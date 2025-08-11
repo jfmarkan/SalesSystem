@@ -18,10 +18,11 @@ class UserSeeder extends Seeder
             [
                 "name" => "Juan Francisco",
                 "surname" => "Markan",
-                "gender" => "M",
+                "username"=> "mju",
                 "email" => "jfmarkan@gmail.com",
                 "email_verified_at" => now(),
                 "password" => bcrypt("jfMS-31531055!"),
+                "role_id" => 1,
             ],
         ];
 
@@ -29,10 +30,11 @@ class UserSeeder extends Seeder
             $newUser = new User();
             $newUser->first_name = $user['name'];
             $newUser->last_name = $user['surname'];
-            $newUser->gender = $user['gender'];
+            $newUser->username = $user['username'];
             $newUser->email = $user['email'];
             $newUser->email_verified_at = $user['email_verified_at'];
             $newUser->password = $user['password'];
+            $newUser->role_id = $user['role_id'];
             $newUser->save();
         }
     }

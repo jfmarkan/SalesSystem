@@ -14,8 +14,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            RolePermissionSeeder::class,
             UserSeeder::class,
-            RolePermissionSeeder::class
         ]);
 
         \App\Models\User::find(1)?->assignRole('superadmin');
