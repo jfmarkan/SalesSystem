@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('assignment_matrices', function (Blueprint $table) {
+        Schema::create('assignment_matrix', function (Blueprint $table) {
             $table->id(); // ID (PK, Auto Increment)
 
             // FK to user_manager_pivot (nullable porque en Access es Not Enforced y no Required)
@@ -39,7 +39,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        Schema::dropIfExists('assignment_matrices');
+        Schema::dropIfExists('assignment_matrix');
     }
 };
 

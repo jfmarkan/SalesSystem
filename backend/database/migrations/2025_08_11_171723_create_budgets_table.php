@@ -8,26 +8,20 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('budgets', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('profit_center_code');
-            $table->unsignedSmallInteger('fiscal_year');
-            $table->unsignedBigInteger('budgeting_case_id');
-            $table->bigInteger('amount')->default(0);
+            $table->id(); // ID (AutoNumber)
+            $table->unsignedBigInteger('client_profit_center_id'); // Required: True (Access)
+            $table->unsignedInteger('budget_month')->nullable();   // Required: False
+            $table->unsignedInteger('budget_year')->nullable();    // Required: False
+            $table->unsignedBigInteger('volume');                  // Required: True
 
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index('profit_center_code', 'idx_budgets_profit_center_code');
-            $table->index('budgeting_case_id', 'idx_budgets_budgeting_case_id');
+            $table->index('client_profit_center_id', 'idx_budgets_client_profit_center_id');
 
-            $table->foreign('profit_center_code')
-                  ->references('code')
-                  ->on('profit_centers')
-                  ->cascadeOnDelete();
-
-            $table->foreign('budgeting_case_id')
+            $table->foreign('client_profit_center_id')
                   ->references('id')
-                  ->on('budgeting_cases')
+                  ->on('client_profit_center_pivots')
                   ->cascadeOnDelete();
         });
     }

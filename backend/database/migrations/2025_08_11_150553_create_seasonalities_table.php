@@ -8,41 +8,28 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('seasonalities', function (Blueprint $table) {
-            // PK: ID (AutoNumber)
-            $table->id();
+            $table->id(); // Access: ID (AutoNumber)
+            $table->unsignedBigInteger('profit_center_code')->nullable(); // FK added later
+            $table->unsignedSmallInteger('fiscal_year')->nullable();
 
-            // ProfitCenterCode: Long Integer, Nullable (Not Enforced)
-            $table->unsignedBigInteger('profit_center_code')->nullable();
+            // Integers only (no decimals)
+            $table->unsignedInteger('apr')->default(0);
+            $table->unsignedInteger('may')->default(0);
+            $table->unsignedInteger('jun')->default(0);
+            $table->unsignedInteger('jul')->default(0);
+            $table->unsignedInteger('aug')->default(0);
+            $table->unsignedInteger('sep')->default(0);
+            $table->unsignedInteger('oct')->default(0);
+            $table->unsignedInteger('nov')->default(0);
+            $table->unsignedInteger('dec')->default(0);
+            $table->unsignedInteger('jan')->default(0);
+            $table->unsignedInteger('feb')->default(0);
+            $table->unsignedInteger('mar')->default(0);
 
-            // FiscalYear: Long Integer, Nullable
-            $table->unsignedBigInteger('fiscal_year')->nullable();
-
-            // Monthly weights (Double with 2 decimals in Access -> decimal here)
-            $table->decimal('apr', 12, 2)->nullable();
-            $table->decimal('may', 12, 2)->nullable();
-            $table->decimal('jun', 12, 2)->nullable();
-            $table->decimal('jul', 12, 2)->nullable();
-            $table->decimal('aug', 12, 2)->nullable();
-            $table->decimal('sep', 12, 2)->nullable();
-            $table->decimal('oct', 12, 2)->nullable();
-            $table->decimal('nov', 12, 2)->nullable();
-            $table->decimal('dec', 12, 2)->nullable();
-            $table->decimal('jan', 12, 2)->nullable();
-            $table->decimal('feb', 12, 2)->nullable();
-            $table->decimal('mar', 12, 2)->nullable();
-
-            // Audit
             $table->timestamps();
             $table->softDeletes();
 
-            // Indexes per Documenter
             $table->index('profit_center_code', 'idx_seasonalities_profit_center_code');
-
-            // Optional FK (Not Enforced in Access)
-            $table->foreign('profit_center_code')
-                  ->references('profit_center_code')
-                  ->on('profit_centers')
-                  ->nullOnDelete();
         });
     }
 
