@@ -89,6 +89,9 @@ function getPropsForType(item) {
   height: 100%;
   width: 100%;
   box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
 }
 
 .glass-button {

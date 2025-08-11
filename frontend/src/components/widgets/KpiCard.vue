@@ -94,7 +94,7 @@ const selectedKpi = computed(() => {
   position: absolute;
   width: 100%;
   height: 100%;
-  
+
   backface-visibility: hidden;
   
   backdrop-filter: blur(10px);
@@ -112,7 +112,6 @@ const selectedKpi = computed(() => {
 .kpi-back {
   color: white;
   transform: rotateY(180deg);
-  background: rgba(0, 0, 0, 1);
 }
 
 .kpi-title {
