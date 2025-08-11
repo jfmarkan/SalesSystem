@@ -1,5 +1,5 @@
 <?php
-use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
+
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
@@ -8,10 +8,24 @@ use App\Http\Controllers\Auth\VerifyOtpController as VerifyOtpController;
 use App\Http\Controllers\Auth\LoginController as LoginController;
 use App\Http\Controllers\Auth\OtpController as OtpController;
 
-// Route::post('/register', [RegisterController::class, 'register']);
+use App\Http\Controllers\ForecastController;
+
+// Rutas públicas (sin auth)
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+// Usuario autenticado (Sanctum)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+
+    // Forecast: selector, lista, detalle/subform, guardar y gráficos
+    Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
+    Route::get('/forecast/list', [ForecastController::class, 'forecastList']);
+    Route::get('/forecast/detail/{assignmentId}', [ForecastController::class, 'detail']);
+    Route::post('/forecast/save/{assignmentId}', [ForecastController::class, 'save']);
+    Route::get('/forecast/summary/{assignmentId}', [ForecastController::class, 'summary']);
+    Route::get('/forecast/monthly-evolution/{assignmentId}', [ForecastController::class, 'monthlyEvolution']);
+    Route::get('/forecast/version-history/{assignmentId}', [ForecastController::class, 'versionHistory']);
 });
