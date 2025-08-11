@@ -51,8 +51,8 @@ const isEditable = ref(false);
 const layout = ref([
     { i: '0', x: 0, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'users' },
     { i: '1', x: 2, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'revenue' },
-    { i: '2', x: 4, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'users' },
-    { i: '3', x: 6, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'users' },
+    { i: '2', x: 4, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'conversion' },
+    { i: '3', x: 6, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'bounce' },
     { i: '4', x: 8, y: 0, w: 3, h: 12, type: 'task' },
     { i: '5', x: 11, y: 0, w: 1, h: 8, type: 'task' },
     { i: '7', x: 0, y: 4, w: 8, h: 16, type: 'chart' },
@@ -89,8 +89,6 @@ function getPropsForType(item) {
   height: 100%;
   width: 100%;
   box-sizing: border-box;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
   border-radius: 10px;
 }
 
