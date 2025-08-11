@@ -7,6 +7,7 @@ import VerifyOtpView from '@/views/auth/VerifyOtpView.vue';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import HomeDashboard from '@/views/dashboard/HomeDashboard.vue';
 import HomeView from '@/views/HomeView.vue';
+import ForecastPanel from '@/views/dashboard/ForecastPanel.vue';
 
 const routes = [
     {
@@ -38,6 +39,10 @@ const routes = [
             },
         ],
         meta: { requiresAuth: true },
+    },
+    {
+        path: '/forecasts',
+        component: ForecastPanel
     },
 ];
 
