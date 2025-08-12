@@ -14,29 +14,6 @@
           <i class="fa-solid fa-repeat"></i>
         </div>
       </div>
-
-      <!-- LADO TRASERO -->
-      <div class="kpi-back">
-        <div class="kpi-title">
-          Detalles del KPI
-        </div>
-
-        <select v-model="selectedKpiId" @change="updateKpi" class="kpi-select">
-          <option v-for="kpi in kpis" :key="kpi.id" :value="kpi.id">
-            {{ kpi.label }}
-          </option>
-        </select>
-
-        <div class="kpi-source">
-          <strong>Origen del cálculo:</strong><br>
-          {{ selectedKpi.source }}
-        </div>
-
-        <div class="flip-icon back" @click.stop="flipped = !flipped" title="Volver">
-          <i class="fa-solid fa-rotate-left"></i>
-        </div>
-      </div>
-
     </div>
   </div>
 </template>
@@ -68,11 +45,6 @@ const selectedKpi = computed(() => {
 </script>
 
 <style scoped>
-.kpi-flip-wrapper {
-  perspective: 1000px;
-  width: 100%;
-  height: 100%;
-}
 
 .kpi-flip-card {
   width: 100%;
@@ -89,14 +61,11 @@ const selectedKpi = computed(() => {
   transform: rotateY(180deg);
 }
 
-.kpi-front,
-.kpi-back {
+.kpi-front
+{
   position: absolute;
   width: 100%;
   height: 100%;
-
-  backface-visibility: hidden;
-  
   backdrop-filter: blur(10px);
   padding: 1rem;
   display: flex;
@@ -107,11 +76,6 @@ const selectedKpi = computed(() => {
 .kpi-front {
   color: white;
   background: rgba(0, 0, 0, .4);
-}
-
-.kpi-back {
-  color: white;
-  transform: rotateY(180deg);
 }
 
 .kpi-title {
@@ -139,24 +103,5 @@ const selectedKpi = computed(() => {
 .kpi-source {
   font-size: 0.9rem;
   opacity: 0.9;
-}
-
-.flip-icon {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  font-size: .75rem;
-  color: #fff;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: 0.2s;
-}
-.flip-icon:hover {
-  opacity: 1;
-  transform: scale(1.1);
-}
-.flip-icon.back {
-  left: 8px;
-  right: auto;
 }
 </style>
