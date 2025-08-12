@@ -17,11 +17,12 @@ class User extends Authenticatable
     protected $fillable = [
         'first_name',
         'last_name',
-        'gender',
+        'username',
         'email',
         'password',
         'otp',
         'otp_expires_at',
+        'role_id'
     ];
 
     protected static $logAttributes = ['first_name', 'last_name', 'email'];
