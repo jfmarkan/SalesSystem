@@ -37,6 +37,13 @@ const routes = [
                     requiresAuth: true 
                 }
             },
+            { 
+                path: '/forecasts', 
+                component: ForecastPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
         ],
         meta: { requiresAuth: true },
     },
