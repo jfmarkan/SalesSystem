@@ -8,23 +8,11 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('profit_centers', function (Blueprint $table) {
-            // Access PK: ProfitCenterCode (Long Integer, NOT auto-increment)
-            $table->unsignedBigInteger('profit_center_code');
             $table->primary('profit_center_code');
-
-            $table->string('profit_center_name', 255)->nullable();
-
-            // Access SeasonalityID (Not Enforced) → nullable FK
-            $table->unsignedBigInteger('seasonality_id')->nullable();
-
+            $table->string('profit_center_name', 255);
+            $table->foreignId('seasonality_id')->constrained('seasonalities')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
-
-            $table->index('seasonality_id', 'idx_profit_centers_seasonality_id');
-
-            $table->foreign('seasonality_id')
-                  ->references('id')->on('seasonalities')
-                  ->nullOnDelete();
         });
     }
 

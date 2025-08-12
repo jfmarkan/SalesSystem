@@ -9,18 +9,12 @@ return new class extends Migration {
     {
         Schema::create('clients', function (Blueprint $table) {
             $table->id('client_group_number');
-
             $table->string('client_name', 255)->nullable();
-
-            // Required FK to classifications
             $table->foreignId('classification_id')
                 ->constrained('classifications')
                 ->cascadeOnDelete();
-
             $table->timestamps();
             $table->softDeletes();
-
-            $table->index('classification_id', 'idx_clients_classification_id');
         });
     }
 
