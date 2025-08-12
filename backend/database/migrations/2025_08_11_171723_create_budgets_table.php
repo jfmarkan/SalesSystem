@@ -21,7 +21,7 @@ return new class extends Migration {
 
             $table->foreign('client_profit_center_id')
                   ->references('id')
-                  ->on('client_profit_center_pivots')
+                  ->on('client_profit_center')
                   ->cascadeOnDelete();
         });
     }

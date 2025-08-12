@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('user_manager_pivots', function (Blueprint $table) {
+        Schema::create('user_manager', function (Blueprint $table) {
             $table->id();
 
             $table->unsignedBigInteger('user_id');

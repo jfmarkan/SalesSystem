@@ -27,12 +27,12 @@ return new class extends Migration {
             // Foreign keys (no enforced en Access, pero aquí las podemos forzar si existen tablas)
             $table->foreign('user_manager_id')
                   ->references('id')
-                  ->on('user_manager_pivots')
+                  ->on('user_manager')
                   ->nullOnDelete();
 
             $table->foreign('client_profit_center_id')
                   ->references('id')
-                  ->on('client_profit_center_pivots')
+                  ->on('client_profit_center')
                   ->nullOnDelete();
         });
     }

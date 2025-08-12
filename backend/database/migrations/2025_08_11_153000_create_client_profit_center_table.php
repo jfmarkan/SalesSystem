@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('client_profit_center_pivots', function (Blueprint $table) {
+        Schema::create('client_profit_center', function (Blueprint $table) {
             $table->id();
 
             $table->unsignedBigInteger('client_group_number');
