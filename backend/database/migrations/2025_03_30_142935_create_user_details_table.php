@@ -22,6 +22,8 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('profile_picture')->nullable(); // Almacenada en storage/public
             $table->timestamps();
+            $table->softdeletes();
+            $table->unique('user_id');
         });
     }
 

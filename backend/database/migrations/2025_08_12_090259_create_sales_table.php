@@ -7,20 +7,22 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('sales', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('client_profit_center_id');
-            $table->foreign('client_profit_center_id')
-                ->references('id')
-                ->on('client_profit_center')
-                ->onDelete('cascade');
+        Schema::create('sales', function (Blueprint $t) {
+            $t->bigIncrements('id');
 
-            $table->unsignedTinyInteger('sales_month'); // 1..12
-            $table->unsignedSmallInteger('sales_year');
-            $table->unsignedBigInteger('volume');
+            $t->unsignedBigInteger('client_profit_center_id');
+            $t->foreign('client_profit_center_id')
+              ->references('id')->on('client_profit_centers')
+              ->cascadeOnUpdate()->restrictOnDelete();
 
-            $table->timestamps();
-            $table->softDeletes();
+            $t->unsignedSmallInteger('fiscal_year'); // ej: 2026
+            $t->unsignedTinyInteger('month');        // 1..12
+            $t->unsignedInteger('amount');           // enteros del ERP
+
+            $t->timestamps();
+            $t->softDeletes();
+
+            $t->unique(['client_profit_center_id','fiscal_year','month'],'uniq_sales_period');
         });
     }
 

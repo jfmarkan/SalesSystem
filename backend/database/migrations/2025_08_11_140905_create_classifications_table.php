@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         Schema::create('classifications', function (Blueprint $table) {
             $table->id();
-            $table->string('calsification', 255)->nullable();
+            $table->string('classification', 255)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

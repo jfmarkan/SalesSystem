@@ -7,22 +7,27 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('budgets', function (Blueprint $table) {
-            $table->id(); // ID (AutoNumber)
-            $table->unsignedBigInteger('client_profit_center_id'); // Required: True (Access)
-            $table->unsignedInteger('budget_month')->nullable();   // Required: False
-            $table->unsignedInteger('budget_year')->nullable();    // Required: False
-            $table->unsignedBigInteger('volume');                  // Required: True
+        Schema::create('budgets', function (Blueprint $t) {
+            $t->bigIncrements('id');
 
-            $table->timestamps();
-            $table->softDeletes();
+            // Relación CPC
+            $t->unsignedBigInteger('client_profit_center_id');
+            $t->foreign('client_profit_center_id')
+              ->references('id')->on('client_profit_centers')
+              ->cascadeOnUpdate()->restrictOnDelete();
 
-            $table->index('client_profit_center_id', 'idx_budgets_client_profit_center_id');
+            // Año fiscal y mes (mes 1-12)
+            $t->unsignedSmallInteger('fiscal_year'); // Ej: 2026
+            $t->unsignedTinyInteger('month');        // 1=Jan ... 12=Dec
 
-            $table->foreign('client_profit_center_id')
-                  ->references('id')
-                  ->on('client_profit_center')
-                  ->cascadeOnDelete();
+            // Valor presupuestado (entero redondo, sin decimales)
+            $t->unsignedInteger('amount');
+
+            $t->timestamps();
+            $t->softDeletes();
+
+            // Evitar duplicados de año+mes por CPC
+            $t->unique(['client_profit_center_id','fiscal_year','month'],'uniq_budget');
         });
     }
 

@@ -12,6 +12,7 @@ return new class extends Migration {
             $table->string('name', 120);
             $table->boolean('is_default')->default(false)->index();
             $table->timestamps();
+            $table->unique(['user_id','name']);
         });
     }
     public function down(): void {

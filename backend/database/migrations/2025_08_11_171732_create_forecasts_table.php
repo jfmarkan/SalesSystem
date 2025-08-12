@@ -7,22 +7,39 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('forecasts', function (Blueprint $table) {
-            $table->id(); // ID (AutoNumber)
-            $table->unsignedBigInteger('assignment_matrix_id'); // Required: True (FK)
-            $table->unsignedInteger('forecast_month')->nullable(); // Required: False
-            $table->unsignedInteger('forecast_year')->nullable();  // Required: False
-            $table->bigInteger('volume')->default(0); // integer-only
+        Schema::create('forecasts', function (Blueprint $t) {
+            $t->bigIncrements('id');
 
-            $table->timestamps();
-            $table->softDeletes();
+            // Relación al vínculo Cliente+ProfitCenter
+            $t->unsignedBigInteger('client_profit_center_id');
+            $t->foreign('client_profit_center_id')
+              ->references('id')->on('client_profit_centers')
+              ->cascadeOnUpdate()->restrictOnDelete();
 
-            $table->index('assignment_matrix_id', 'idx_forecasts_assignment_matrix_id');
+            // Periodo
+            $t->unsignedSmallInteger('fiscal_year');   // ej: 2026
+            $t->unsignedTinyInteger('month');          // 1..12
 
-            $table->foreign('assignment_matrix_id')
-                  ->references('id')
-                  ->on('assignment_matrix')
-                  ->cascadeOnDelete();
+            // Valor pronosticado (entero, sin decimales)
+            $t->unsignedInteger('amount');
+
+            // Versionado (controlás lógica en controller/frontend)
+            $t->unsignedInteger('version')->default(1);
+
+            // Quién lo cargó (opcional)
+            $t->foreignId('user_id')->nullable()
+              ->constrained('users')
+              ->cascadeOnUpdate()
+              ->nullOnDelete();
+
+            $t->timestamps();
+            $t->softDeletes();
+
+            // Búsquedas rápidas por periodo
+            $t->index(['client_profit_center_id','fiscal_year','month']);
+
+            // Evita duplicar la misma versión del mismo periodo
+            $t->unique(['client_profit_center_id','fiscal_year','month','version'],'uniq_forecast_version');
         });
     }
 

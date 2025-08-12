@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Classification;
 
 class ClassificationSeeder extends Seeder
 {
@@ -38,7 +39,7 @@ class ClassificationSeeder extends Seeder
 
         foreach ($classifications as $classification){
             $newClassification = new Classification();
-            $newClassification->classification = $clasification['classification'];
+            $newClassification->classification = $classification['classification'];
             $newClassification->save();
         }
     }

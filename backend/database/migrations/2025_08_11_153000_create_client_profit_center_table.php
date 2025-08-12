@@ -7,34 +7,30 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('client_profit_center', function (Blueprint $table) {
-            $table->id();
+        Schema::create('client_profit_centers', function (Blueprint $t) {
+            $t->bigIncrements('id'); // identificador único del vínculo
 
-            $table->unsignedBigInteger('client_group_number');
-            $table->unsignedBigInteger('profit_center_code');
+            // FK al PK de clients (client_group_number)
+            $t->unsignedInteger('client_group_number');
+            $t->foreign('client_group_number')
+              ->references('client_group_number')->on('clients')
+              ->cascadeOnUpdate()->restrictOnDelete();
 
-            $table->timestamps();
-            $table->softDeletes();
+            // FK al PK de profit_centers (profit_center_code)
+            $t->unsignedSmallInteger('profit_center_code');
+            $t->foreign('profit_center_code')
+              ->references('profit_center_code')->on('profit_centers')
+              ->cascadeOnUpdate()->restrictOnDelete();
 
-            $table->index('client_group_number', 'idx_cpcp_client_group_number');
-            $table->index('profit_center_code', 'idx_cpcp_profit_center_code');
+            $t->timestamps();
+            $t->softDeletes();
 
-            // Relaciones (Not Enforced en Access → aquí opcionales)
-            $table->foreign('client_group_number')
-                  ->references('client_group_number')
-                  ->on('clients')
-                  ->cascadeOnDelete();
-
-            $table->foreign('profit_center_code')
-                  ->references('profit_center_code')
-                  ->on('profit_centers')
-                  ->cascadeOnDelete();
+            $t->unique(['client_group_number','profit_center_code'],'uniq_client_pc');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('client_profit_center_pivots');
+        Schema::dropIfExists('client_profit_centers');
     }
 };
-

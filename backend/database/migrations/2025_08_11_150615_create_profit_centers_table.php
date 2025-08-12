@@ -7,12 +7,20 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('profit_centers', function (Blueprint $table) {
-            $table->primary('profit_center_code');
-            $table->string('profit_center_name', 255);
-            $table->foreignId('seasonality_id')->constrained('seasonalities')->nullOnDelete();
-            $table->timestamps();
-            $table->softDeletes();
+        Schema::create('profit_centers', function (Blueprint $t) {
+            // Código de 3 dígitos
+            $t->unsignedSmallInteger('profit_center_code')->primary();
+
+            $t->string('profit_center_name', 255);
+
+            // FK a seasonalities.id
+            $t->foreignId('seasonality_id')
+              ->constrained('seasonalities')
+              ->cascadeOnUpdate()
+              ->restrictOnDelete();
+
+            $t->timestamps();
+            $t->softDeletes();
         });
     }
 
