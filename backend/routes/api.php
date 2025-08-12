@@ -8,9 +8,10 @@ use App\Http\Controllers\Auth\VerifyOtpController as VerifyOtpController;
 use App\Http\Controllers\Auth\LoginController as LoginController;
 use App\Http\Controllers\Auth\OtpController as OtpController;
 
+use App\Http\Controllers\Dashboard\RadarController as DashboardRadarController;
+
 use App\Http\Controllers\ForecastController;
 
-// Rutas públicas (sin auth)
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
@@ -20,7 +21,6 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-    // Forecast: selector, lista, detalle/subform, guardar y gráficos
     Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
     Route::get('/forecast/list', [ForecastController::class, 'forecastList']);
     Route::get('/forecast/detail/{assignmentId}', [ForecastController::class, 'detail']);
@@ -28,4 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/forecast/summary/{assignmentId}', [ForecastController::class, 'summary']);
     Route::get('/forecast/monthly-evolution/{assignmentId}', [ForecastController::class, 'monthlyEvolution']);
     Route::get('/forecast/version-history/{assignmentId}', [ForecastController::class, 'versionHistory']);
+
+    Route::get('/radar', [DashboardRadarController::class, 'radar']);
+    Route::get('/radar-table', [DashboardRadarController::class, 'radarTable']);
 });
