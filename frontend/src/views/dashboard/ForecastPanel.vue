@@ -179,9 +179,10 @@ const chartKey = computed(() => `${mode.value}:${primaryId.value ?? ''}:${second
 
 <style scoped>
 .forecast-wrapper{
-  width: calc(100vw - 70px); /* ancho total menos barra */
+  width: 100%; /* ancho total menos barra */
   overflow: hidden;
 }
+
 .h-full{ height: 100%; }
 
 .glass-card{
