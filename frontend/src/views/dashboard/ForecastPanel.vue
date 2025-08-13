@@ -132,7 +132,7 @@ const layout = ref([
   { i:'title',   x:2,  y:0,  w:10, h:3,  static:true },
   { i:'chart',   x:2,  y:3,  w:7, h:24,  static:true },
   { i:'chart',   x:9,  y:3,  w:3, h:24,  static:true },
-  { i:'table',   x:2,  y:27, w:10, h:13, static:true }
+  { i:'table',   x:2,  y:27, w:10, h:15, static:true }
 ])
 </script>
 

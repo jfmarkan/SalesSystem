@@ -21,10 +21,18 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     
-    Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
+    Route::get('/me-test', function (Request $request) {
+        return response()->json([
+            'user' => $request->user(),
+            'auth_id' => auth()->id(),
+            'session_id' => session()->getId(),
+        ]);
+    });
+
     Route::get('/me/clients', [ForecastController::class, 'getClients']);
     Route::get('/me/profit-centers', [ForecastController::class, 'getProfitCenters']);
     Route::get('/me/assignments', [ForecastController::class, 'getAssignments']);
+    Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
 
     Route::get('/forecast/list', [ForecastController::class, 'forecastList']);
     Route::get('/forecast/detail/{assignmentId}', [ForecastController::class, 'detail']);
@@ -33,6 +41,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/forecast/monthly-evolution/{assignmentId}', [ForecastController::class, 'monthlyEvolution']);
     Route::get('/forecast/version-history/{assignmentId}', [ForecastController::class, 'versionHistory']);
 
-    Route::get('/radar', [DashboardRadarController::class, 'radar']);
-    Route::get('/radar-table', [DashboardRadarController::class, 'radarTable']);
+    #Route::get('/radar', [DashboardRadarController::class, 'radar']);
+    #Route::get('/radar-table', [DashboardRadarController::class, 'radarTable']);
 });

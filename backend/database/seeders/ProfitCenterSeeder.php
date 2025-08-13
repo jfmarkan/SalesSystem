@@ -84,7 +84,7 @@ class ProfitCenterSeeder extends Seeder
             DB::table('profit_centers')->insert([
                 'profit_center_code' => $pc['profit_center_code'],
                 'profit_center_name' => $pc['profit_center_name'],
-                'seasonality_id'     => $pc['seasonality_id'],
+                'seasonality_id'     => 1,
                 'created_at'         => $now,
                 'updated_at'         => null,
                 'deleted_at'         => null,
