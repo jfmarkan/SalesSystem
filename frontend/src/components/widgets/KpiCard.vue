@@ -46,38 +46,6 @@ const selectedKpi = computed(() => {
 
 <style scoped>
 
-.kpi-flip-card {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transition: transform 0.6s;
-  transform-style: preserve-3d;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-}
-
-.kpi-flip-card.flipped {
-  transform: rotateY(180deg);
-}
-
-.kpi-front
-{
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backdrop-filter: blur(10px);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.kpi-front {
-  color: white;
-  background: rgba(0, 0, 0, .4);
-}
-
 .kpi-title {
   font-size: 1rem;
   font-weight: 500;
@@ -89,19 +57,5 @@ const selectedKpi = computed(() => {
   font-weight: bold;
   text-align: center;
   margin: auto 0;
-}
-
-.kpi-select {
-  padding: 0.4rem;
-  margin-bottom: 1rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.kpi-source {
-  font-size: 0.9rem;
-  opacity: 0.9;
 }
 </style>

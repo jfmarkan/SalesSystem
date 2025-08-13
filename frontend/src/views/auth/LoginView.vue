@@ -39,13 +39,17 @@ const login = async () => {
       password: password.value,
     })
 
+    console.log('📦 Respuesta completa desde login():', response)
+
     if (response.verify) {
       modal.show('Konto nicht verifiziert', 'Gib den Code ein, den wir dir per E-Mail geschickt haben..')
       router.push({ path: '/verify-otp', query: { email: response.email } })
     } else {
+      console.log('🔁 Redirigiendo al dashboard...');
       router.push('/dashboard')
     }
   } catch (err) {
+    console.error('❌ Error en login:', err)
     modal.show('Zugriffsfehler', 'Ungültige Anmeldedaten oder nicht vorhandenes Konto.')
   }
 }

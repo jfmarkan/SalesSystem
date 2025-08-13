@@ -120,7 +120,7 @@ const userItems = [
 }
 
 .dashboard-bg {
-  background-image: url('@/assets/img/backgrounds/green.jpg');
+  background-image: url('@/assets/img/backgrounds/red.jpg');
   background-repeat: repeat;
   background-position: center;
   background-attachment: fixed;

@@ -41,21 +41,6 @@ class User extends Authenticatable
         ];
     }
 
-    public function saludo($formal = true)
-    {
-        if ($formal) {
-            if ($this->gender === 'M') {
-                return "Estimado Sr. {$this->last_name}";
-            } elseif ($this->gender === 'F') {
-                return "Estimada Sra. {$this->last_name}";
-            } else {
-                return "Estimado/a {$this->last_name}";
-            }
-        } else {
-            return "Hola {$this->first_name}";
-        }
-    }
-
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -69,18 +54,13 @@ class User extends Authenticatable
         return $this->hasOne(UserDetail::class);
     }
 
-    public function businessesOwned()
+    public function clients()
     {
-        return $this->hasMany(Business::class, 'owner_id');
+        return $this->belongsToMany(\App\Models\Client::class); 
     }
 
-    public function teams()
-    {
-        return $this->hasMany(Team::class);
-    }
-
-    public function certifications()
-    {
-        return $this->hasMany(Certification::class);
+    public function profitCenters()
+    { 
+        return $this->belongsToMany(\App\Models\ProfitCenter::class); 
     }
 }

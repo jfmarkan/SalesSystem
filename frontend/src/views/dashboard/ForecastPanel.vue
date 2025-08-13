@@ -1,28 +1,31 @@
 <script setup>
+/* Uses your axios plugin + Sanctum CSRF bootstrap */
 import { ref, computed, watch, onMounted } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
-import ForecastFilters from '@/components/filters/ComponentFilter.vue'
+import Button from 'primevue/button'
+import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
+
+import api from '@/plugins/axios'
+import { ensureCsrf } from '@/plugins/csrf'
 import ForecastTitle from '@/components/titles/ComponentTitle.vue'
+import ForecastFilters from '@/components/filters/ComponentFilter.vue'
 import ForecastChart from '@/components/charts/LineChart.vue'
 import ForecastTable from '@/components/tables/ComponentTable.vue'
+import GlassCard from '@/components/ui/GlassCard.vue'
 
-const userName = ref('Sales Rep')
+const toast = useToast()
+const API = '/api'
 
-const clientes = ref([
-  { id: 1, name: 'Cliente A' }, { id: 2, name: 'Cliente B' }, { id: 3, name: 'Cliente C' }
-])
-const profitCenters = ref([
-  { id: 10, code: 'PC10', name: 'PC Norte' },
-  { id: 20, code: 'PC20', name: 'PC Sur' },
-  { id: 30, code: 'PC30', name: 'PC Centro' }
-])
-const mapClienteToPC = { 1: [10,30], 2: [20], 3: [10,20,30] }
-const mapPCToCliente = { 10: [1,3], 20: [2,3], 30: [1,3] }
+const kunden = ref([])
+const profitCenters = ref([])
+const mapKundeToPC = ref({})
+const mapPCToKunde = ref({})
 
-const mode = ref('cliente')     // 'cliente' | 'pc'
-const primaryId = ref(null)     // dropdown
-const secondaryId = ref(null)   // lista asociada
-const secondaryIndex = ref(0)
+const mode = ref('kunde')
+const primaryId = ref(null)
+const secondaryId = ref(null)
+const loading = ref(false)
 
 function genMonths(n){
   const out=[], base=new Date(); base.setDate(1)
@@ -31,98 +34,111 @@ function genMonths(n){
   return out
 }
 const months = ref(genMonths(18))
-
-const ventas   = ref(Array(18).fill(0))
-const budget   = ref(Array(18).fill(0))
+const ventas = ref(Array(18).fill(0))
+const budget = ref(Array(18).fill(0))
 const forecast = ref(Array(18).fill(0))
-const orders   = ref(Array(18).fill(0))
-
-function loadSeriesMock(){
-  const seed = (primaryId.value||0)*31 + (secondaryId.value||0)*17 + (mode.value==='cliente'?5:11)
-  const rng = i => { const x=Math.sin(seed+i)*10000; return x-Math.floor(x) }
-  for(let i=0;i<18;i++){
-    const b=Math.round(80+rng(i)*120)
-    const v=Math.max(0,Math.round(b*(0.8+rng(i+1)*0.5)))
-    const f=Math.round(b*(0.85+rng(i+2)*0.4))
-    const o=Math.round(b*(0.6+rng(i+3)*0.6))
-    budget.value[i]=b; ventas.value[i]=v; forecast.value[i]=f; orders.value[i]=o
-  }
-}
+const orders = ref(Array(18).fill(0))
 
 const primaryOptions = computed(() =>
-  mode.value==='cliente'
-    ? clientes.value.map(c=>({label:c.name, value:c.id}))
-    : profitCenters.value.map(p=>({label:`${p.code} — ${p.name}`, value:p.id}))
+  mode.value==='kunde'
+    ? kunden.value.map(c=>({ label:c.name, value:c.id }))
+    : profitCenters.value.map(p=>({ label:`${p.code} — ${p.name}`, value:p.id }))
 )
 const secondaryOptions = computed(()=>{
   if(primaryId.value==null) return []
-  if(mode.value==='cliente'){
-    const ids = mapClienteToPC[primaryId.value]||[]
+  if(mode.value==='kunde'){
+    const ids = mapKundeToPC.value[primaryId.value]||[]
     return ids.map(id=>{ const p=profitCenters.value.find(x=>x.id===id); return p&&{label:`${p.code} — ${p.name}`, value:p.id} }).filter(Boolean)
   } else {
-    const ids = mapPCToCliente[primaryId.value]||[]
-    return ids.map(id=>{ const c=clientes.value.find(x=>x.id===id); return c&&{label:c.name, value:c.id} }).filter(Boolean)
+    const ids = mapPCToKunde.value[primaryId.value]||[]
+    return ids.map(id=>{ const c=kunden.value.find(x=>x.id===id); return c&&{label:c.name, value:c.id} }).filter(Boolean)
   }
 })
 
-watch([mode, primaryId], ()=>{
-  secondaryIndex.value=0
-  secondaryId.value = secondaryOptions.value[0]?.value ?? null
-  if(primaryId.value!=null && secondaryId.value!=null) loadSeriesMock()
-})
-watch(secondaryId, ()=>{
-  if(primaryId.value!=null && secondaryId.value!=null) loadSeriesMock()
-})
-
-function goNext(){
-  if(!secondaryOptions.value.length) return
-  secondaryIndex.value = (secondaryIndex.value + 1) % secondaryOptions.value.length
-  secondaryId.value = secondaryOptions.value[secondaryIndex.value].value
-}
-
+/* Nombres seleccionados para el título */
 const selectedClienteName = computed(()=>{
-  if(mode.value==='cliente'){
-    return clientes.value.find(c=>c.id===primaryId.value)?.name || ''
-  } else {
-    return clientes.value.find(c=>c.id===secondaryId.value)?.name || ''
-  }
+  return mode.value==='kunde'
+    ? (kunden.value.find(c=>c.id===primaryId.value)?.name || '')
+    : (kunden.value.find(c=>c.id===secondaryId.value)?.name || '')
 })
 const selectedPCName = computed(()=>{
-  if(mode.value==='cliente'){
-    const pc = profitCenters.value.find(p=>p.id===secondaryId.value)
-    return pc ? `${pc.code} — ${pc.name}` : ''
-  } else {
-    const pc = profitCenters.value.find(p=>p.id===primaryId.value)
-    return pc ? `${pc.code} — ${pc.name}` : ''
-  }
+  const pcId = mode.value==='kunde' ? secondaryId.value : primaryId.value
+  const pc = profitCenters.value.find(p=>p.id===pcId)
+  return pc ? `${pc.code} — ${pc.name}` : ''
 })
 
-function updateForecastAt({ index, value }){
-  const n = Number(value)
-  forecast.value[index] = isNaN(n) ? 0 : n
+async function loadMaster(){
+  try{
+    await ensureCsrf()
+    const [{data:c},{data:p},{data:m}] = await Promise.all([
+      api.get(`${API}/me/clients`),
+      api.get(`${API}/me/profit-centers`),
+      api.get(`${API}/me/assignments`)
+    ])
+    kunden.value = c
+    profitCenters.value = p
+    mapKundeToPC.value = m.clientToPc || {}
+    mapPCToKunde.value = m.pcToClient || {}
+  } catch {
+    toast.add({ severity:'error', summary:'Fehler', detail:'Stammdaten nicht verfügbar', life:2500 })
+  }
 }
 
-/* Init */
-onMounted(()=>{
+async function loadSeries(){
+  if(primaryId.value==null || secondaryId.value==null) return
+  loading.value = true
+  try{
+    await ensureCsrf()
+    const kundeId = mode.value==='kunde' ? primaryId.value : secondaryId.value
+    const pcId    = mode.value==='kunde' ? secondaryId.value : primaryId.value
+    const { data } = await api.get(`${API}/forecast/series`, { params: { kundeId, pcId } })
+    months.value   = data.months   ?? months.value
+    ventas.value   = data.ventas   ?? ventas.value
+    budget.value   = data.budget   ?? budget.value
+    forecast.value = data.forecast ?? forecast.value
+    orders.value   = data.orders   ?? orders.value
+  } finally { loading.value = false }
+}
+
+async function saveForecast(){
+  try{
+    await ensureCsrf()
+    const kundeId = mode.value==='kunde' ? primaryId.value : secondaryId.value
+    const pcId    = mode.value==='kunde' ? secondaryId.value : primaryId.value
+    await api.put(`${API}/forecast/series`, { kundeId, pcId, months: months.value, forecast: forecast.value })
+    toast.add({ severity:'success', summary:'Gespeichert', detail:'Forecast aktualisiert', life:2000 })
+  } catch {
+    toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2500 })
+  }
+}
+function resetForecastToBudget(){ forecast.value = budget.value.slice() }
+
+watch([mode, primaryId], ()=>{
+  secondaryId.value = secondaryOptions.value[0]?.value ?? null
+  loadSeries()
+})
+watch(secondaryId, loadSeries)
+
+onMounted(async ()=>{
+  await loadMaster()
   primaryId.value = primaryOptions.value[0]?.value ?? null
   secondaryId.value = secondaryOptions.value[0]?.value ?? null
-  if(primaryId.value!=null && secondaryId.value!=null) loadSeriesMock()
+  await loadSeries()
 })
 
-/* Grid estático: 12 columnas */
+/* Grid con título */
 const layout = ref([
-  { i:'filters', x:0,  y:0, w:2,  h:27, static:true },
-  { i:'title',   x:2,  y:0, w:10, h:3,  static:true },
-  { i:'chart',   x:2,  y:3, w:10, h:24,  static:true },
-  { i:'table',   x:2,  y:27, w:10, h:12, static:true }
+  { i:'filters', x:0,  y:0,  w:2,  h:27, static:true },
+  { i:'title',   x:2,  y:0,  w:10, h:3,  static:true },
+  { i:'chart',   x:2,  y:3,  w:7, h:24,  static:true },
+  { i:'chart',   x:9,  y:3,  w:3, h:24,  static:true },
+  { i:'table',   x:2,  y:27, w:10, h:13, static:true }
 ])
-
-/* Forzar re-render del chart cuando cambian filtros para respuesta instantánea */
-const chartKey = computed(() => `${mode.value}:${primaryId.value ?? ''}:${secondaryId.value ?? ''}`)
 </script>
 
 <template>
   <div class="forecast-wrapper">
+    <Toast />
     <GridLayout
       :layout="layout"
       :col-num="12"
@@ -131,67 +147,56 @@ const chartKey = computed(() => `${mode.value}:${primaryId.value ?? ''}:${second
       :is-resizable="false"
       :margin="[12,12]"
       :use-css-transforms="true"
-      style="min-height: calc(100vh - 140px);"
     >
       <GridItem v-for="item in layout" :key="item.i" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
-        <div v-if="item.i==='filters'" class="glass-card h-full">
-          <ForecastFilters
-            :mode="mode"
-            :primary-options="primaryOptions"
-            :primary-id="primaryId"
-            :secondary-options="secondaryOptions"
-            :secondary-id="secondaryId"
-            @update:mode="v=>mode=v"
-            @update:primary-id="v=>primaryId=v"
-            @update:secondary-id="v=>secondaryId=v"
-            @next="goNext"
-          />
-        </div>
+        <GlassCard>
+          <div v-if="item.i==='filters'" class="h-full p-3">
+            <ForecastFilters
+              :mode="mode"
+              :primary-options="primaryOptions"
+              :primary-id="primaryId"
+              :secondary-options="secondaryOptions"
+              :secondary-id="secondaryId"
+              @update:mode="v=>mode=v"
+              @update:primary-id="v=>primaryId=v"
+              @update:secondary-id="v=>secondaryId=v"
+              @next="() => { if (secondaryOptions.length) { const idx = secondaryOptions.findIndex(o=>o.value===secondaryId); const n=(idx+1)%secondaryOptions.length; secondaryId = secondaryOptions[n].value } }"
+            />
+            <div class="mt-3 text-500 text-sm" v-if="loading">Lädt…</div>
+          </div>
 
-        <div v-else-if="item.i==='title'" class="glass-card h-full p-3 flex align-items-center">
-          <ForecastTitle :user="userName" :cliente="selectedClienteName" :pc="selectedPCName" />
-        </div>
+          <div v-else-if="item.i==='title'" class="h-full p-3 flex align-items-center">
+            <!-- Ajusta las props si tu ComponentTitle tiene API distinta -->
+            <ForecastTitle :kunde="selectedClienteName" :pc="selectedPCName" />
+          </div>
 
-        <div v-else-if="item.i==='chart'" class="glass-card h-full">
-          <ForecastChart
-            :key="chartKey"
-            :labels="months"
-            :ventas="ventas"
-            :budget="budget"
-            :forecast="forecast"
-            :orders="orders"
-          />
-        </div>
+          <div v-else-if="item.i==='chart'" class="h-full">
+            <ForecastChart :labels="months" :ventas="ventas" :budget="budget" :forecast="forecast" :orders="orders" />
+          </div>
 
-        <div v-else-if="item.i==='table'" class="glass-card h-full">
-          <ForecastTable
-            :months="months"
-            :ventas="ventas"
-            :budget="budget"
-            :forecast="forecast"
-            @edit-forecast="updateForecastAt"
-          />
-        </div>
+          <div v-else-if="item.i==='table'" class="h-full">
+            <ForecastTable
+              :months="months"
+              :ventas="ventas"
+              :budget="budget"
+              :forecast="forecast"
+              @edit-forecast="({index,value}) => { const n=Number(value); forecast[index]=isNaN(n)?0:n }"
+            />
+            <div class="mt-3 flex gap-2 justify-content-end">
+              <Button label="Zurücksetzen (Budget)" icon="pi pi-refresh" severity="secondary" @click="resetForecastToBudget" />
+              <Button label="Speichern" icon="pi pi-save" @click="saveForecast" />
+            </div>
+          </div>
+        </GlassCard>
       </GridItem>
     </GridLayout>
   </div>
 </template>
 
 <style scoped>
-.forecast-wrapper{
-  width: 100%; /* ancho total menos barra */
-  overflow: hidden;
-}
-
-.h-full{ height: 100%; }
-
-.glass-card{
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 2px 4px 0 rgba(0,0,0,0.4);
-  border-radius: 10px;
-  padding: 12px;
-  height: 100%;
+.forecast-wrapper{ 
+  height: 100vh;
+  width: 100%; 
+  overflow: hidden; 
 }
 </style>

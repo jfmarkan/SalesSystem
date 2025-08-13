@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import HomeDashboard from '@/views/dashboard/HomeDashboard.vue';
 import HomeView from '@/views/HomeView.vue';
 import ForecastPanel from '@/views/dashboard/ForecastPanel.vue';
+import DeviationPanel from '@/views/dashboard/DeviationPanel.vue';
 
 const routes = [
     {
@@ -40,6 +41,13 @@ const routes = [
             { 
                 path: '/forecasts', 
                 component: ForecastPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/deviations', 
+                component: DeviationPanel, 
                 meta: { 
                     requiresAuth: true 
                 }

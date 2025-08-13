@@ -22,17 +22,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->append([
+        // Middleware GLOBAL (corre en todos lados)
+        $middleware->append(HandleCors::class);
+
+        // Middleware del grupo API (ej: Sanctum)
+        $middleware->group('api', [
+            EnsureFrontendRequestsAreStateful::class, // 👈 Necesario para cookies en API
+        ]);
+
+        // Middleware del grupo WEB (para páginas tradicionales o rutas web.php)
+        $middleware->group('web', [
             EncryptCookies::class,
-            StartSession::class,
-            VerifyCsrfToken::class,
             AddQueuedCookiesToResponse::class,
+            StartSession::class,
             ShareErrorsFromSession::class,
-            HandleCors::class,
-            // SubstituteBindings::class,
-            EnsureFrontendRequestsAreStateful::class,
+            VerifyCsrfToken::class,
         ]);
     })
+
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();

@@ -20,8 +20,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-
+    
     Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
+    Route::get('/me/clients', [ForecastController::class, 'getClients']);
+    Route::get('/me/profit-centers', [ForecastController::class, 'getProfitCenters']);
+    Route::get('/me/assignments', [ForecastController::class, 'getAssignments']);
+
     Route::get('/forecast/list', [ForecastController::class, 'forecastList']);
     Route::get('/forecast/detail/{assignmentId}', [ForecastController::class, 'detail']);
     Route::post('/forecast/save/{assignmentId}', [ForecastController::class, 'save']);

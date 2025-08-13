@@ -12,7 +12,7 @@
           unternehmensweite Erkenntnisse und Maßnahmen.
         </p>
         <div class="hero-actions">
-          <Button label="Anmelden" class="btn-hero" />
+          <Button label="Anmelden" class="btn-hero" @click="goToLogin"/>
           <Button label="Registrieren" outlined class="btn-hero-outline" />
         </div>
       </div>
@@ -31,6 +31,18 @@ import Button from 'primevue/button'
 import heroImg from '@/assets/img/backgrounds/stb-factory.jpg'
 const heroImage = heroImg
 // const heroImage = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1600&auto=format&fit=crop'
+
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const goToLogin = () => {
+  router.push('/login')
+}
+
+const goToRegister = () => {
+  router.push('/register')
+}
 </script>
 
 <<style scoped>

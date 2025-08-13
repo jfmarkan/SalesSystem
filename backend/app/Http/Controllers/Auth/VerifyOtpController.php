@@ -41,12 +41,13 @@ class VerifyOtpController extends Controller
         $user->save();
 
         // Crear token de autenticación Sanctum
-        $token = $user->createToken('auth_token')->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Verificación exitosa.',
-            'token' => $token,
-            'user' => $user
+            'user' => $user->load('roles'),
+            'roles' => $user->roles->pluck('name'),
         ]);
     }
 }
