@@ -55,10 +55,6 @@ const routes = [
         ],
         meta: { requiresAuth: true },
     },
-    {
-        path: '/forecasts',
-        component: ForecastPanel
-    },
 ];
 
 const router = createRouter({

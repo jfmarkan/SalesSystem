@@ -32,7 +32,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/forecast/summary/{assignmentId}', [ForecastController::class, 'summary']);
     Route::get('/forecast/monthly-evolution/{assignmentId}', [ForecastController::class, 'monthlyEvolution']);
     Route::get('/forecast/version-history/{assignmentId}', [ForecastController::class, 'versionHistory']);
-
-    #Route::get('/radar', [DashboardRadarController::class, 'radar']);
-    #Route::get('/radar-table', [DashboardRadarController::class, 'radarTable']);
 });
