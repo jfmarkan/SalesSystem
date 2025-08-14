@@ -12,7 +12,7 @@ use Illuminate\http\Middleware\HandleCors;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-// use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Middleware del grupo API (ej: Sanctum)
         $middleware->group('api', [
             EnsureFrontendRequestsAreStateful::class, // 👈 Necesario para cookies en API
+            SubstituteBindings::class
         ]);
 
         // Middleware del grupo WEB (para páginas tradicionales o rutas web.php)
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             StartSession::class,
             ShareErrorsFromSession::class,
             VerifyCsrfToken::class,
+            EnsureFrontendRequestsAreStateful::class
         ]);
     })
 

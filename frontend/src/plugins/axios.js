@@ -1,8 +1,6 @@
 // Axios client for Laravel Sanctum (stateful, cookies-based)
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 // Simple cookie reader
 function readCookie(name) {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
@@ -10,7 +8,7 @@ function readCookie(name) {
 }
 
 export const api = axios.create({
-  baseURL,
+  baseURL: 'http://localhost:8000',
   withCredentials: true, // send cookies
   headers: { 'X-Requested-With': 'XMLHttpRequest' },
 
