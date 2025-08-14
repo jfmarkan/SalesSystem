@@ -281,21 +281,25 @@ class ForecastController extends Controller
         ]);
     }
 
-    public function getClients(Request $request)
-    {
-        $user = $request->user();
+    public function getClients(\Illuminate\Http\Request $request)
+{
+    $uid = auth()->id();
+    if (!$uid) return response()->json(['message'=>'Unauthenticated'], 401);
 
-        $assignments = Assignment::where('user_id', $user->id)->get();
+    $cpcIds = \App\Models\Assignment::where('user_id', $uid)->pluck('client_profit_center_id');
+    if ($cpcIds->isEmpty()) return response()->json([]);
 
-        $clientGroupNumbers = ClientProfitCenter::whereIn('id', $assignments->pluck('client_profit_center_id'))
-            ->pluck('client_group_number')
-            ->unique()
-            ->toArray();
+    $groupNumbers = \App\Models\ClientProfitCenter::whereIn('id', $cpcIds)
+        ->pluck('client_group_number')->filter()->unique();
+    if ($groupNumbers->isEmpty()) return response()->json([]);
 
-        $clients = Client::whereIn('client_group_number', $clientGroupNumbers)->get();
+    $clients = \App\Models\Client::whereIn('client_group_number', $groupNumbers)
+        ->select(['id','client_group_number','client_name as name'])
+        ->orderBy('client_name')->get();
 
-        return response()->json($clients);
-    }
+    return response()->json($clients);
+}
+
 
     public function getProfitCenters(Request $request)
     {

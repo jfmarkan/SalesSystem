@@ -120,6 +120,7 @@ watch([mode, primaryId], ()=>{
 watch(secondaryId, loadSeries)
 
 onMounted(async ()=>{
+    console.log("Montando ForecastPanel.vue")
   await loadMaster()
   primaryId.value = primaryOptions.value[0]?.value ?? null
   secondaryId.value = secondaryOptions.value[0]?.value ?? null
@@ -145,7 +146,7 @@ const layout = ref([
       :row-height="8"
       :is-draggable="false"
       :is-resizable="false"
-      :margin="[12,12]"
+      :margin="[10,10]"
       :use-css-transforms="true"
     >
       <GridItem v-for="item in layout" :key="item.i" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">

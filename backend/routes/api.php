@@ -21,14 +21,6 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     
-    Route::get('/me-test', function (Request $request) {
-        return response()->json([
-            'user' => $request->user(),
-            'auth_id' => auth()->id(),
-            'session_id' => session()->getId(),
-        ]);
-    });
-
     Route::get('/me/clients', [ForecastController::class, 'getClients']);
     Route::get('/me/profit-centers', [ForecastController::class, 'getProfitCenters']);
     Route::get('/me/assignments', [ForecastController::class, 'getAssignments']);
