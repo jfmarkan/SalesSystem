@@ -1,7 +1,7 @@
 <template>
   <AuthLayout blurBackground>
     <form @submit.prevent="login" class="login-form">
-      <InputText v-model="email" placeholder="Email" class="glass-field" />
+      <InputText v-model="email" placeholder="E-Mail" class="glass-field" />
       <Password
         v-model="password"
         placeholder="Passwort"
@@ -19,6 +19,7 @@
 </template>
 
 <script setup>
+/* Component: Login View (German UI, English code/comments) */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -32,6 +33,7 @@ const modal = useModal()
 const email = ref('')
 const password = ref('')
 
+// Handles login submit; keeps your OTP verify flow intact
 const login = async () => {
   try {
     const response = await auth.login({
@@ -39,17 +41,20 @@ const login = async () => {
       password: password.value,
     })
 
-    console.log('📦 Respuesta completa desde login():', response)
+    console.log('📦 Vollständige Login-Antwort:', response)
 
-    if (response.verify) {
-      modal.show('Konto nicht verifiziert', 'Gib den Code ein, den wir dir per E-Mail geschickt haben..')
+    if (response?.verify) {
+      // Unverified account: show modal and route to OTP with email
+      modal.show('Konto nicht verifiziert', 'Gib den Code ein, den wir dir per E-Mail geschickt haben.')
       router.push({ path: '/verify-otp', query: { email: response.email } })
     } else {
-      console.log('🔁 Redirigiendo al dashboard...');
+      // Normal login: go to dashboard
+      console.log('🔁 Weiterleitung zum Dashboard...')
       router.push('/dashboard')
     }
   } catch (err) {
-    console.error('❌ Error en login:', err)
+    console.error('❌ Login-Fehler:', err)
+    // Generic German UI message; adjust to your backend messages if needed
     modal.show('Zugriffsfehler', 'Ungültige Anmeldedaten oder nicht vorhandenes Konto.')
   }
 }

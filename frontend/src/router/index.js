@@ -62,22 +62,23 @@ const router = createRouter({
     routes
 });
 
+// Guard: only hit /api/user when a route needs auth
 router.beforeEach(async (to, from, next) => {
-    const auth = useAuthStore();
-
-    if (to.meta.requiresAuth) {
-        if (!auth.user) {
-            try {
-                await auth.fetchUser();
-            } catch (e) {
-                return next('/login');
+    if (to.meta?.requiresAuth) {
+        const auth = useAuthStore()
+        try {
+            if (!auth.user) {
+                // Try to get the current user (will be 401 if not logged in)
+                await auth.fetchUser()
             }
-        }
-        if (!auth.user) {
-            return next('/login');
+            if (!auth.user) {
+                return next({ path: '/login', query: { redirect: to.fullPath } })
+            }
+        } catch (_) {
+            return next({ path: '/login', query: { redirect: to.fullPath } })
         }
     }
-    return next();
-});
+    return next()
+})
 
 export default router;

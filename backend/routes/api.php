@@ -15,21 +15,13 @@ use App\Http\Controllers\ForecastController;
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
-// Usuario autenticado (Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', function (Request $request) {
-        return $request->user();
+    Route::prefix('me')->group(function () {
+        Route::get('/clients',        [ForecastController::class, 'getClients']);
+        Route::get('/profit-centers', [ForecastController::class, 'getProfitCenters']);
+        Route::get('/assignments',    [ForecastController::class, 'getAssignments']);
     });
-    
-    Route::get('/me/clients', [ForecastController::class, 'getClients']);
-    Route::get('/me/profit-centers', [ForecastController::class, 'getProfitCenters']);
-    Route::get('/me/assignments', [ForecastController::class, 'getAssignments']);
-    Route::get('/forecast/selector-options', [ForecastController::class, 'selectorOptions']);
 
-    Route::get('/forecast/list', [ForecastController::class, 'forecastList']);
-    Route::get('/forecast/detail/{assignmentId}', [ForecastController::class, 'detail']);
-    Route::post('/forecast/save/{assignmentId}', [ForecastController::class, 'save']);
-    Route::get('/forecast/summary/{assignmentId}', [ForecastController::class, 'summary']);
-    Route::get('/forecast/monthly-evolution/{assignmentId}', [ForecastController::class, 'monthlyEvolution']);
-    Route::get('/forecast/version-history/{assignmentId}', [ForecastController::class, 'versionHistory']);
+    Route::get('/forecast/series',  [ForecastController::class, 'getSeries']);
+    Route::put('/forecast/series',  [ForecastController::class, 'saveSeries']);
 });
