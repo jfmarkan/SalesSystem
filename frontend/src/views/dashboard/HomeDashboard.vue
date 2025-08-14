@@ -100,8 +100,8 @@ function getPropsForType(item) {
 
 <style scoped>
 .dash-wrapper{
-  width: calc(100vw - 70px); /* ancho útil menos la barra */
-  overflow: hidden;
+  width: 100%; /* ancho útil menos la barra */
+
 }
 
 .grid-widget{
