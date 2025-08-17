@@ -6,9 +6,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\Assignment;
-use App\Models\Forecast;
-use App\Models\Budget;
-use App\Models\Sale;
 
 class DetectDeviations extends Command
 {
@@ -36,7 +33,7 @@ class DetectDeviations extends Command
         }
 
         foreach ($userIds as $userId) {
-            // por cada PC code del usuario
+            // PC codes del usuario
             $pcCodes = Assignment::query()
                 ->join('client_profit_centers as cpc', 'cpc.id', '=', 'assignments.client_profit_center_id')
                 ->where('assignments.user_id', $userId)
@@ -44,7 +41,7 @@ class DetectDeviations extends Command
                 ->pluck('cpc.profit_center_code');
 
             foreach ($pcCodes as $pcCode) {
-                // todos los CPC ids del user para ese PC
+                // IDs de CPC del user para este PC code
                 $cpcIds = Assignment::query()
                     ->join('client_profit_centers as cpc', 'cpc.id', '=', 'assignments.client_profit_center_id')
                     ->where('assignments.user_id', $userId)
@@ -91,15 +88,15 @@ class DetectDeviations extends Command
                 }
 
                 if ($totalBudgetF > 0.0) {
-                    $ratioF = $totalForecast / $totalBudgetF; // 0.95..1.05
+                    $ratioF = $totalForecast / $totalBudgetF; // agregado por PC code
                     if ($ratioF < 0.95 || $ratioF > 1.05) {
-                        $this->insertDeviationRows(
-                            userId: $userId,
-                            cpcIds: $cpcIds,
-                            fy: $yearNow,
-                            m: $monthNow,
-                            type: 'FORECAST',
-                            percent: round($ratioF * 100, 2)
+                        $this->upsertDeviation(
+                            profitCenterCode: $pcCode,
+                            userId:  $userId,
+                            fy:      $yearNow,
+                            m:       $monthNow,
+                            type:    'FORECAST',
+                            percent: round($ratioF * 100, 2),
                         );
                     }
                 }
@@ -120,15 +117,15 @@ class DetectDeviations extends Command
                     ->sum('volume');
 
                 if ($sumBudget > 0.0 && $sumSales > 0.0) {
-                    $ratioS = $sumSales / $sumBudget; // 0.90..1.10
+                    $ratioS = $sumSales / $sumBudget;
                     if ($ratioS < 0.90 || $ratioS > 1.10) {
-                        $this->insertDeviationRows(
-                            userId: $userId,
-                            cpcIds: $cpcIds,
-                            fy: $py,
-                            m: $pm,
-                            type: 'SALES',
-                            percent: round($ratioS * 100, 2)
+                        $this->upsertDeviation(
+                            profitCenterCode: $pcCode,
+                            userId:  $userId,
+                            fy:      $py,
+                            m:       $pm,
+                            type:    'SALES',
+                            percent: round($ratioS * 100, 2),
                         );
                     }
                 }
@@ -140,34 +137,32 @@ class DetectDeviations extends Command
     }
 
     /**
-     * Inserta 1 fila por cada CPC (ajustado a tu tabla) si no existe.
+     * Inserta/omite por clave única (profit_center_code + fy + month + type + user_id)
      */
-    private function insertDeviationRows(int $userId, array $cpcIds, int $fy, int $m, string $type, float $percent): void
+    private function upsertDeviation(string $profitCenterCode, int $userId, int $fy, int $m, string $type, float $percent): void
     {
+        $exists = DB::table('deviations')->where([
+            'profit_center_code' => $profitCenterCode,
+            'fiscal_year'        => $fy,
+            'month'              => $m,
+            'deviation_type'     => $type,
+            'user_id'            => $userId,
+        ])->exists();
+
+        if ($exists) return;
+
         $now = Carbon::now();
-        foreach ($cpcIds as $cpcId) {
-            $exists = DB::table('deviations')
-                ->where('client_profit_center_id', $cpcId)
-                ->where('fiscal_year', $fy)
-                ->where('month', $m)
-                ->where('deviation_type', $type)
-                ->where('user_id', $userId)
-                ->exists();
-
-            if ($exists) continue;
-
-            DB::table('deviations')->insert([
-                'client_profit_center_id' => (int)$cpcId,
-                'deviation_type'          => $type,
-                'fiscal_year'             => $fy,
-                'month'                   => $m,
-                'deviation_ratio'       => $percent,   // ratio * 100
-                'explanation'             => null,
-                'user_id'                 => $userId,
-                'created_at'              => $now,
-                'updated_at'              => $now,
-                'deleted_at'              => null,
-            ]);
-        }
+        DB::table('deviations')->insert([
+            'profit_center_code' => $profitCenterCode,
+            'deviation_type'     => $type,
+            'fiscal_year'        => $fy,
+            'month'              => $m,
+            'deviation_ratio'    => $percent, // ratio * 100
+            'explanation'        => null,
+            'user_id'            => $userId,
+            'created_at'         => $now,
+            'updated_at'         => $now,
+            'deleted_at'         => null,
+        ]);
     }
 }
