@@ -21,7 +21,7 @@ return new class extends Migration {
             $t->unsignedTinyInteger('month');          // 1..12
 
             // Valor pronosticado (entero, sin decimales)
-            $t->unsignedInteger('amount');
+            $t->unsignedBigInteger('volume');
 
             // Versionado (controlás lógica en controller/frontend)
             $t->unsignedInteger('version')->default(1);

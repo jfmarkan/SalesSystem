@@ -17,7 +17,7 @@ return new class extends Migration {
 
             $t->unsignedSmallInteger('fiscal_year'); // ej: 2026
             $t->unsignedTinyInteger('month');        // 1..12
-            $t->unsignedInteger('amount');           // enteros del ERP
+            $t->unsignedInteger('volume');           // enteros del ERP
 
             $t->timestamps();
             $t->softDeletes();

@@ -21,7 +21,7 @@ return new class extends Migration {
             $t->unsignedTinyInteger('month');        // 1=Jan ... 12=Dec
 
             // Valor presupuestado (entero redondo, sin decimales)
-            $t->unsignedInteger('amount');
+            $t->unsignedBigInteger('volume');
 
             $t->timestamps();
             $t->softDeletes();
