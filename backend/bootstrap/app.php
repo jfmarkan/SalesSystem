@@ -12,6 +12,7 @@ use Illuminate\http\Middleware\HandleCors;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -41,7 +42,14 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureFrontendRequestsAreStateful::class
         ]);
     })
-
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+    ->withSchedule(function (Schedule $schedule) {
+        // Corre el día 4 de cada mes a las 05:00
+        $schedule->command('deviations:detect')
+            ->monthlyOn(4, '05:00')
+            ->withoutOverlapping()
+            ->runInBackground();
+    })
+    ->create();
