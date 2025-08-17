@@ -10,11 +10,8 @@ return new class extends Migration {
         Schema::create('deviations', function (Blueprint $t) {
             $t->bigIncrements('id');
 
-            // Ámbito de la desviación
-            $t->unsignedBigInteger('client_profit_center_id');
-            $t->foreign('client_profit_center_id')
-              ->references('id')->on('client_profit_centers')
-              ->cascadeOnUpdate()->restrictOnDelete();
+            // Ámbito de la desviación (código de Profit Center numérico, 3 cifras)
+            $t->unsignedSmallInteger('profit_center_code'); // 0..999
 
             // Tipo: comparación con presupuesto usando ventas (pasado) o forecast (futuro)
             $t->enum('deviation_type', ['SALES','FORECAST']);
@@ -24,7 +21,7 @@ return new class extends Migration {
             $t->unsignedTinyInteger('month'); // 1..12
 
             // Resultado calculado (porcentaje respecto al budget)
-            $t->decimal('percent_of_budget', 6, 2)->nullable(); // ej: 94.50
+            $t->decimal('deviation_ratio', 5, 2)->nullable(); // ej: 94.50
 
             // Explicación del usuario cuando supera umbral
             $t->text('explanation')->nullable();
@@ -38,7 +35,12 @@ return new class extends Migration {
             $t->timestamps();
             $t->softDeletes();
 
-            $t->index(['client_profit_center_id','fiscal_year','month']);
+            // Índices
+            $t->index(['profit_center_code']);
+            $t->unique(
+                ['profit_center_code', 'fiscal_year', 'month', 'deviation_type', 'user_id'],
+                'uniq_dev_pc_user_period_type'
+            );
         });
     }
 
