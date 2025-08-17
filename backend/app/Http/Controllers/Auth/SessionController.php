@@ -69,8 +69,10 @@ class SessionController extends Controller
                 'message' => 'Anmeldung erfolgreich',
                 'user'    => [
                     'id'    => $user->id,
-                    'name'  => $user->name,
+                    'first_name'  => $user->first_name,
+                    'last_name' => $user->last_name,
                     'email' => $user->email,
+                    'role_id' => $user->role_id
                     // Add more fields if needed
                 ],
                 'roles'   => $roles,
