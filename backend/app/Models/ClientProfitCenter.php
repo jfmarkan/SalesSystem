@@ -39,4 +39,20 @@ class ClientProfitCenter extends Model
     {
         return $this->hasMany(Assignment::class, 'client_profit_center_id', 'id');
     }
+
+    public function budgets()
+    {
+        return $this->hasMany(Budget::class, 'client_profit_center_id');
+    }
+
+    public function forecasts()
+    {
+        return $this->hasMany(Forecast::class, 'client_profit_center_id');
+    }
+
+    public function sales()
+    {
+        return $this->hasMany(Sale::class, 'client_profit_center_id');
+    }
+
 }
