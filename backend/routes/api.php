@@ -8,8 +8,7 @@ use App\Http\Controllers\Auth\VerifyOtpController as VerifyOtpController;
 use App\Http\Controllers\Auth\LoginController as LoginController;
 use App\Http\Controllers\Auth\OtpController as OtpController;
 
-use App\Http\Controllers\Dashboard\RadarController as DashboardRadarController;
-
+use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ForecastController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
@@ -24,4 +23,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/forecast/series',  [ForecastController::class, 'getSeries']);
     Route::put('/forecast/series',  [ForecastController::class, 'saveSeries']);
+    Route::get('/forecast/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
+
+    Route::get('/deviations', [DeviationController::class, 'index']);
+    Route::post('/deviations/run', [DeviationController::class, 'runForMe']);
+    Route::put('/deviations/{id}/justify', [DeviationController::class, 'justify']);
 });
