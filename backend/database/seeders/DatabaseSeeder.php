@@ -17,8 +17,17 @@ class DatabaseSeeder extends Seeder
             ClassificationSeeder::class,
             RolePermissionSeeder::class,
             UserSeeder::class,
+            TeamSeeder::class,
+            TeamMemberSeeder::class,
+            ClientSeeder::class,
+            SeasonalitySeeder::class,
+            ProfitCenterSeeder::class,
+            ClientProfitCenterSeeder::class,
+            BudgetSeeder::class,
+            SaleSeeder::class,
+            ForecastSeeder::class,
         ]);
 
-        \App\Models\User::find(1)?->assignRole('superadmin');
+        \App\Models\User::find(1)?->assignRole('Super Admin');
     }
 }

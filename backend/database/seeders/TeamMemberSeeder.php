@@ -19,30 +19,6 @@ class TeamMemberSeeder extends Seeder
         $teamMembers = [
             [
                 'team_id' => 1,
-                'user_id' => 4,
-                'role' => 'MANAGER',
-                'created_at' => Now(),
-                'updated_at' => NULL,
-                'deleted_at' => NULL,
-            ],
-            [
-                'team_id' => 2,
-                'user_id' => 5,
-                'role' => 'MANAGER',
-                'created_at' => Now(),
-                'updated_at' => NULL,
-                'deleted_at' => NULL,
-            ],
-            [
-                'team_id' => 3,
-                'user_id' => 6,
-                'role' => 'MANAGER',
-                'created_at' => Now(),
-                'updated_at' => NULL,
-                'deleted_at' => NULL,
-            ],
-            [
-                'team_id' => 1,
                 'user_id' => 7,
                 'role' => 'SALES_REP',
                 'created_at' => Now(),
@@ -161,7 +137,7 @@ class TeamMemberSeeder extends Seeder
             $newTeamMember->user_id = $teamMember['user_id'];
             $newTeamMember->role = $teamMember['role'];
             $newTeamMember->created_at = $teamMember['created_at'];
-            $newTeamMember->updated_at = $teamMember['team_id'];
+            $newTeamMember->updated_at = $teamMember['updated_at'];
             $newTeamMember->deleted_at = $teamMember['deleted_at'];
             $newTeamMember->save();
         };
