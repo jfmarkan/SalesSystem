@@ -1,158 +1,215 @@
-<script setup>
-/* Accordion of open deviations for a Profit Center (no filters).
-   UI: German; comments: English; uses your axios plugin + Sanctum CSRF. */
-import { ref, onMounted } from 'vue'
-import Accordion from 'primevue/accordion'
-import AccordionTab from 'primevue/accordiontab'
-import Button from 'primevue/button'
-import InputNumber from 'primevue/inputnumber'
-import Textarea from 'primevue/textarea'
-import Tag from 'primevue/tag'
-
-import api from '@/plugins/axios'
-import { ensureCsrf } from '@/plugins/csrf'
-
-const props = defineProps({
-  pcId: { type: [Number, String], required: true },   // current Profit Center id
-  apiPrefix: { type: String, default: '/api' }        // adjust if no /api prefix
-})
-
-const loading = ref(false)
-/* Expected row shape from API:
-   { id, month:'YYYY-MM', type:'ventas'|'forecast', venta, budget, forecast, note } */
-const rows = ref([])
-
-/* Load open deviations for the given Profit Center */
-async function loadOpen() {
-  loading.value = true
-  try {
-    await ensureCsrf()
-    const { data } = await api.get(`${props.apiPrefix}/deviations/open`, { params: { pcId: props.pcId } })
-    rows.value = (data || []).map(d => ({
-      ...d,
-      _note: d.note || '',
-      _forecast: Number.isFinite(+d.forecast) ? +d.forecast : 0
-    }))
-  } finally { loading.value = false }
-}
-
-/* Percent helper */
-function pct(num, den) {
-  const n = Number(num), d = Number(den)
-  if (!d) return '0%'
-  return Math.round((n / d) * 100) + '%'
-}
-
-/* Save a single deviation changes (note + forecast) */
-async function saveRow(row) {
-  await ensureCsrf()
-  await api.put(`${props.apiPrefix}/deviations/${row.id}`, {
-    note: row._note,
-    forecast: row._forecast
-  })
-  row.note = row._note
-  row.forecast = row._forecast
-}
-
-onMounted(loadOpen)
-</script>
-
 <template>
-  <div class="deviation-panel">
-    <div class="panel-header">
-      <h3 class="m-0">Offene Abweichungen</h3>
-      <Button label="Aktualisieren" icon="pi pi-refresh" size="small" @click="loadOpen" :disabled="loading" />
-    </div>
+  <div class="deviations-wrapper">
+    <Toast />
 
-    <div v-if="loading" class="loading">Wird geladen…</div>
-    <div v-else-if="!rows.length" class="empty">Keine offenen Abweichungen im Profit Center.</div>
-
-    <Accordion v-else multiple :activeIndex="[0]">
-      <AccordionTab v-for="row in rows" :key="row.id">
-        <template #header>
-          <div class="tab-header">
-            <span :class="['marker', row.type === 'ventas' ? 'verkauf' : 'prognose']"></span>
-            <div class="title">
-              <div class="line1">
-                <strong>{{ row.month }}</strong>
-                <Tag :value="row.type === 'ventas' ? 'Verkauf' : 'Prognose'"
-                     :class="['pill', row.type === 'ventas' ? 'verkauf' : 'prognose']" />
+    <GridLayout
+      :layout="layout"
+      :col-num="12"
+      :row-height="8"
+      :is-draggable="false"
+      :is-resizable="false"
+      :margin="[12,12]"
+      :use-css-transforms="true"
+    >
+      <!-- Título en 12 columnas, con GlassCard -->
+      <GridItem :i="'title'" :x="0" :y="0" :w="12" :h="4">
+        <GlassCard class="title-glass">
+          <div class="title-bar">
+            <div class="left">
+              <h2 class="m-0">Abweichungen</h2>
+              <span class="muted">offen: {{ openCount }}</span>
+            </div>
+            <div class="right">
+              <div class="tabs">
+                <button class="tab" :class="{ active: tab==='open' }" @click="tab='open'">
+                  Offen <span class="badge">{{ openCount }}</span>
+                </button>
+                <button class="tab" :class="{ active: tab==='just' }" @click="tab='just'">
+                  Begründet <span class="badge">{{ justifiedLocal.length }}</span>
+                </button>
               </div>
-              <div class="line2">
-                <span>Verkauf: <b>{{ row.venta }}</b></span>
-                <span>Budget: <b>{{ row.budget }}</b></span>
-                <span>Prognose: <b>{{ row._forecast }}</b></span>
-                <span>Δ V/Budget: <b>{{ pct(row.venta, row.budget) }}</b></span>
-                <span>Δ P/Budget: <b>{{ pct(row._forecast, row.budget) }}</b></span>
+              <div class="actions">
+                <Button label="Neu berechnen" icon="pi pi-refresh" class="p-button-sm" :loading="running" @click="runNow" />
+                <Button label="Aktualisieren" icon="pi pi-sync" class="p-button-sm p-button-secondary" :loading="loading" @click="loadDeviations" />
               </div>
             </div>
           </div>
-        </template>
+        </GlassCard>
+      </GridItem>
 
-        <div class="tab-body">
-          <div class="form-grid">
-            <div class="field">
-              <label>Begründung</label>
-              <Textarea v-model="row._note" rows="3" class="w-full" />
-            </div>
-            <div class="field">
-              <label>Prognose-Anpassung ({{ row.month }})</label>
-              <InputNumber v-model="row._forecast" inputClass="w-full text-right" :min="0" :useGrouping="false" />
-            </div>
+      <!-- Lista apilada (cada item ya trae su glass) -->
+      <GridItem :i="'list'" :x="0" :y="4" :w="12" :h="40">
+        <div class="list-wrap">
+          <div v-if="loading" class="local-loader">
+            <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
+            <div class="caption">Wird geladen…</div>
           </div>
-          <div class="actions">
-            <Button label="Speichern" icon="pi pi-save" @click="saveRow(row)" />
-          </div>
+
+          <template v-else>
+            <template v-if="tab==='open'">
+              <template v-if="deviations.length">
+                <DeviationItem
+                  v-for="dev in deviations"
+                  :key="dev.id"
+                  :dev="dev"
+                  :saving="savingId===dev.id"
+                  @save="onSave"
+                />
+              </template>
+              <div v-else class="empty">Keine offenen Abweichungen.</div>
+            </template>
+
+            <template v-else>
+              <template v-if="justifiedLocal.length">
+                <DeviationItem
+                  v-for="dev in justifiedLocal"
+                  :key="'j-'+dev.id"
+                  :dev="dev"
+                  :readonly="true"
+                />
+              </template>
+              <div v-else class="empty">Keine begründeten Abweichungen.</div>
+            </template>
+          </template>
         </div>
-      </AccordionTab>
-    </Accordion>
+      </GridItem>
+    </GridLayout>
   </div>
 </template>
 
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { GridLayout, GridItem } from 'vue3-grid-layout'
+import Button from 'primevue/button'
+import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
+import api from '@/plugins/axios'
+import { ensureCsrf } from '@/plugins/csrf'
+import DeviationItem from '@/components/lists/DeviationList.vue'
+import GlassCard from '@/components/ui/GlassCard.vue'
+
+const toast = useToast()
+
+const layout = ref([
+  { i:'title', x:0, y:0, w:12, h:4, static:true },
+  { i:'list',  x:0, y:4, w:12, h:40, static:true }
+])
+
+const deviations = ref([])
+const justifiedLocal = ref([])
+const loading = ref(false)
+const running = ref(false)
+const savingId = ref(null)
+const tab = ref('open')
+
+const openCount = computed(() => deviations.value.filter(d => !d.justified).length)
+
+function normalizeDev(d){
+  return {
+    id: d.id,
+    type: String(d.type || 'sales'),
+    clientName: d.clientName || d.client || d.kunde || '',
+    pcCode: d.pcCode || d.pc_code || d.code || '',
+    pcName: d.pcName || d.pc_name || d.name || '',
+    year: Number(d.year || d.y || 0),
+    month: Number(d.month || d.m || 0),
+    sales: Number(d.sales || 0),
+    budget: Number(d.budget || 0),
+    forecast: Number(d.forecast || 0),
+    deltaAbs: Number(d.deltaAbs ?? d.delta_abs ?? 0),
+    deltaPct: Number(d.deltaPct ?? d.delta_pct ?? 0),
+    comment: d.comment || '',
+    justified: !!d.justified
+  }
+}
+
+async function loadDeviations(){
+  loading.value = true
+  try{
+    await ensureCsrf()
+    const { data } = await api.get('/api/deviations')
+    deviations.value = Array.isArray(data) ? data.map(normalizeDev) : []
+  } catch {
+    deviations.value = []
+    toast.add({ severity:'error', summary:'Fehler', detail:'Abweichungen konnten nicht geladen werden', life:2500 })
+  } finally { loading.value = false }
+}
+
+async function runNow(){
+  running.value = true
+  try{
+    await ensureCsrf()
+    await api.post('/api/deviations/run')
+    await loadDeviations()
+    toast.add({ severity:'success', summary:'OK', detail:'Neu berechnet', life:1600 })
+  } catch {
+    toast.add({ severity:'error', summary:'Fehler', detail:'Neuberechnung fehlgeschlagen', life:2500 })
+  } finally { running.value = false }
+}
+
+async function onSave(payload){
+  const { id, comment } = payload
+  savingId.value = id
+  try{
+    await ensureCsrf()
+    await api.put(`/api/deviations/${id}/justify`, { comment })
+    const idx = deviations.value.findIndex(d => d.id === id)
+    if (idx >= 0) {
+      deviations.value[idx] = { ...deviations.value[idx], justified: true, comment }
+      if (!justifiedLocal.value.some(j => j.id === id)) {
+        justifiedLocal.value.push({ ...deviations.value[idx] })
+      }
+    }
+    toast.add({ severity:'success', summary:'Gespeichert', detail:'Begründung gespeichert', life:1600 })
+  } catch {
+    toast.add({ severity:'error', summary:'Fehler', detail:'Begründung konnte nicht gespeichert werden', life:2500 })
+  } finally {
+    savingId.value = null
+  }
+}
+
+onMounted(loadDeviations)
+</script>
+
 <style scoped>
-.deviation-panel { width: 100%; }
-.panel-header{
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 8px;
-}
-.loading, .empty { padding: 12px; opacity: .8; }
+.deviations-wrapper{ width: calc(100vw - 70px); overflow: hidden; }
 
-/* Accordion header with left color marker */
-.tab-header{ display: flex; align-items: center; gap: 12px; }
-.marker{ width: 6px; height: 32px; border-radius: 3px; }
-.marker.verkauf{ background: #3B82F6; }      /* blue for sales deviations */
-.marker.prognose{ background: #F59E0B; }     /* amber for forecast deviations */
+/* Title glass keeps backdrop on every render */
+.title-glass{
+  padding: 0; /* GlassCard ya tiene padding; usamos layout interno */
+  will-change: backdrop-filter;
+}
+.title-bar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.left{ display:flex; align-items:baseline; gap:10px; }
+.muted{ color:#475569; opacity:.9; }
+.right{ display:flex; align-items:center; gap:12px; }
+.tabs{ display:flex; gap:8px; }
+.tab{
+  background: rgba(255,255,255,.6);
+  border:1px solid rgba(0,0,0,.08);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight:600; color:#111;
+}
+.tab.active{ border-color: var(--c-blue); box-shadow: 0 0 0 2px rgba(var(--c-blue-rgb),.15) inset; }
+.badge{ margin-left: 6px; background: rgba(0,0,0,.06); border-radius: 999px; padding: 2px 6px; font-size:.85em; }
 
-.title{ display: flex; flex-direction: column; gap: 4px; }
-.line1{ display: flex; align-items: center; gap: 8px; }
-.line2{ display: flex; flex-wrap: wrap; gap: 16px; font-size: .85rem; opacity: .9; }
+.list-wrap{ position:relative; height:100%; overflow:auto; display:flex; flex-direction:column; gap:12px; }
 
-/* Body */
-.tab-body{ padding: 8px 4px 4px; }
-.form-grid{ display: grid; grid-template-columns: 1fr 280px; gap: 12px; }
-.field label{ display:block; font-size: .85rem; color: #6b7280; margin-bottom: 6px; }
-.actions{ margin-top: 8px; display: flex; justify-content: flex-end; }
+/* Loader */
+.local-loader{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+}
+.dots{ display:flex; gap:10px; align-items:center; justify-content:center; }
+.dot{ width:10px; height:10px; border-radius:50%; opacity:.9; animation: bounce 1s infinite ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.dot.g{ background:#22C55E; animation-delay: 0s; } .dot.r{ background:#EF4444; animation-delay:.15s; } .dot.b{ background:#3B82F6; animation-delay:.30s; }
+@keyframes bounce{ 0%,80%,100%{ transform: translateY(0) scale(1); opacity:.8; } 40%{ transform: translateY(-8px) scale(1.05); opacity:1; } }
+.caption{ font-size:.9rem; color:#334155; opacity:.9; }
 
-/* Fixed-color pills independent of theme */
-:deep(.p-tag.pill){
-  border-radius: 9999px; padding: 0.1rem 0.5rem; font-weight: 600; font-size: .75rem;
-  border: 1px solid transparent;
-}
-:deep(.p-tag.pill.verkauf){
-  background: rgba(59,130,246,.18); color: #1e40af; border-color: rgba(59,130,246,.28);
-}
-:deep(.p-tag.pill.prognose){
-  background: rgba(245,158,11,.22); color: #92400e; border-color: rgba(245,158,11,.30);
-}
-
-/* Glassy look to match page cards */
-:deep(.p-accordion){ background: transparent; border: 0; }
-:deep(.p-accordion .p-accordion-header .p-accordion-header-link){
-  background: rgba(255,255,255,0.45);
-  backdrop-filter: blur(8px);
-}
-:deep(.p-accordion .p-accordion-content){
-  background: rgba(255,255,255,0.30);
-  backdrop-filter: blur(8px);
-}
+.empty{ padding: 18px; text-align: center; color: #475569; opacity: .9; }
 </style>
