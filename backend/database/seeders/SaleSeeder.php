@@ -21,8 +21,8 @@ class SaleSeeder extends Seeder
         $batch = [];
         $inserted = 0; $skipped = 0;
 
-        // max para UNSIGNED INT
-        $MAX = 4294967295;
+        // límites de INT firmado
+        $MIN = -2147483648; $MAX = 2147483647;
 
         foreach ($rows as $row) {
             $cpcId = $this->ival($row,$headers,['client_profit_center_id','clientprofitcenterid','ClientProfitCenterID']);
@@ -35,18 +35,12 @@ class SaleSeeder extends Seeder
             if (!$year || !$month || is_null($volume)) { $skipped++; continue; }
 
             if (!$cpcId || !DB::table('client_profit_centers')->where('id',$cpcId)->exists()) {
-                $this->command->warn("SKIP CPC inexistente: cpc_id={$cpcId}, y={$year}, m={$month}");
                 $skipped++; continue;
             }
 
-            // Normalización para unsigned int
-            if ($volume < 0) {
-                $this->command->warn("Volumen negativo -> 0 (cpc_id={$cpcId}, y={$year}, m={$month}, v={$volume})");
-                $volume = 0;
-            } elseif ($volume > $MAX) {
-                $this->command->warn("Volumen > {$MAX} -> cap (cpc_id={$cpcId}, y={$year}, m={$month}, v={$volume})");
-                $volume = $MAX;
-            }
+            // Cap a rango INT
+            if ($volume < $MIN) $volume = $MIN;
+            if ($volume > $MAX) $volume = $MAX;
 
             // Dedupe (cpc, year, month)
             $exists = DB::table('sales')->where([
@@ -60,7 +54,7 @@ class SaleSeeder extends Seeder
                 'client_profit_center_id' => $cpcId,
                 'fiscal_year'             => $year,
                 'month'                   => $month,
-                'volume'                  => $volume,
+                'volume'                  => $volume, // puede ser negativo
                 'created_at'              => $now,
                 'updated_at'              => null,
                 'deleted_at'              => null,

@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             BudgetSeeder::class,
             SaleSeeder::class,
             ForecastSeeder::class,
+            AssignmentSeeder::class
         ]);
 
         \App\Models\User::find(1)?->assignRole('Super Admin');

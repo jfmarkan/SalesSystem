@@ -10,7 +10,7 @@ class ForecastSeeder extends Seeder
 {
     public function run(): void
     {
-        $file = database_path('seeders/data/tblForecast.csv'); // ajustá si tu archivo se llama distinto (p.ej. tblForecasts.csv)
+        $file = database_path('seeders\data\tblForecasts.csv'); // ajustá si tu archivo se llama distinto (p.ej. tblForecasts.csv)
         if (!is_file($file)) {
             $this->command->error("CSV not found: $file");
             return;
