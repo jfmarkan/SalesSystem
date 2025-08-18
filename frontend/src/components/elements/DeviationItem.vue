@@ -163,7 +163,7 @@ function doSave(){
 <style scoped>
 .item{
   position: relative; border-radius: 12px;
-  background: rgba(0,0,0,.45);
+  background: rgba(255,255,255,0.3);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255,255,255,.08);
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
