@@ -104,7 +104,7 @@
               </a>
 
               <!-- Logout con fondo más oscuro e icono rojo -->
-              <a v-else v-bind="props.action" class="user-menu-item glass-dark logout-item">
+              <a v-else v-bind="props.action" class="user-menu-item glass-dark logout-item" @click.prevent="onLogout">
                 <i class="pi pi-sign-out danger-icon"></i>
                 <span class="ml-2">{{ item.label }}</span>
               </a>
@@ -212,10 +212,10 @@ const userItems = computed(() => [
   {
     label: 'Dashboard bearbeiten',
     icon: 'pi pi-th-large',
-    command: () => router.push('/dashboard/edit'),
+    command: () => router.push('/edit'),
   },
   { separator: true },
-  { label: 'Abmelden', danger: true }, // manejado por logout-item
+  { label: 'Abmelden', danger: true}, // manejado por logout-item
 ])
 
 /* Deviations badge para sales_rep */
@@ -256,7 +256,7 @@ function onLogout() {
 }
 
 .dashboard-bg {
-  background-image: url('@/assets/img/backgrounds/red.jpg');
+  background-image: url('@/assets/img/backgrounds/linen.png');
   background-repeat: repeat;
   background-position: center;
   background-attachment: fixed;
@@ -268,7 +268,7 @@ function onLogout() {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0);
   z-index: 1;
 }
 
@@ -281,9 +281,8 @@ function onLogout() {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 2rem;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 .logo {
