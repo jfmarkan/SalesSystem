@@ -4,17 +4,16 @@
       <h3>Leistungsübersicht nach Profit-Center</h3>
 
       <div class="toggle">
-        <button :class="{active: unit==='raw'}"  @click="setUnit('raw')">Stück</button>
-        <button :class="{active: unit==='m3'}"   @click="setUnit('m3')">m³</button>
-        <button :class="{active: unit==='euro'}" @click="setUnit('euro')">€</button>
+        <button :class="{ active: unit === 'raw' }" @click="setUnit('raw')">Stück</button>
+        <button :class="{ active: unit === 'm3' }" @click="setUnit('m3')">m³</button>
+        <button :class="{ active: unit === 'euro' }" @click="setUnit('euro')">€</button>
       </div>
     </div>
 
     <Radar v-if="chartData" :data="chartData" :options="chartOptions" />
 
     <div class="legend">
-      <span class="dot dot-sales"></span>Ist
-      <span class="dot dot-budget"></span>Budget
+      <span class="dot dot-sales"></span>Ist <span class="dot dot-budget"></span>Budget
       <span class="dot dot-forecast"></span>Forecast
     </div>
   </div>
@@ -30,7 +29,7 @@ import {
   LineElement,
   Filler,
   Tooltip,
-  Legend
+  Legend,
 } from 'chart.js'
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
@@ -45,11 +44,11 @@ const chartOptions = {
   scales: {
     r: {
       angleLines: { color: 'rgba(255,255,255,0.1)' },
-      grid:       { color: 'rgba(255,255,255,0.1)' },
-      pointLabels:{ color: '#cbd5e1', font: { size: 11, weight: 600 } },
-      ticks:      { showLabelBackdrop: false, color: '#94a3b8' }
-    }
-  }
+      grid: { color: 'rgba(255,255,255,0.1)' },
+      pointLabels: { color: '#cbd5e1', font: { size: 11, weight: 600 } },
+      ticks: { showLabelBackdrop: false, color: '#94a3b8' },
+    },
+  },
 }
 
 function setUnit(u) {
@@ -60,17 +59,19 @@ function setUnit(u) {
 }
 
 async function fetchData() {
-  const res = await fetch(`/api/radar?unit=${unit.value}`, { headers: { 'Accept': 'application/json' } })
+  const res = await fetch(`/api/radar?unit=${unit.value}`, {
+    headers: { Accept: 'application/json' },
+  })
   const json = await res.json()
   raw.value = json.data || []
   buildChart()
 }
 
 function buildChart() {
-  const labels = raw.value.map(r => `${r.profit_center_code}`)
-  const sales   = raw.value.map(r => Number(r.total_sales)    || 0)
-  const budget  = raw.value.map(r => Number(r.total_budget)   || 0)
-  const forecast= raw.value.map(r => Number(r.total_forecast) || 0)
+  const labels = raw.value.map((r) => `${r.profit_center_code}`)
+  const sales = raw.value.map((r) => Number(r.total_sales) || 0)
+  const budget = raw.value.map((r) => Number(r.total_budget) || 0)
+  const forecast = raw.value.map((r) => Number(r.total_forecast) || 0)
 
   chartData.value = {
     labels,
@@ -110,8 +111,8 @@ function buildChart() {
         pointHoverBorderColor: '#ec4899',
         borderWidth: 2,
         fill: true,
-      }
-    ]
+      },
+    ],
   }
 }
 
@@ -128,18 +129,56 @@ watch(unit, () => buildChart())
   color: #e2e8f0;
 }
 .header {
-  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
-h3 { font-size: 1rem; margin: 0; }
-.toggle { display: flex; gap: .5rem; }
+h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+.toggle {
+  display: flex;
+  gap: 0.5rem;
+}
 .toggle button {
-  background: transparent; color: #cbd5e1; border: 1px solid #334155; border-radius: 8px;
-  padding: .35rem .6rem; cursor: pointer; font-weight: 600; font-size: .85rem;
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
-.toggle button.active { background: #0ea5e9; border-color: #0ea5e9; color: #001018; }
-.legend { display: flex; gap: 1rem; align-items: center; padding: .5rem 0 1rem; color:#94a3b8; font-size:.85rem;}
-.dot { width:10px; height:10px; border-radius: 50%; display:inline-block; margin-right:.35rem; }
-.dot-sales { background:#22d3ee; }
-.dot-budget{ background:#a78bfa; }
-.dot-forecast{ background:#f472b6; }
+.toggle button.active {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #001018;
+}
+.legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0 1rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.35rem;
+}
+.dot-sales {
+  background: #22d3ee;
+}
+.dot-budget {
+  background: #a78bfa;
+}
+.dot-forecast {
+  background: #f472b6;
+}
 </style>
