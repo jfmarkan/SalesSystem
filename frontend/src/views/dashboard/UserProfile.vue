@@ -93,6 +93,8 @@ import { useToast } from 'primevue/usetoast'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import { useAuthStore } from '@/stores/auth'
+import femalePlaceholder from '@/assets/img/placeholders/user-female.svg'
+import malePlaceholder from '@/assets/img/placeholders/user-male.svg'
 
 const toast = useToast()
 const auth = useAuthStore()
@@ -117,7 +119,13 @@ const hasRecord = ref(false)
 /* Avatar */
 const fileInput = ref(null)
 const avatarPreview = ref('')
-const fallbackAvatar = '/default-avatar.svg'
+
+const fallbackAvatar = computed(() => {
+  const gender = auth.user?.gender?.toUpperCase?.()
+  if (gender === 'F') return femalePlaceholder
+  if (gender === 'M') return malePlaceholder
+  return '/default-avatar.svg'
+})
 
 /* Flags */
 const loading = ref(false)
