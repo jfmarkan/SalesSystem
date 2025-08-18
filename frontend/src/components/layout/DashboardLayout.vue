@@ -86,8 +86,8 @@
               <!-- Sección Header -->
               <div v-if="item.type === 'header'" class="user-menu-header glass-gray">
                 <div class="name-line">
-                  <span class="last">{{ lastName || '—' }}</span>
-                  <span class="first">{{ firstName }}</span>
+                    <span class="first">{{ firstName }}</span>
+                    <span class="last">{{ lastName || '—' }}</span>
                 </div>
                 <div class="role-line">
                   <em>{{ displayRole }}</em>
