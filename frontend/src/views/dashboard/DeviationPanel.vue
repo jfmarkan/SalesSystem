@@ -175,23 +175,25 @@ onMounted(loadDeviations)
 <style scoped>
 .deviations-wrapper {
   width: 100%;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .title-glass {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   border-radius: 12px;
 }
+
 .title-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
 }
+
 .right {
   display: flex;
   align-items: center;
@@ -201,20 +203,23 @@ onMounted(loadDeviations)
   display: flex;
   gap: 8px;
 }
+
 .tab {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   padding: 6px 10px;
   font-weight: 600;
 }
+
 .tab.active {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12) inset;
+  background: rgba(84, 132, 154, 1);
 }
+
 .badge {
   margin-left: 6px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 999px;
   padding: 2px 6px;
   font-size: 0.85em;
@@ -224,7 +229,6 @@ onMounted(loadDeviations)
 /* Lista scrollable. El item abierto puede medir hasta 80vh */
 .list-wrap {
   position: relative;
-  height: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -241,12 +245,14 @@ onMounted(loadDeviations)
   justify-content: center;
   gap: 10px;
 }
+
 .dots {
   display: flex;
   gap: 10px;
   align-items: center;
   justify-content: center;
 }
+
 .dot {
   width: 10px;
   height: 10px;
@@ -255,18 +261,22 @@ onMounted(loadDeviations)
   animation: bounce 1s infinite ease-in-out;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
+
 .dot.g {
   background: #22c55e;
   animation-delay: 0s;
 }
+
 .dot.r {
   background: #ef4444;
   animation-delay: 0.15s;
 }
+
 .dot.b {
   background: #3b82f6;
   animation-delay: 0.3s;
 }
+
 @keyframes bounce {
   0%,
   80%,
@@ -279,6 +289,7 @@ onMounted(loadDeviations)
     opacity: 1;
   }
 }
+
 .caption {
   font-size: 0.9rem;
   color: #e5e7eb;

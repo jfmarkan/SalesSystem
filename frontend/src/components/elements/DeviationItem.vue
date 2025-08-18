@@ -171,8 +171,8 @@ function doSave(){
 }
 .header{ display:flex; align-items:center; gap:12px; padding:10px 12px; cursor:pointer; }
 .band{ width:6px; align-self:stretch; border-radius:6px; box-shadow: 0 0 0 1px rgba(0,0,0,.12) inset; }
-.band.sales{ background:#54849A; }
-.band.forecast{ background:#EA6312; }
+.band.sales{ background:#749c75; }
+.band.forecast{ background:#6A5D7B; }
 .head-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .top-row{ display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .type{ font-weight:700; }
