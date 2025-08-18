@@ -28,7 +28,7 @@
 <script setup>
 import Button from 'primevue/button'
 // Local asset example:
-import heroImg from '@/assets/img/backgrounds/stb-factory.jpg'
+import heroImg from '@/assets/img/outerapp/stb-factory.jpg'
 const heroImage = heroImg
 // const heroImage = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1600&auto=format&fit=crop'
 
