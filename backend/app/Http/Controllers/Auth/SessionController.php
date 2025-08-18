@@ -64,6 +64,8 @@ class SessionController extends Controller
                 $roles = $user->roles->pluck('name')->values();
             }
 
+            $user->load('details');
+
             // Success payload
             return response()->json([
                 'message' => 'Anmeldung erfolgreich',
@@ -72,8 +74,8 @@ class SessionController extends Controller
                     'first_name'  => $user->first_name,
                     'last_name' => $user->last_name,
                     'email' => $user->email,
-                    'role_id' => $user->role_id
-                    // Add more fields if needed
+                    'role_id' => $user->role_id,
+                    'gender' => optional($user->details)->gender,
                 ],
                 'roles'   => $roles,
                 'verify'  => false,
