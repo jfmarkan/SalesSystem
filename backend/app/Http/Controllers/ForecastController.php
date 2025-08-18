@@ -309,7 +309,7 @@ public function saveSeries(Request $request)
         // Versión actual por CPC+mes+año (si querés por usuario, descomentar where user_id)
         $curVer = Forecast::where('client_profit_center_id', $cpcId)
             ->where('fiscal_year', $y)->where('month', $m)
-            // ->where('user_id', $user->id)
+            //->where('user_id', $user->id)
             ->max('version') ?? 0;
 
         $existing = null;

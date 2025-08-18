@@ -1,6 +1,24 @@
 <template>
   <div class="forecast-wrapper">
     <Toast />
+
+    <!-- Unsaved changes modal -->
+    <Dialog
+      v-model:visible="confirmVisible"
+      :modal="true"
+      :draggable="false"
+      :dismissableMask="true"
+      header="Ungespeicherte Änderungen"
+      :style="{ width:'520px' }"
+    >
+      <p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
+      <div class="flex justify-content-end gap-2">
+        <Button label="Abbrechen" severity="secondary" @click="confirmVisible=false; pendingChange=null" />
+        <Button label="Verwerfen" severity="danger" @click="discardAndApply" />
+        <Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
+      </div>
+    </Dialog>
+
     <GridLayout
       :layout="layout"
       :col-num="12"
@@ -12,7 +30,7 @@
     >
       <GridItem v-for="item in layout" :key="item.i + '-' + item.x + '-' + item.y" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
         <GlassCard>
-          <!-- Filtros siempre visibles -->
+          <!-- Filtros -->
           <div v-if="item.i==='filters'" class="h-full p-3">
             <ForecastFilters
               :mode="mode"
@@ -20,19 +38,23 @@
               :primary-id="primaryId"
               :secondary-options="secondaryOptions"
               :secondary-id="secondaryId"
-              @update:mode="handleModeChange"
-              @update:primary-id="v=>primaryId=v"
-              @update:secondary-id="v=>secondaryId=v"
+              @update:mode="v => guardedChange('mode', normalizeMode(v))"
+              @update:primary-id="v => guardedChange('primary', v)"
+              @update:secondary-id="v => guardedChange('secondary', v)"
               @next="handleNext"
             />
+            <div class="mt-3 text-500 text-sm" v-if="loading">Lädt…</div>
           </div>
 
-          <!-- Título solo con selección -->
-          <div v-else-if="item.i==='title'" class="h-full p-3 flex align-items-center">
+          <!-- Título + acciones -->
+          <div v-else-if="item.i==='title'" class="h-full p-3 flex align-items-center justify-content-between">
             <ForecastTitle v-if="hasSelection" :client="selectedClienteName" :kunde="selectedClienteName" :pc="selectedPCName" />
+            <div v-if="hasSelection" class="flex gap-2">
+              <Button label="Speichern" icon="pi pi-save" :disabled="changedCount===0" @click="saveForecast" />
+            </div>
           </div>
 
-          <!-- Chart principal: usa loader interno con :busy y datos reactivos -->
+          <!-- Chart principal -->
           <div v-else-if="item.i==='chart' && item.x===2" class="h-full">
             <LineChartSmart
               v-if="hasSelection"
@@ -46,7 +68,7 @@
             />
           </div>
 
-          <!-- Chart versiones: fetch propio y loader interno -->
+          <!-- Chart versiones -->
           <div v-else-if="item.i==='chart' && item.x===9" class="h-full">
             <LineChartSmart
               v-if="hasSelection"
@@ -58,7 +80,7 @@
             />
           </div>
 
-          <!-- Tabla solo con selección -->
+          <!-- Tabla -->
           <div v-else-if="item.i==='table'" class="h-full">
             <template v-if="hasSelection">
               <ForecastTable
@@ -68,10 +90,6 @@
                 :forecast="forecast"
                 @edit-forecast="({index,value}) => { const n=Number(value); forecast[index]=isNaN(n)?0:n }"
               />
-              <div class="mt-3 flex gap-2 justify-content-end">
-                <Button label="Zurücksetzen (Budget)" icon="pi pi-refresh" severity="secondary" @click="resetForecastToBudget" />
-                <Button label="Speichern" icon="pi pi-save" @click="saveForecast" />
-              </div>
             </template>
           </div>
         </GlassCard>
@@ -80,13 +98,12 @@
   </div>
 </template>
 
-
-
 <script setup>
 /* All code in English; UI texts live in child components */
 import { ref, computed, watch, onMounted } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 
@@ -128,6 +145,7 @@ function normalizeMode(v){
   if (['pc','profit','profitcenter','profit center'].includes(s)) return 'pc'
   return ''
 }
+function isClose(a,b,eps=1e-6){ return Math.abs(Number(a||0)-Number(b||0)) <= eps }
 
 /* Series */
 const months   = ref(genMonths(18))
@@ -136,10 +154,13 @@ const budget   = ref(fillZeros(18))
 const forecast = ref(fillZeros(18))
 const orders   = ref(fillZeros(18))
 
+/* Baseline para detectar cambios (usa 12 slots del back) */
+const originalForecast = ref(fillZeros(12))
+
 /* Selection guard */
 const hasSelection = computed(() => !!mode.value && primaryId.value != null && secondaryId.value != null)
 
-/* Version history (side chart) */
+/* Version history (solo trigger para el chart lateral) */
 const versionHistory = ref(null)
 async function loadCurrentMonthVersions () {
   if (!hasSelection.value) return
@@ -179,7 +200,7 @@ const secondaryOptions = computed(() => {
   }
 })
 
-/* Title computed */
+/* Title */
 const _titleClientName = computed(() => {
   if (mode.value === 'client') {
     const c = clients.value.find(x => x.id === primaryId.value)
@@ -209,7 +230,7 @@ async function loadMaster () {
     mapClientToPC.value = (resMap.data && resMap.data.clientToPc) ? resMap.data.clientToPc : {}
     mapPCToClient.value = (resMap.data && resMap.data.pcToClient) ? resMap.data.pcToClient : {}
   } catch {
-    toast.add({ severity:'error', summary:'Fehler', detail:'Stammdaten nicht verfügbar', life:2500 })
+    toast.add({ severity:'error', summary:'Fehler', detail:'Stammdaten nicht verfügbar', life:5000 })
   }
 }
 
@@ -220,6 +241,7 @@ function clearSeries () {
   budget.value   = fillZeros(18)
   forecast.value = fillZeros(18)
   orders.value   = fillZeros(18)
+  originalForecast.value = fillZeros(12)
   versionHistory.value = null
 }
 
@@ -238,26 +260,69 @@ async function loadSeries () {
     budget.value   = Array.isArray(data.budget)   && data.budget.length   ? data.budget   : fillZeros(18)
     forecast.value = Array.isArray(data.forecast) && data.forecast.length ? data.forecast : fillZeros(18)
     orders.value   = Array.isArray(data.orders)   && data.orders.length   ? data.orders   : fillZeros(18)
+    originalForecast.value = (Array.isArray(data.forecast) ? data.forecast.slice(0,12) : fillZeros(12))
     await loadCurrentMonthVersions()
   } finally { loading.value = false }
 }
 
-/* Save */
+/* ---- Diff detection (solo guarda si cambió) ---- */
+const changedIndices = computed(() => {
+  const cur = (forecast.value || []).slice(0,12)
+  const base = (originalForecast.value || []).slice(0,12)
+  const out = []
+  for (let i=0;i<12;i++){ if (!isClose(cur[i], base[i])) out.push(i) }
+  return out
+})
+const changedCount = computed(() => changedIndices.value.length)
+
+/* ---- Normalizadores a 12 para contrato del back ---- */
+function toYYYYMM(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0')
+  return `${y}-${m}`
+}
+function build12FromFirst(ym){
+  const [y,m] = ym.split('-').map(n=>parseInt(n,10))
+  const base = new Date(y, m-1, 1)
+  const out = []
+  for(let i=0;i<12;i++){ const d=new Date(base.getFullYear(), base.getMonth()+i, 1); out.push(toYYYYMM(d)) }
+  return out
+}
+function coerceLen12Months(monthsArr){
+  if (Array.isArray(monthsArr) && monthsArr.length === 12) return monthsArr
+  if (Array.isArray(monthsArr) && monthsArr.length > 0)   return build12FromFirst(monthsArr[0])
+  return genMonths(12)
+}
+function coerceLen12Forecast(forecastArr){
+  const a = Array.isArray(forecastArr) ? forecastArr : []
+  const out = []
+  for(let i=0;i<12;i++){ const v = Number(a[i] ?? 0); out.push(isNaN(v)||v<0?0:v) }
+  return out
+}
+
+/* Save SOLO si hay cambios */
 async function saveForecast () {
   if (!hasSelection.value) return
+  if (changedCount.value === 0) {
+    toast.add({ severity:'info', summary:'Keine Änderungen', detail:'Es gibt nichts zu speichern', life:1600 })
+    return
+  }
   try {
     await ensureCsrf()
     const clientId       = (mode.value === 'client') ? primaryId.value   : secondaryId.value
     const profitCenterId = (mode.value === 'client') ? secondaryId.value : primaryId.value
-    await api.put(API + '/forecast/series', { clientId, profitCenterId, months: months.value, forecast: forecast.value })
-    toast.add({ severity:'success', summary:'Gespeichert', detail:'Forecast aktualisiert', life:2000 })
+    const months12   = coerceLen12Months(months.value)
+    const forecast12 = coerceLen12Forecast(forecast.value)
+    await api.put(API + '/forecast/series', { clientId, profitCenterId, months: months12, forecast: forecast12 })
+    originalForecast.value = forecast12.slice()
+    toast.add({ severity:'success', summary:'Gespeichert', detail:`${changedCount.value} Änderungen gespeichert`, life:2000 })
+    await loadSeries()
   } catch {
     toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2500 })
   }
 }
 function resetForecastToBudget () {
-  budget.value = Array.isArray(budget.value) ? budget.value : []
-  forecast.value = budget.value.slice()
+  const b = Array.isArray(budget.value) ? budget.value : []
+  forecast.value = b.slice()
 }
 
 /* Live cumulative data for main chart */
@@ -282,24 +347,58 @@ const liveCumData = computed(() => {
   }
 })
 
-/* UI events */
-function handleModeChange (v) {
-  const n = normalizeMode(v)
-  mode.value = n
-  primaryId.value = null
-  secondaryId.value = null
-  clearSeries()
+/* Guarded filter changes (unsaved changes dialog) */
+const confirmVisible = ref(false)
+const pendingChange = ref(null) // { kind: 'mode'|'primary'|'secondary', value: any }
+
+function applyChange(kind, value){
+  if (kind === 'mode') {
+    mode.value = value
+    primaryId.value = null
+    secondaryId.value = null
+    clearSeries()
+  } else if (kind === 'primary') {
+    primaryId.value = value
+    secondaryId.value = null
+  } else if (kind === 'secondary') {
+    secondaryId.value = value
+  }
 }
+function guardedChange(kind, value){
+  if (changedCount.value > 0) {
+    pendingChange.value = { kind, value }
+    confirmVisible.value = true
+  } else {
+    applyChange(kind, value)
+  }
+}
+async function saveAndApply(){
+  try { await saveForecast() } finally {
+    confirmVisible.value = false
+    if (pendingChange.value){ applyChange(pendingChange.value.kind, pendingChange.value.value) }
+    pendingChange.value = null
+  }
+}
+function discardAndApply(){
+  // revert to baseline (first 12 slots)
+  const base = originalForecast.value.slice(0,12)
+  for (let i=0;i<12;i++){ forecast.value[i] = Number(base[i] ?? 0) }
+  confirmVisible.value = false
+  if (pendingChange.value){ applyChange(pendingChange.value.kind, pendingChange.value.value) }
+  pendingChange.value = null
+}
+
+/* Next cycles secondary guarded */
 function handleNext () {
   const list = secondaryOptions.value
   if (!list || !list.length) return
   const idx = list.findIndex(o => o.value === secondaryId.value)
   const n = (idx >= 0 ? (idx + 1) : 0) % list.length
-  secondaryId.value = list[n].value
+  guardedChange('secondary', list[n].value)
 }
 
 /* React */
-watch([mode, primaryId], () => { secondaryId.value = null; clearSeries() })
+watch([mode, primaryId], () => { /* changes handled via guardedChange/applyChange */ })
 watch(secondaryId, () => { loadSeries() })
 
 /* Mount */

@@ -1,109 +1,165 @@
 <script setup>
-/* Table with editable forecast cells. Emits edit events. Horizontal scroll only. */
+/* Table with editable forecast cells + reactive deviation colors. */
+import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 
 const props = defineProps({
-  months:   { type: Array, required: true }, // e.g. ['2025-04', ...]
-  ventas:   { type: Array, required: true },
-  budget:   { type: Array, required: true },
-  forecast: { type: Array, required: true }
+  months: { type: Array, required: true },
+  ventas: { type: Array, required: true },
+  budget: { type: Array, required: true },
+  forecast: { type: Array, required: true },
 })
 const emit = defineEmits(['edit-forecast'])
 
-function pct(num, den){
-  const n = Number(num) || 0
-  const d = Number(den) || 0
-  if (!d) return '0%'
-  return Math.round((n / d) * 100) + '%'
+/* Formats: "Jän 25", "Mär 26", ... */
+function fmtMonthDE(ym) {
+  if (!ym) return '—'
+  const [yS, mS] = String(ym).split('-')
+  const y = yS?.slice(2) ?? ''
+  const m = parseInt(mS || '1', 10)
+  const map = ['Jän', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+  return `${map[m - 1] || '—'} ${y}`
 }
 
-/* DE month labels */
-const DE_ABBR = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
-function formatMonthDE(key){
-  if (typeof key !== 'string') return String(key ?? '')
-  const m = key.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/)
-  if (!m) return key
-  const y = m[1]
-  const mm = Math.max(1, Math.min(12, parseInt(m[2],10)))
-  return `${DE_ABBR[mm-1]} ${y.slice(2)}`
+/* Current month index inside provided months (YYYY-MM) */
+function yyyymm(d){
+  const y = d.getFullYear()
+  const m = String(d.getMonth()+1).padStart(2,'0')
+  return `${y}-${m}`
 }
+const curIdx = computed(() => {
+  const key = yyyymm(new Date())
+  return Array.isArray(props.months) ? props.months.findIndex(m => m === key) : -1
+})
 
-/* Deviation classes:
-   ventas/budget: |dev|>10 red, >5 orange, >2 yellow, else green
-   forecast/budget: |dev|>5 red, >2 yellow, else green
-   dev = |(value/budget)*100 - 100|  */
-function devFrom(value, budget){
-  const b = Number(budget) || 0
-  const v = Number(value) || 0
-  if (!b) return null
-  return Math.abs((v/b)*100 - 100)
-}
-function devClassSales(i){
-  const d = devFrom(props.ventas[i], props.budget[i])
-  if (d === null) return 'dev-neutral'
+/* Deviation helpers: pct vs budget => deviation from 100% */
+function devPct(num, den) {
+  if (!den) return 0
+  return (num / den - 1) * 100
+} // +/- deviation
+function clsSalesDev(v, b) {
+  const d = Math.abs(devPct(v, b))
   if (d > 10) return 'dev-red'
-  if (d > 5)  return 'dev-orange'
-  if (d > 2)  return 'dev-yellow'
+  if (d > 5) return 'dev-orange'
+  if (d > 2) return 'dev-yellow'
   return 'dev-green'
 }
-function devClassForecast(i){
-  const d = devFrom(props.forecast[i], props.budget[i])
-  if (d === null) return 'dev-neutral'
-  if (d > 5)  return 'dev-red'
-  if (d > 2)  return 'dev-yellow'
+function clsFcstDev(v, b) {
+  const d = Math.abs(devPct(v, b))
+  if (d > 5) return 'dev-red'
+  if (d > 2) return 'dev-yellow'
   return 'dev-green'
+}
+function pctLabel(num, den) {
+  if (!den) return '0%'
+  return Math.round((num / den) * 100) + '%'
 }
 </script>
 
 <template>
   <div class="table-shell">
     <div class="table-scroll-x">
-      <table class="w-full" style="min-width: 1200px; border-collapse: separate; border-spacing: 0;">
+      <table class="w-full" style="min-width: 1200px; border-collapse: separate; border-spacing: 0">
         <thead>
           <tr>
-            <th class="p-2 text-left sticky left-0 z-2 stick-left rounded-tl-md">Begriff</th>
-            <th v-for="(m,i) in months" :key="'m'+i" class="p-2 text-center stick-head">
-              {{ formatMonthDE(m) }}
+            <th class="p-2 text-left sticky left-0 z-2 stick-left"></th>
+            <th
+              v-for="(m, i) in months"
+              :key="'m' + i"
+              class="p-2 text-center stick-head"
+              :class="{
+                'cur-left':  i === curIdx,
+                'cur-right': i === curIdx,
+                'cur-top':   i === curIdx
+              }"
+            >
+              {{ fmtMonthDE(m) }}
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr class="row-sales">
-            <td class="p-2 sticky left-0 z-2 stick-left">Verkauf</td>
-            <td v-for="(m,i) in months" :key="'v'+i" class="p-2 text-right cell">
-              {{ ventas[i] }}
-            </td>
-          </tr>
-
-          <tr class="row-budget">
-            <td class="p-2 sticky left-0 z-2 stick-left">Budget</td>
-            <td v-for="(m,i) in months" :key="'b'+i" class="p-2 text-right cell">
-              {{ budget[i] }}
-            </td>
-          </tr>
-
+          <!-- Ist -->
           <tr>
-            <td class="p-2 sticky left-0 z-2 stick-left">Prognose</td>
-            <td v-for="(m,i) in months" :key="'f'+i" class="p-1 cell">
+            <td class="p-2 sticky text-right left-0 z-2 stick-left">Ist</td>
+            <td
+              v-for="(m, i) in months"
+              :key="'v' + i"
+              class="p-2 text-center cell cell-sales"
+              :class="{
+                'cur-left':  i === curIdx,
+                'cur-right': i === curIdx
+              }"
+            >
+              {{ ventas[i] ?? 0 }}
+            </td>
+          </tr>
+
+          <!-- Budget -->
+          <tr>
+            <td class="p-2 sticky text-right left-0 z-2 stick-left">Budget</td>
+            <td
+              v-for="(m, i) in months"
+              :key="'b' + i"
+              class="p-2 text-center cell cell-budget"
+              :class="{
+                'cur-left':  i === curIdx,
+                'cur-right': i === curIdx
+              }"
+            >
+              {{ budget[i] ?? 0 }}
+            </td>
+          </tr>
+
+          <!-- Forecast (editable) -->
+          <tr>
+            <td class="p-2 sticky text-right left-0 z-2 stick-left">Forecast</td>
+            <td
+              v-for="(m, i) in months"
+              :key="'f' + i"
+              class="p-1 cell"
+              :class="{
+                'cur-left':   i === curIdx,
+                'cur-right':  i === curIdx,
+                'cur-bottom': i === curIdx        /* bottom border only here */
+              }"
+            >
               <InputText
-                class="w-full p-inputtext-sm text-right input-forecast"
+                class="w-full p-inputtext-sm text-center inp-forecast"
                 :value="forecast[i]"
-                @input="e=>emit('edit-forecast',{ index:i, value:e.target.value })"
+                @input="(e) => emit('edit-forecast', { index: i, value: e.target.value })"
               />
             </td>
           </tr>
 
+          <!-- % Ist / Budget -->
           <tr>
-            <td class="p-2 sticky left-0 z-2 stick-left">% Verkauf / Budget</td>
-            <td v-for="(m,i) in months" :key="'ivb'+i" class="p-2 text-right cell dev" :class="devClassSales(i)">
-              {{ pct(ventas[i], budget[i]) }}
+            <td class="p-2 sticky text-right left-0 z-2 stick-left">% Ist / Bud.</td>
+            <td
+              v-for="(m, i) in months"
+              :key="'ivb' + i"
+              class="p-2 text-center cell dev-cell"
+              :class="[
+                clsSalesDev(ventas[i] ?? 0, budget[i] ?? 0),
+                { 'cur-left': i === curIdx, 'cur-right': i === curIdx }
+              ]"
+            >
+              {{ pctLabel(ventas[i] ?? 0, budget[i] ?? 0) }}
             </td>
           </tr>
 
+          <!-- % Forecast / Budget -->
           <tr>
-            <td class="p-2 sticky left-0 z-2 stick-left">% Prognose / Budget</td>
-            <td v-for="(m,i) in months" :key="'ifb'+i" class="p-2 text-right cell dev" :class="devClassForecast(i)">
-              {{ pct(forecast[i], budget[i]) }}
+            <td class="p-2 sticky text-right left-0 z-2 stick-left">% For. / Bud.</td>
+            <td
+              v-for="(m, i) in months"
+              :key="'ifb' + i"
+              class="p-2 text-center cell dev-cell"
+              :class="[
+                clsFcstDev(forecast[i] ?? 0, budget[i] ?? 0),
+                { 'cur-left': i === curIdx, 'cur-right': i === curIdx }
+              ]"
+            >
+              {{ pctLabel(forecast[i] ?? 0, budget[i] ?? 0) }}
             </td>
           </tr>
         </tbody>
@@ -113,47 +169,49 @@ function devClassForecast(i){
 </template>
 
 <style scoped>
-.table-shell{ height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-.table-scroll-x{ overflow-x: auto; overflow-y: hidden; height: 100%; }
-
-/* Sticky header/left with glass */
-.stick-head{
-  position: sticky; top: 0;
-  background: var(--glass);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  box-shadow: 0 1px 0 rgba(0,0,0,0.08);
-  z-index: 1;
-}
-.stick-left{
-  background: var(--glass);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  left: 0; min-width: 180px;
-  box-shadow: 1px 0 0 rgba(0,0,0,0.08);
+/* Palette */
+:root {
+  --blue: #54849a;
+  --green: #05a46f;
+  --yellow: #e6b729;
+  --orange: #e88d1e;
+  --orangeDeep: #ea6312;
+  --red: #b01513;
 }
 
-/* Base cells */
-.cell{ border-bottom: 1px solid rgba(0,0,0,0.06); white-space: nowrap; }
+/* Layout */
+.table-shell { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+.table-scroll-x { overflow-x: auto; overflow-y: hidden; height: 100%; }
+
+/* Keep your restyling */
+.stick-head { position: sticky; top: 0; }
+.stick-left { width: calc(100% / 13); left: 0; }
+.cell { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+
+/* Current month red frame */
+.cur-left   { border-left:   2px solid var(--red) !important; }
+.cur-right  { border-right:  2px solid var(--red) !important; }
+.cur-top    { border-top:    2px solid var(--red) !important; }
+.cur-bottom { border-bottom: 2px solid var(--red) !important; }
 
 /* Row tints */
-.row-sales > td:not(.stick-left){ background: rgba(var(--c-blue-rgb), 0.10); }
-.row-budget > td:not(.stick-left){ background: rgba(14,165,233,0.10); } /* celestito suave */
+.cell-sales  { background: rgba(31, 86, 115, 0.25); }
+.cell-budget { background: rgba(84, 132, 154, 0.25); }
 
-/* Forecast input -> glass-friendly */
-.input-forecast :deep(.p-inputtext){
-  background: rgba(255,255,255,0.55);
-  border: 1px solid rgba(0,0,0,0.08);
-  color: var(--txt);
+/* Forecast input look */
+.inp-forecast {
+  background: rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
 }
 
 /* Deviation colors */
-.dev{ font-variant-numeric: tabular-nums; border-bottom: 1px solid rgba(0,0,0,0.06); }
-.dev-red   { color: var(--c-red);    background: rgba(var(--c-red-rgb), .10); }
-.dev-orange{ color: var(--c-orange); background: rgba(var(--c-orange-rgb), .10); }
-.dev-yellow{ color: var(--c-yellow); background: rgba(var(--c-yellow-rgb), .10); }
-.dev-green { color: var(--c-green);  background: rgba(var(--c-green-rgb), .10); }
-
-/* Ensure transparency against theme defaults */
-:deep(table), :deep(thead th), :deep(tbody td){ background-clip: padding-box; }
+.dev-cell {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.dev-red    { background: rgba(176, 21, 19, 0.18);   color:#3b0d0d; }
+.dev-orange { background: rgba(234, 99, 18, 0.18);   color:#3b260d; }
+.dev-yellow { background: rgba(230, 183, 41, 0.20);  color:#3a300b; }
+.dev-green  { background: rgba(5, 164, 111, 0.18);   color:#093a2c; }
 </style>

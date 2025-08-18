@@ -50,10 +50,10 @@ function mapCumulative(d){
     : m.map(()=> Number(d.budget_fy ?? 0))
   labels.value = m
   datasets.value = [
-    { label:'Verkauf kumuliert',  data:sales,    borderColor:'#22C55E', backgroundColor:'rgba(34,197,94,.12)',  tension:.25, pointRadius:0, fill:false },
-    { label:'Budget kumuliert',   data:budget,   borderColor:'#3B82F6', backgroundColor:'rgba(59,130,246,.12)', tension:.25, pointRadius:0, fill:false },
-    { label:'Prognose kumuliert', data:forecast, borderColor:'#F59E0B', backgroundColor:'rgba(245,158,11,.12)', tension:.25, pointRadius:0, fill:false },
-    { label:'FY-Budget',          data:fyLine,   borderColor:'#64748B', borderDash:[6,6],                       tension:0,   pointRadius:0, fill:false }
+    { label:'Ist',  data:sales,    borderColor:'#456287', backgroundColor:'rgba(255,255,255,0)',  tension:.25, pointRadius:0, fill:false },
+    { label:'Budget',   data:budget,   borderColor:'#9DBB61', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
+    { label:'Forecast', data:forecast, borderColor:'#FFC20E', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
+    { label:'Ziel Budget',          data:fyLine,   borderColor:'#44512A', borderDash:[6,6],                       tension:0,   pointRadius:0, fill:false }
   ]
 }
 
@@ -61,10 +61,10 @@ function mapVersions(d, budgetValue = null){
   if (Array.isArray(d.versions) && Array.isArray(d.volumes)) {
     labels.value = d.versions.map(v => `v${v}`)
     const base = [{
-      label: 'Versionen',
+      label: 'Forecast',
       data: d.volumes.map(Number),
-      borderColor: '#3B82F6',
-      backgroundColor: 'rgba(59,130,246,.12)',
+      borderColor: '#FFC20E',
+      backgroundColor: 'rgba(255,255,255,0)',
       tension: .15,
       pointRadius: 3,
       fill: false
@@ -73,7 +73,7 @@ function mapVersions(d, budgetValue = null){
       base.push({
         label: 'Budget (Monat)',
         data: Array(labels.value.length).fill(Number(budgetValue)),
-        borderColor: '#64748B',
+        borderColor: '#44512A',
         borderDash: [6,6],
         tension: 0,
         pointRadius: 0,
@@ -184,14 +184,14 @@ watch([labels, datasets], ()=>{ chartRef.value?.chart?.update('none') })
     <div v-if="isLoading" class="loader">
       <div v-if="logo" class="logo-loader" :style="{ '--ls': logoSize + 'px' }">
         <img :src="logo" alt="logo" />
+        <span class="orbit orbit-b"></span>
         <span class="orbit orbit-g"></span>
         <span class="orbit orbit-r"></span>
-        <span class="orbit orbit-b"></span>
       </div>
       <div v-else class="dots">
+        <span class="dot b"></span>
         <span class="dot g"></span>
         <span class="dot r"></span>
-        <span class="dot b"></span>
       </div>
       <div class="caption">Wird geladen…</div>
     </div>

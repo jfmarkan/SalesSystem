@@ -18,11 +18,11 @@ const props = defineProps({
 
 <style scoped>
 .glass-card{
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255,255,255,0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 2px 4px 0 rgba(0,0,0,0.4);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   height: 100%;
   display: flex;
@@ -30,17 +30,18 @@ const props = defineProps({
 }
 .card-header{
   padding: 10px 14px;
-  background: rgba(0,0,0,0.5);
+  background: rgba(255,255,255,0.5);
   border-bottom: 1px solid rgba(0,0,0,0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .title{
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #c5c5c5;
+  color: #000;
 }
 .card-body{
   padding: 12px;

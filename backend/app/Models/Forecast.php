@@ -15,7 +15,7 @@ class Forecast extends Model
         'client_profit_center_id',
         'fiscal_year',
         'month',
-        'amount',
+        'volume',
         'version',
         'user_id',
     ];
