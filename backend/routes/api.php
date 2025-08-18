@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\OtpController as OtpController;
 
 use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ForecastController;
+use App\Http\Controllers\UserDetailController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
@@ -28,4 +29,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deviations', [DeviationController::class, 'index']);
     Route::post('/deviations/run', [DeviationController::class, 'runForMe']);
     Route::put('/deviations/{id}/justify', [DeviationController::class, 'justify']);
+
+    Route::get   ('users/{user}/details', [UserDetailController::class, 'show']);
+    Route::post  ('users/{user}/details', [UserDetailController::class, 'storeOrUpdate']);
+    Route::delete('users/{user}/details', [UserDetailController::class, 'destroy']);
 });
