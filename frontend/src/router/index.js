@@ -9,6 +9,7 @@ import HomeDashboard from '@/views/dashboard/HomeDashboard.vue';
 import HomeView from '@/views/HomeView.vue';
 import ForecastPanel from '@/views/dashboard/ForecastPanel.vue';
 import DeviationPanel from '@/views/dashboard/DeviationPanel.vue';
+import UserProfile from '@/views/dashboard/UserProfile.vue';
 
 const routes = [
     {
@@ -48,6 +49,13 @@ const routes = [
             { 
                 path: '/deviations', 
                 component: DeviationPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/profile', 
+                component: UserProfile, 
                 meta: { 
                     requiresAuth: true 
                 }
