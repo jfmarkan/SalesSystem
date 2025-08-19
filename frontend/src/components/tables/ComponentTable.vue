@@ -22,14 +22,43 @@ function fmtMonthDE(ym) {
 }
 
 /* Current month index inside provided months (YYYY-MM) */
-function yyyymm(d){
-  const y = d.getFullYear()
-  const m = String(d.getMonth()+1).padStart(2,'0')
-  return `${y}-${m}`
+function yyyymm(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
+function thirdWednesday(d = new Date()) {
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const firstWeekday = first.getDay() // 0..6 (0=Dom)
+  const deltaToWed = (3 - firstWeekday + 7) % 7
+  const firstWed = new Date(first)
+  firstWed.setDate(1 + deltaToWed)
+  const third = new Date(firstWed)
+  third.setDate(firstWed.getDate() + 14)
+  return third
+}
+function isEditableYM(ym) {
+  const now = new Date()
+  const cur = new Date(now.getFullYear(), now.getMonth(), 1)
+  const [yS, mS] = String(ym).split('-')
+  const y = +yS,
+    m = +mS
+  const target = new Date(y, m - 1, 1)
+
+  // bloquea igual o anterior al mes en curso
+  if (target <= cur) return false
+
+  // mes siguiente: solo hasta 3er miércoles del mes actual
+  const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)
+  if (target.getTime() === next.getTime()) {
+    return now <= thirdWednesday(now)
+  }
+
+  // meses posteriores al siguiente: siempre editables
+  return true
+}
+
 const curIdx = computed(() => {
   const key = yyyymm(new Date())
-  return Array.isArray(props.months) ? props.months.findIndex(m => m === key) : -1
+  return Array.isArray(props.months) ? props.months.findIndex((m) => m === key) : -1
 })
 
 /* Deviation helpers: pct vs budget => deviation from 100% */
@@ -68,9 +97,9 @@ function pctLabel(num, den) {
               :key="'m' + i"
               class="p-2 text-center stick-head"
               :class="{
-                'cur-left':  i === curIdx,
+                'cur-left': i === curIdx,
                 'cur-right': i === curIdx,
-                'cur-top':   i === curIdx
+                'cur-top': i === curIdx,
               }"
             >
               {{ fmtMonthDE(m) }}
@@ -86,8 +115,8 @@ function pctLabel(num, den) {
               :key="'v' + i"
               class="p-2 text-center cell cell-sales"
               :class="{
-                'cur-left':  i === curIdx,
-                'cur-right': i === curIdx
+                'cur-left': i === curIdx,
+                'cur-right': i === curIdx,
               }"
             >
               {{ ventas[i] ?? 0 }}
@@ -102,8 +131,8 @@ function pctLabel(num, den) {
               :key="'b' + i"
               class="p-2 text-center cell cell-budget"
               :class="{
-                'cur-left':  i === curIdx,
-                'cur-right': i === curIdx
+                'cur-left': i === curIdx,
+                'cur-right': i === curIdx,
               }"
             >
               {{ budget[i] ?? 0 }}
@@ -118,15 +147,20 @@ function pctLabel(num, den) {
               :key="'f' + i"
               class="p-1 cell"
               :class="{
-                'cur-left':   i === curIdx,
-                'cur-right':  i === curIdx,
-                'cur-bottom': i === curIdx        /* bottom border only here */
+                'cur-left': i === curIdx,
+                'cur-right': i === curIdx,
+                'cur-bottom': i === curIdx,
               }"
             >
               <InputText
                 class="w-full p-inputtext-sm text-center inp-forecast"
                 :value="forecast[i]"
-                @input="(e) => emit('edit-forecast', { index: i, value: e.target.value })"
+                :disabled="!isEditableYM(m)"
+                @input="
+                  (e) => {
+                    if (isEditableYM(m)) emit('edit-forecast', { index: i, value: e.target.value })
+                  }
+                "
               />
             </td>
           </tr>
@@ -140,7 +174,7 @@ function pctLabel(num, den) {
               class="p-2 text-center cell dev-cell"
               :class="[
                 clsSalesDev(ventas[i] ?? 0, budget[i] ?? 0),
-                { 'cur-left': i === curIdx, 'cur-right': i === curIdx }
+                { 'cur-left': i === curIdx, 'cur-right': i === curIdx },
               ]"
             >
               {{ pctLabel(ventas[i] ?? 0, budget[i] ?? 0) }}
@@ -156,7 +190,7 @@ function pctLabel(num, den) {
               class="p-2 text-center cell dev-cell"
               :class="[
                 clsFcstDev(forecast[i] ?? 0, budget[i] ?? 0),
-                { 'cur-left': i === curIdx, 'cur-right': i === curIdx }
+                { 'cur-left': i === curIdx, 'cur-right': i === curIdx },
               ]"
             >
               {{ pctLabel(forecast[i] ?? 0, budget[i] ?? 0) }}
@@ -180,23 +214,52 @@ function pctLabel(num, den) {
 }
 
 /* Layout */
-.table-shell { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-.table-scroll-x { overflow-x: auto; overflow-y: hidden; height: 100%; }
+.table-shell {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.table-scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 100%;
+}
 
 /* Keep your restyling */
-.stick-head { position: sticky; top: 0; }
-.stick-left { width: calc(100% / 13); left: 0; }
-.cell { border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.stick-head {
+  position: sticky;
+  top: 0;
+}
+.stick-left {
+  width: calc(100% / 13);
+  left: 0;
+}
+.cell {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
 
 /* Current month red frame */
-.cur-left   { border-left:   2px solid var(--red) !important; }
-.cur-right  { border-right:  2px solid var(--red) !important; }
-.cur-top    { border-top:    2px solid var(--red) !important; }
-.cur-bottom { border-bottom: 2px solid var(--red) !important; }
+.cur-left {
+  border-left: 2px solid var(--red) !important;
+}
+.cur-right {
+  border-right: 2px solid var(--red) !important;
+}
+.cur-top {
+  border-top: 2px solid var(--red) !important;
+}
+.cur-bottom {
+  border-bottom: 2px solid var(--red) !important;
+}
 
 /* Row tints */
-.cell-sales  { background: rgba(31, 86, 115, 0.25); }
-.cell-budget { background: rgba(84, 132, 154, 0.25); }
+.cell-sales {
+  background: rgba(31, 86, 115, 0.25);
+}
+.cell-budget {
+  background: rgba(84, 132, 154, 0.25);
+}
 
 /* Forecast input look */
 .inp-forecast {
@@ -208,10 +271,24 @@ function pctLabel(num, den) {
 
 /* Deviation colors */
 .dev-cell {
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
-.dev-red    { background: rgba(176, 21, 19, 0.18);   color:#3b0d0d; }
-.dev-orange { background: rgba(234, 99, 18, 0.18);   color:#3b260d; }
-.dev-yellow { background: rgba(230, 183, 41, 0.20);  color:#3a300b; }
-.dev-green  { background: rgba(5, 164, 111, 0.18);   color:#093a2c; }
+.dev-red {
+  background: rgba(176, 21, 19, 0.18);
+  color: #3b0d0d;
+}
+.dev-orange {
+  background: rgba(234, 99, 18, 0.18);
+  color: #3b260d;
+}
+.dev-yellow {
+  background: rgba(230, 183, 41, 0.2);
+  color: #3a300b;
+}
+.dev-green {
+  background: rgba(5, 164, 111, 0.18);
+  color: #093a2c;
+}
 </style>
