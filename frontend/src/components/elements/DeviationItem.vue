@@ -412,7 +412,7 @@ function doSave() {
   color: #0a0a0a;
 }
 .status-saved {
-  background: #2ecc71;
+  background: #909C44;
   color: #0a0a0a;
 }
 
