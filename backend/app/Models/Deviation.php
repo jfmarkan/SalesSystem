@@ -56,13 +56,18 @@ class Deviation extends Model
         return $this->hasOne(ActionPlan::class, 'deviation_id');
     }
 
+    public function profitCenter()
+    {
+        return $this->belongsTo(ProfitCenter::class, 'profit_center_code', 'profit_center_code');
+    }
+
     public function actionItems()
     {
         return $this->hasManyThrough(
             ActionItem::class,
             ActionPlan::class,
-            'deviation_id',
-            'action_plan_id',
+            'deviation_id',   // FK on action_plans
+            'action_plan_id', // FK on action_items
             'id',
             'id'
         );

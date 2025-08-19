@@ -19,7 +19,7 @@ class DeviationController extends Controller
         $user = $request->user();
         if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
 
-        $q = Deviation::with(['justification'])
+        $q = Deviation::with(['profitCenter', 'justification', 'actionPlan.items'])
             ->where('user_id', $user->id)
             ->orderByDesc('fiscal_year')
             ->orderByDesc('month');
@@ -37,12 +37,14 @@ class DeviationController extends Controller
             $deltaAbs = $dev->delta_abs ?? ($budget !== 0 ? ($ref - $budget) : null);
             $deltaPct = $dev->delta_pct ?? ($budget > 0 ? (($ref - $budget) / $budget) * 100.0 : null);
 
+            $items = optional($dev->actionPlan)->items ?? collect();
+
             return [
                 'id' => $dev->id,
                 'type' => strtolower($dev->deviation_type ?? 'SALES'),
                 'clientName' => $dev->client_name ?: null,
                 'pcCode' => $dev->profit_center_code,
-                'pcName' => $dev->pc_name,
+                'pcName' => $dev->pc_name?: optional($dev->profitCenter)->profit_center_name,
                 'year' => (int)$dev->fiscal_year,
                 'month' => (int)$dev->month,
                 'sales' => (float)$sales,
@@ -51,6 +53,14 @@ class DeviationController extends Controller
                 'deltaAbs' => is_null($deltaAbs) ? 0.0 : (float)$deltaAbs,
                 'deltaPct' => is_null($deltaPct) ? 0.0 : (float)$deltaPct,
                 'comment' => $dev->justification->comment ?? '',
+                'plan' => $dev->justification->plan ?? null, // plan objective for closed
+                'actions' => $items->map(function ($it) {
+                    return [
+                        'title' => $it->title,
+                        'desc'  => $it->description,
+                        'due'   => $it->due_date ? $it->due_date->format('Y-m-d') : null,
+                    ];
+                })->values(),
                 'justified' => (bool)$dev->justified,
                 'months' => $dev->months,
                 'salesSeries' => $dev->sales_series,
@@ -82,7 +92,7 @@ class DeviationController extends Controller
 
         $v = Validator::make($request->all(), [
             'comment' => ['nullable', 'string'],
-            'explanation' => ['nullable', 'string'], // backwards-compat
+            'explanation' => ['nullable', 'string'], // compat
             'plan' => ['nullable', 'string'],
             'actions' => ['nullable', 'array'],
             'actions.*.title' => ['required_with:actions', 'string', 'max:255'],
@@ -97,7 +107,7 @@ class DeviationController extends Controller
         $planText = $request->input('plan');
         $actions  = $request->input('actions', []);
 
-        // 1) Upsert justification (1:1). SALES: only comment; FORECAST: comment + textual plan.
+        // 1) Upsert justification (1:1)
         $just = Justification::firstOrNew(['deviation_id' => $dev->id]);
         $just->user_id = $user->id;
         $just->type = strtoupper($dev->deviation_type) === 'FORECAST' ? 'FORECAST' : 'SALES';

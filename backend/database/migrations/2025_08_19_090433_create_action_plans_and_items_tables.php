@@ -37,7 +37,7 @@ return new class extends Migration {
               ->cascadeOnUpdate()
               ->cascadeOnDelete();
 
-            // Minimal fields required by your UI/calendar
+            // Minimal fields required by UI/calendar
             $t->string('title');           // required
             $t->text('description')->nullable();
             $t->date('due_date')->nullable();

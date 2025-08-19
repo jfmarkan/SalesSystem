@@ -2,16 +2,7 @@
 // Code in English; UI labels in German.
 import { computed } from 'vue'
 import { Bar, Line } from 'vue-chartjs'
-import {
-  Chart,
-  BarElement,
-  LineElement,
-  PointElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-} from 'chart.js'
+import { Chart, BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js'
 Chart.register(BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const props = defineProps({
@@ -19,7 +10,7 @@ const props = defineProps({
   sales: { type: [Array, Number], required: true },
   budget: { type: [Array, Number], required: true },
   forecast: { type: [Array, Number], required: true },
-  height: { type: Number, default: 180 }, // <-- new: allow tall charts
+  height: { type: Number, default: 500 }
 })
 
 const isSeries = computed(() => Array.isArray(props.months) && props.months.length > 1)
@@ -29,48 +20,23 @@ const chartData = computed(() => {
     return {
       labels: props.months,
       datasets: [
-        {
-          label: 'Ist',
-          data: Array.isArray(props.sales) ? props.sales : [],
-          borderColor: '#05a46f',
-          backgroundColor: 'rgba(5,164,111,.15)',
-          tension: 0.2,
-          fill: false,
-        },
-        {
-          label: 'Budget',
-          data: Array.isArray(props.budget) ? props.budget : [],
-          borderColor: '#54849A',
-          backgroundColor: 'rgba(84,132,154,.15)',
-          tension: 0.2,
-          fill: false,
-        },
-        {
-          label: 'Forecast',
-          data: Array.isArray(props.forecast) ? props.forecast : [],
-          borderColor: '#E88D1E',
-          backgroundColor: 'rgba(232,141,30,.15)',
-          tension: 0.2,
-          fill: false,
-        },
-      ],
+        { label:'Ist',      data: Array.isArray(props.sales) ? props.sales : [],      borderColor:'#05a46f', backgroundColor:'rgba(5,164,111,.15)', tension:.2, fill:false },
+        { label:'Budget',   data: Array.isArray(props.budget) ? props.budget : [],    borderColor:'#54849A', backgroundColor:'rgba(84,132,154,.15)', tension:.2, fill:false },
+        { label:'Forecast', data: Array.isArray(props.forecast) ? props.forecast : [], borderColor:'#E88D1E', backgroundColor:'rgba(232,141,30,.15)', tension:.2, fill:false }
+      ]
     }
   }
   return {
-    labels: ['Ist', 'Budget', 'Forecast'],
-    datasets: [
-      {
-        label: '',
-        data: [
-          Number(Array.isArray(props.sales) ? (props.sales.at(-1) ?? 0) : (props.sales ?? 0)),
-          Number(Array.isArray(props.budget) ? (props.budget.at(-1) ?? 0) : (props.budget ?? 0)),
-          Number(
-            Array.isArray(props.forecast) ? (props.forecast.at(-1) ?? 0) : (props.forecast ?? 0),
-          ),
-        ],
-        backgroundColor: ['#05a46f', '#54849A', '#E88D1E'],
-      },
-    ],
+    labels: ['Ist','Budget','Forecast'],
+    datasets: [{
+      label: '',
+      data: [
+        Number(Array.isArray(props.sales) ? props.sales.at(-1) ?? 0 : props.sales ?? 0),
+        Number(Array.isArray(props.budget) ? props.budget.at(-1) ?? 0 : props.budget ?? 0),
+        Number(Array.isArray(props.forecast) ? props.forecast.at(-1) ?? 0 : props.forecast ?? 0)
+      ],
+      backgroundColor: ['#05a46f','#54849A','#E88D1E']
+    }]
   }
 })
 
@@ -79,12 +45,12 @@ const options = {
   maintainAspectRatio: false,
   plugins: {
     legend: { display: isSeries.value, position: 'bottom' },
-    tooltip: { mode: 'index', intersect: false },
+    tooltip: { mode: 'index', intersect: false }
   },
   scales: {
     x: { ticks: { color: '#e5e7eb' }, grid: { color: 'rgba(255,255,255,.08)' } },
-    y: { beginAtZero: true, ticks: { color: '#e5e7eb' }, grid: { color: 'rgba(255,255,255,.08)' } },
-  },
+    y: { beginAtZero: true, ticks: { color: '#e5e7eb' }, grid: { color: 'rgba(255,255,255,.08)' } }
+  }
 }
 </script>
 
