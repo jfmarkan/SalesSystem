@@ -10,32 +10,50 @@ return new class extends Migration {
         Schema::create('deviations', function (Blueprint $t) {
             $t->bigIncrements('id');
 
-            // Ámbito de la desviación (código de Profit Center numérico, 3 cifras)
+            // Scope / identification
             $t->unsignedSmallInteger('profit_center_code'); // 0..999
+            $t->string('pc_name')->nullable();              // optional PC readable name snapshot
+            $t->string('client_name')->nullable();          // optional client name snapshot
 
-            // Tipo: comparación con presupuesto usando ventas (pasado) o forecast (futuro)
-            $t->enum('deviation_type', ['SALES','FORECAST']);
+            // Type: SALES (historical vs budget) / FORECAST (future vs budget)
+            $t->enum('deviation_type', ['SALES', 'FORECAST']);
 
-            // Periodo evaluado
+            // Period
             $t->unsignedSmallInteger('fiscal_year');
             $t->unsignedTinyInteger('month'); // 1..12
 
-            // Resultado calculado (porcentaje respecto al budget)
-            $t->decimal('deviation_ratio', 5, 2)->nullable(); // ej: 94.50
+            // Core metrics (widened precision)
+            $t->decimal('sales', 20, 2)->nullable();
+            $t->decimal('budget', 20, 2)->nullable();
+            $t->decimal('forecast', 20, 2)->nullable();
 
-            // Explicación del usuario cuando supera umbral
-            $t->text('explanation')->nullable();
+            // Derived deltas (widened precision)
+            $t->decimal('delta_abs', 20, 4)->nullable(); // ref - budget
+            $t->decimal('delta_pct', 12, 6)->nullable(); // (delta_abs / budget) * 100
 
-            // Autor
+            // Optional ratio kept for compatibility (percentage)
+            $t->decimal('deviation_ratio', 12, 6)->nullable();
+
+            // Series for charts
+            $t->json('months')->nullable();           // ["YYYY-MM", ...]
+            $t->json('sales_series')->nullable();     // [number,...]
+            $t->json('budget_series')->nullable();    // [number,...]
+            $t->json('forecast_series')->nullable();  // [number,...]
+
+            // State
+            $t->boolean('justified')->default(false);
+
+            // Author
             $t->foreignId('user_id')->nullable()
-              ->constrained('users')
-              ->cascadeOnUpdate()
-              ->nullOnDelete();
+                ->constrained('users')
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
 
             $t->timestamps();
             $t->softDeletes();
 
-            // Índices
+            // Indexes
+            $t->index(['user_id']);
             $t->index(['profit_center_code']);
             $t->unique(
                 ['profit_center_code', 'fiscal_year', 'month', 'deviation_type', 'user_id'],

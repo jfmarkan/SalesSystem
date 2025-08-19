@@ -16,6 +16,7 @@ class DetectDeviations extends Command
     {
         $now = Carbon::now();
 
+        // Keep your original early-month skip
         if ($now->day < 4) {
             $this->info('Skipping: day < 4.');
             return self::SUCCESS;
@@ -23,7 +24,7 @@ class DetectDeviations extends Command
 
         $onlyUserId = $this->option('user_id') ? (int)$this->option('user_id') : null;
 
-        // usuarios con assignments
+        // Users with assignments
         $userIds = Assignment::when($onlyUserId, fn($q) => $q->where('user_id', $onlyUserId))
             ->distinct()->pluck('user_id');
 
@@ -33,7 +34,7 @@ class DetectDeviations extends Command
         }
 
         foreach ($userIds as $userId) {
-            // PC codes del usuario
+            // Profit center codes for the user
             $pcCodes = Assignment::query()
                 ->join('client_profit_centers as cpc', 'cpc.id', '=', 'assignments.client_profit_center_id')
                 ->where('assignments.user_id', $userId)
@@ -41,7 +42,7 @@ class DetectDeviations extends Command
                 ->pluck('cpc.profit_center_code');
 
             foreach ($pcCodes as $pcCode) {
-                // IDs de CPC del user para este PC code
+                // CPC IDs of the user for this profit center
                 $cpcIds = Assignment::query()
                     ->join('client_profit_centers as cpc', 'cpc.id', '=', 'assignments.client_profit_center_id')
                     ->where('assignments.user_id', $userId)
@@ -51,57 +52,31 @@ class DetectDeviations extends Command
 
                 if (!$cpcIds) continue;
 
-                // A) Forecast vs Budget (mes actual + 5)
-                [$monthNow, $yearNow] = [$now->month, $now->year];
-                $totalForecast = 0.0;
-                $totalBudgetF  = 0.0;
+                // A) FORECAST vs BUDGET (current month + next 5) => aggregated window
+                $forecastWindow = $this->buildForecastWindowSeries($cpcIds, $now, 6);
 
-                for ($i = 0; $i < 6; $i++) {
-                    $m = $monthNow + $i;
-                    $y = $yearNow;
-                    if ($m > 12) { $m -= 12; $y += 1; }
-
-                    $b = (float) DB::table('budgets')
-                        ->whereIn('client_profit_center_id', $cpcIds)
-                        ->where('fiscal_year', $y)->where('month', $m)
-                        ->sum('volume');
-
-                    // último forecast por CPC (sumados)
-                    $fSum = 0.0;
-                    foreach ($cpcIds as $cpcId) {
-                        $ver = DB::table('forecasts')
-                            ->where('client_profit_center_id', $cpcId)
-                            ->where('fiscal_year', $y)->where('month', $m)
-                            ->max('version');
-                        if ($ver) {
-                            $fv = (float) DB::table('forecasts')
-                                ->where('client_profit_center_id', $cpcId)
-                                ->where('fiscal_year', $y)->where('month', $m)
-                                ->where('version', $ver)
-                                ->value('volume');
-                            $fSum += $fv;
-                        }
-                    }
-
-                    $totalBudgetF  += $b;
-                    $totalForecast += $fSum;
-                }
-
-                if ($totalBudgetF > 0.0) {
-                    $ratioF = $totalForecast / $totalBudgetF; // agregado por PC code
+                if ($forecastWindow['total_budget'] > 0.0) {
+                    $ratioF = $forecastWindow['total_forecast'] / $forecastWindow['total_budget'];
                     if ($ratioF < 0.95 || $ratioF > 1.05) {
                         $this->upsertDeviation(
-                            profitCenterCode: $pcCode,
-                            userId:  $userId,
-                            fy:      $yearNow,
-                            m:       $monthNow,
-                            type:    'FORECAST',
-                            percent: round($ratioF * 100, 2),
+                            profitCenterCode: (int)$pcCode,
+                            userId:           (int)$userId,
+                            fy:               (int)$now->year,
+                            m:                (int)$now->month,
+                            type:             'FORECAST',
+                            percent:          round($ratioF * 100, 6),
+                            sales:            null,
+                            budget:           (float)$forecastWindow['total_budget'],
+                            forecast:         (float)$forecastWindow['total_forecast'],
+                            months:           $forecastWindow['months'],
+                            salesSeries:      null,
+                            budgetSeries:     $forecastWindow['budget_series'],
+                            forecastSeries:   $forecastWindow['forecast_series'],
                         );
                     }
                 }
 
-                // B) Sales vs Budget (mes anterior)
+                // B) SALES vs BUDGET (previous month) => single period
                 $prev = $now->copy()->subMonth();
                 $pm = (int)$prev->month;
                 $py = (int)$prev->year;
@@ -120,12 +95,19 @@ class DetectDeviations extends Command
                     $ratioS = $sumSales / $sumBudget;
                     if ($ratioS < 0.90 || $ratioS > 1.10) {
                         $this->upsertDeviation(
-                            profitCenterCode: $pcCode,
-                            userId:  $userId,
-                            fy:      $py,
-                            m:       $pm,
-                            type:    'SALES',
-                            percent: round($ratioS * 100, 2),
+                            profitCenterCode: (int)$pcCode,
+                            userId:           (int)$userId,
+                            fy:               (int)$py,
+                            m:                (int)$pm,
+                            type:             'SALES',
+                            percent:          round($ratioS * 100, 6),
+                            sales:            (float)$sumSales,
+                            budget:           (float)$sumBudget,
+                            forecast:         null,
+                            months:           [sprintf('%04d-%02d', $py, $pm)],
+                            salesSeries:      [$sumSales],
+                            budgetSeries:     [$sumBudget],
+                            forecastSeries:   null
                         );
                     }
                 }
@@ -136,33 +118,131 @@ class DetectDeviations extends Command
         return self::SUCCESS;
     }
 
-    /**
-     * Inserta/omite por clave única (profit_center_code + fy + month + type + user_id)
-     */
-    private function upsertDeviation(string $profitCenterCode, int $userId, int $fy, int $m, string $type, float $percent): void
+    private function buildForecastWindowSeries(array $cpcIds, Carbon $start, int $monthsCount = 6): array
     {
-        $exists = DB::table('deviations')->where([
-            'profit_center_code' => $profitCenterCode,
-            'fiscal_year'        => $fy,
-            'month'              => $m,
-            'deviation_type'     => $type,
-            'user_id'            => $userId,
-        ])->exists();
+        $months = [];
+        $budgetSeries = [];
+        $forecastSeries = [];
 
-        if ($exists) return;
+        $totalBudget = 0.0;
+        $totalForecast = 0.0;
+
+        $monthNow = (int)$start->month;
+        $yearNow  = (int)$start->year;
+
+        for ($i = 0; $i < $monthsCount; $i++) {
+            $m = $monthNow + $i;
+            $y = $yearNow;
+            if ($m > 12) { $m -= 12; $y += 1; }
+
+            $key = sprintf('%04d-%02d', $y, $m);
+            $months[] = $key;
+
+            $b = (float) DB::table('budgets')
+                ->whereIn('client_profit_center_id', $cpcIds)
+                ->where('fiscal_year', $y)->where('month', $m)
+                ->sum('volume');
+
+            $fSum = 0.0;
+            foreach ($cpcIds as $cpcId) {
+                $ver = DB::table('forecasts')
+                    ->where('client_profit_center_id', $cpcId)
+                    ->where('fiscal_year', $y)->where('month', $m)
+                    ->max('version');
+
+                if ($ver) {
+                    $fv = (float) DB::table('forecasts')
+                        ->where('client_profit_center_id', $cpcId)
+                        ->where('fiscal_year', $y)->where('month', $m)
+                        ->where('version', $ver)
+                        ->value('volume');
+                    $fSum += $fv;
+                }
+            }
+
+            $budgetSeries[] = $b;
+            $forecastSeries[] = $fSum;
+
+            $totalBudget  += $b;
+            $totalForecast += $fSum;
+        }
+
+        return [
+            'months' => $months,
+            'budget_series' => $budgetSeries,
+            'forecast_series' => $forecastSeries,
+            'total_budget' => $totalBudget,
+            'total_forecast' => $totalForecast,
+        ];
+    }
+
+    private function upsertDeviation(
+        int $profitCenterCode,
+        int $userId,
+        int $fy,
+        int $m,
+        string $type,          // 'FORECAST' | 'SALES'
+        float $percent,        // ratio * 100
+        ?float $sales = null,
+        ?float $budget = null,
+        ?float $forecast = null,
+        ?array $months = null,
+        ?array $salesSeries = null,
+        ?array $budgetSeries = null,
+        ?array $forecastSeries = null
+    ): void {
+        $type = strtoupper($type) === 'FORECAST' ? 'FORECAST' : 'SALES';
+
+        $ref = $type === 'FORECAST' ? $forecast : $sales;
+
+        $deltaAbs = (!is_null($budget) && !is_null($ref)) ? ($ref - $budget) : null;
+        $deltaPct = (!is_null($budget) && $budget != 0.0 && !is_null($ref))
+            ? (($ref - $budget) / $budget) * 100.0
+            : null;
+
+        if (!is_null($deltaAbs)) $deltaAbs = round($deltaAbs, 4);
+        if (!is_null($deltaPct)) $deltaPct = round($deltaPct, 6);
 
         $now = Carbon::now();
-        DB::table('deviations')->insert([
+
+        $where = [
+            'profit_center_code' => $profitCenterCode,
+            'fiscal_year'        => $fy,
+            'month'              => $m,
+            'deviation_type'     => $type,
+            'user_id'            => $userId,
+        ];
+
+        $existing = DB::table('deviations')->where($where)->first();
+
+        $payload = [
             'profit_center_code' => $profitCenterCode,
             'deviation_type'     => $type,
             'fiscal_year'        => $fy,
             'month'              => $m,
-            'deviation_ratio'    => $percent, // ratio * 100
-            'explanation'        => null,
             'user_id'            => $userId,
-            'created_at'         => $now,
+
+            'sales'              => $sales,
+            'budget'             => $budget,
+            'forecast'           => $forecast,
+            'delta_abs'          => $deltaAbs,
+            'delta_pct'          => $deltaPct,
+            'deviation_ratio'    => round($percent, 6),
+
+            'months'             => is_array($months) ? json_encode(array_values($months)) : null,
+            'sales_series'       => is_array($salesSeries) ? json_encode(array_values($salesSeries)) : null,
+            'budget_series'      => is_array($budgetSeries) ? json_encode(array_values($budgetSeries)) : null,
+            'forecast_series'    => is_array($forecastSeries) ? json_encode(array_values($forecastSeries)) : null,
+
             'updated_at'         => $now,
-            'deleted_at'         => null,
-        ]);
+        ];
+
+        if ($existing) {
+            DB::table('deviations')->where($where)->update($payload);
+        } else {
+            $payload['created_at'] = $now;
+            $payload['justified'] = false;
+            DB::table('deviations')->insert($payload);
+        }
     }
 }
