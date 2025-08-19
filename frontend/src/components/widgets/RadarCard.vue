@@ -1,184 +1,119 @@
 <template>
-  <div class="radar-card">
-    <div class="header">
-      <h3>Leistungsübersicht nach Profit-Center</h3>
-
-      <div class="toggle">
-        <button :class="{ active: unit === 'raw' }" @click="setUnit('raw')">Stück</button>
-        <button :class="{ active: unit === 'm3' }" @click="setUnit('m3')">m³</button>
-        <button :class="{ active: unit === 'euro' }" @click="setUnit('euro')">€</button>
+  <div class="chart-wrap">
+    <div class="chart-toolbar">
+      <div class="btn-group">
+        <button :class="{active: unit==='VK-EH'}" @click="$emit('unitChange','VK-EH')">VK-EH</button>
+        <button :class="{active: unit==='M3'}"    @click="$emit('unitChange','M3')">m³</button>
+        <button :class="{active: unit==='EUR'}"   @click="$emit('unitChange','EUR')">€</button>
       </div>
     </div>
 
-    <Radar v-if="chartData" :data="chartData" :options="chartOptions" />
-
-    <div class="legend">
-      <span class="dot dot-sales"></span>Ist <span class="dot dot-budget"></span>Budget
-      <span class="dot dot-forecast"></span>Forecast
+    <div class="chart-area">
+      <Radar v-if="chartData" :data="chartData" :options="chartOptions" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
-import { Radar } from 'vue-chartjs'
+// Code/vars/comments in English
+import { computed } from 'vue'
 import {
   Chart as ChartJS,
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend,
+  RadialLinearScale, PointElement, LineElement, Filler,
+  Tooltip, Legend, Title
 } from 'chart.js'
+import { Radar } from 'vue-chartjs'
 
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend, Title)
 
-const unit = ref('raw')
-const raw = ref([]) // API rows
-const chartData = ref(null)
+const props = defineProps({
+  labels: { type: Array, required: true },         // e.g. ['Zentrum Nord', ...]
+  series: { type: Array, required: true },         // e.g. [{ name:'Verkäufe', data:[...] }, ...]
+  unit:   { type: String, default: 'VK-EH' }       // 'VK-EH' | 'M3' | 'EUR'
+})
+defineEmits(['unitChange'])
 
-const chartOptions = {
+const palette = [
+  { border: 'rgba(59,130,246,1)',  bg: 'rgba(59,130,246,.20)' }, // blue
+  { border: 'rgba(16,185,129,1)',  bg: 'rgba(16,185,129,.20)' }, // green
+  { border: 'rgba(244,63,94,1)',   bg: 'rgba(244,63,94,.20)' },  // red
+  { border: 'rgba(245,158,11,1)',  bg: 'rgba(245,158,11,.20)' }, // amber (spare)
+]
+
+// Build reactive Chart.js dataset from incoming series
+const chartData = computed(() => ({
+  labels: props.labels,
+  datasets: props.series.map((s, i) => ({
+    label: s.name,                 // UI label in German comes from parent
+    data: s.data ?? [],
+    borderColor: palette[i % palette.length].border,
+    backgroundColor: palette[i % palette.length].bg,
+    pointBackgroundColor: palette[i % palette.length].border,
+    pointBorderColor: '#fff',
+    pointHoverRadius: 4,
+    borderWidth: 2,
+    fill: true,
+    tension: 0.25
+  }))
+}))
+
+const chartOptions = computed(() => ({
   responsive: true,
-  plugins: { legend: { display: false } },
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom', labels: { usePointStyle: true } },
+    tooltip: {
+      mode: 'nearest',
+      callbacks: {
+        label: (ctx) => {
+          const v = ctx.parsed.r ?? 0
+          return `${ctx.dataset.label}: ${formatNumber(v)}`
+        },
+        title: (items) => items?.[0]?.label ?? ''
+      }
+    },
+    title: { display: false }
+  },
   scales: {
     r: {
-      angleLines: { color: 'rgba(255,255,255,0.1)' },
-      grid: { color: 'rgba(255,255,255,0.1)' },
-      pointLabels: { color: '#cbd5e1', font: { size: 11, weight: 600 } },
-      ticks: { showLabelBackdrop: false, color: '#94a3b8' },
-    },
+      angleLines: { color: 'rgba(0,0,0,.08)' },
+      grid: { color: 'rgba(0,0,0,.08)' },
+      pointLabels: { color: '#111827', font: { weight: '600' } },
+      ticks: {
+        backdropColor: 'transparent',
+        showLabelBackdrop: false,
+        color: '#374151',
+        z: 1,
+        callback: (value) => formatNumber(Number(value))
+      },
+      suggestedMin: 0
+    }
   },
+  animation: { duration: 300 }
+}))
+
+function formatNumber(n) {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return (n/1_000_000).toFixed(2) + 'M'
+  if (abs >= 1_000)     return (n/1_000).toFixed(1) + 'k'
+  return (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
-
-function setUnit(u) {
-  if (unit.value !== u) {
-    unit.value = u
-    fetchData()
-  }
-}
-
-async function fetchData() {
-  const res = await fetch(`/api/radar?unit=${unit.value}`, {
-    headers: { Accept: 'application/json' },
-  })
-  const json = await res.json()
-  raw.value = json.data || []
-  buildChart()
-}
-
-function buildChart() {
-  const labels = raw.value.map((r) => `${r.profit_center_code}`)
-  const sales = raw.value.map((r) => Number(r.total_sales) || 0)
-  const budget = raw.value.map((r) => Number(r.total_budget) || 0)
-  const forecast = raw.value.map((r) => Number(r.total_forecast) || 0)
-
-  chartData.value = {
-    labels,
-    datasets: [
-      {
-        label: 'Verkauf',
-        data: sales,
-        borderColor: '#22d3ee',
-        backgroundColor: 'rgba(34,211,238,0.25)',
-        pointBackgroundColor: '#22d3ee',
-        pointBorderColor: '#22d3ee',
-        pointHoverBackgroundColor: '#0ea5e9',
-        pointHoverBorderColor: '#0ea5e9',
-        borderWidth: 2,
-        fill: true,
-      },
-      {
-        label: 'Budget',
-        data: budget,
-        borderColor: '#a78bfa',
-        backgroundColor: 'rgba(167,139,250,0.20)',
-        pointBackgroundColor: '#a78bfa',
-        pointBorderColor: '#a78bfa',
-        pointHoverBackgroundColor: '#7c3aed',
-        pointHoverBorderColor: '#7c3aed',
-        borderWidth: 2,
-        fill: true,
-      },
-      {
-        label: 'Prognose',
-        data: forecast,
-        borderColor: '#f472b6',
-        backgroundColor: 'rgba(244,114,182,0.18)',
-        pointBackgroundColor: '#f472b6',
-        pointBorderColor: '#f472b6',
-        pointHoverBackgroundColor: '#ec4899',
-        pointHoverBorderColor: '#ec4899',
-        borderWidth: 2,
-        fill: true,
-      },
-    ],
-  }
-}
-
-onMounted(fetchData)
-watch(unit, () => buildChart())
 </script>
 
 <style scoped>
-.radar-card {
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 14px;
-  padding: 1rem 1rem 0.5rem;
-  color: #e2e8f0;
+.chart-wrap{ height: 100%; display: flex; flex-direction: column; }
+.chart-toolbar{
+  display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .25rem;
 }
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-h3 {
-  font-size: 1rem;
-  margin: 0;
-}
-.toggle {
-  display: flex;
-  gap: 0.5rem;
-}
-.toggle button {
-  background: transparent;
-  color: #cbd5e1;
-  border: 1px solid #334155;
+.btn-group{
+  background: rgba(255,255,255,.25);
+  border: 1px solid rgba(0,0,0,.1);
   border-radius: 8px;
-  padding: 0.35rem 0.6rem;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
+  overflow: hidden;
 }
-.toggle button.active {
-  background: #0ea5e9;
-  border-color: #0ea5e9;
-  color: #001018;
+.btn-group button{
+  padding: .35rem .6rem; font-size: .8rem; border: 0; background: transparent; cursor: pointer;
 }
-.legend {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  padding: 0.5rem 0 1rem;
-  color: #94a3b8;
-  font-size: 0.85rem;
-}
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 0.35rem;
-}
-.dot-sales {
-  background: #22d3ee;
-}
-.dot-budget {
-  background: #a78bfa;
-}
-.dot-forecast {
-  background: #f472b6;
-}
+.btn-group button.active{ background: rgba(255,255,255,.5); font-weight: 700; }
+.chart-area{ flex: 1; min-height: 0; }
 </style>

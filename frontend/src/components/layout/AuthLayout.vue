@@ -27,7 +27,7 @@
     position: relative;
     height: 100vh;
     width: 100vw;
-    background-image: url('@/assets/img/backgrounds/stb-factory.jpg');
+    background-image: url('@/assets/img/outerapp/stb-factory.jpg');
     background-size: cover;
     background-position: center;
     overflow: hidden;
