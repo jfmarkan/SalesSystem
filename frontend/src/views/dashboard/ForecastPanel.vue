@@ -270,16 +270,49 @@ const changedIndices = computed(() => {
   const cur = (forecast.value || []).slice(0,12)
   const base = (originalForecast.value || []).slice(0,12)
   const out = []
-  for (let i=0;i<12;i++){ if (!isClose(cur[i], base[i])) out.push(i) }
+  for (let i=0;i<12;i++){
+    const ym = months.value?.[i]
+    if (!isEditableYM(ym)) continue
+    if (!isClose(cur[i], base[i])) out.push(i)
+  }
   return out
 })
 const changedCount = computed(() => changedIndices.value.length)
 
+
 /* ---- Normalizadores a 12 para contrato del back ---- */
-function toYYYYMM(d){
-  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0')
-  return `${y}-${m}`
+function yyyymm(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+
+function thirdWednesday(d=new Date()){
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const wd = first.getDay() // 0=Dom..3=Mié
+  const deltaToWed = (3 - wd + 7) % 7
+  const firstWed = new Date(first); firstWed.setDate(1 + deltaToWed)
+  const third = new Date(firstWed); third.setDate(firstWed.getDate() + 14)
+  return third
 }
+
+/* Regla:
+   - Bloquea meses <= mes actual.
+   - Permite el mes siguiente solo hasta 3er miércoles del mes actual.
+   - Meses posteriores siempre editables. */
+function isEditableYM(ym){
+  if (!ym) return false
+  const now = new Date()
+  const cur = new Date(now.getFullYear(), now.getMonth(), 1)
+  const [yS,mS] = String(ym).split('-'); const y = +yS, m = +mS
+  const target = new Date(y, m-1, 1)
+
+  if (target <= cur) return false
+
+  const next = new Date(cur.getFullYear(), cur.getMonth()+1, 1)
+  if (target.getTime() === next.getTime()) {
+    return now <= thirdWednesday(now)
+  }
+  return true
+}
+
+
 function build12FromFirst(ym){
   const [y,m] = ym.split('-').map(n=>parseInt(n,10))
   const base = new Date(y, m-1, 1)
@@ -299,7 +332,6 @@ function coerceLen12Forecast(forecastArr){
   return out
 }
 
-/* Save SOLO si hay cambios */
 async function saveForecast () {
   if (!hasSelection.value) return
   if (changedCount.value === 0) {
@@ -312,18 +344,30 @@ async function saveForecast () {
     const profitCenterId = (mode.value === 'client') ? secondaryId.value : primaryId.value
     const months12   = coerceLen12Months(months.value)
     const forecast12 = coerceLen12Forecast(forecast.value)
-    await api.put(API + '/forecast/series', { clientId, profitCenterId, months: months12, forecast: forecast12 })
+
+    const { data } = await api.put(API + '/forecast/series', {
+      clientId, profitCenterId, months: months12, forecast: forecast12
+    })
+
+    const saved = Number(data?.changed_count ?? data?.saved ?? 0)
+
+    // baseline
     originalForecast.value = forecast12.slice()
-    toast.add({ severity:'success', summary:'Gespeichert', detail:`${changedCount.value} Änderungen gespeichert`, life:2000 })
+
+    toast.add({
+      severity:'success',
+      summary:'Gespeichert',
+      detail: `${saved} Änderung${saved===1?'':'en'} gespeichert`,
+      life: 2200
+    })
+
     await loadSeries()
   } catch {
     toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2500 })
   }
 }
-function resetForecastToBudget () {
-  const b = Array.isArray(budget.value) ? budget.value : []
-  forecast.value = b.slice()
-}
+
+
 
 /* Live cumulative data for main chart */
 function cumulateToLen(arr, len){

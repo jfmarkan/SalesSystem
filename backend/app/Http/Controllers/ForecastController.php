@@ -292,10 +292,14 @@ public function saveSeries(Request $request)
         ->exists();
     if (!$authorized) return response()->json(['message' => 'Forbidden'], 403);
 
-    // Reglas de edición
     $today = now();
     $secondTuesday = $this->getNthWeekdayOfMonth($today, 2, 3);
-    $saved = 0; $eps = 0.0001;
+
+    $eps = 0.0001;
+    $saved = 0;
+    $changes = [];          // campos cambiados
+    $unchanged = [];        // iguales al valor vigente
+    $locked = [];           // bloqueados por regla de edición
 
     foreach ($data['months'] as $idx => $ym) {
         [$yStr, $mStr] = explode('-', $ym);
@@ -303,13 +307,18 @@ public function saveSeries(Request $request)
         $slot = $idx + 1;
         $val  = (float) $data['forecast'][$idx];
 
-        if ($slot === 1 || $slot === 2) continue;
-        if ($slot === 3 && $today->gt($secondTuesday)) continue;
+        // reglas de edición
+        if ($slot === 1 || $slot === 2) {
+            $locked[] = ['index'=>$idx,'month'=>$ym,'reason'=>'locked_past'];
+            continue;
+        }
+        if ($slot === 3 && $today->gt($secondTuesday)) {
+            $locked[] = ['index'=>$idx,'month'=>$ym,'reason'=>'locked_after_2nd_tuesday'];
+            continue;
+        }
 
-        // Versión actual por CPC+mes+año (si querés por usuario, descomentar where user_id)
         $curVer = Forecast::where('client_profit_center_id', $cpcId)
             ->where('fiscal_year', $y)->where('month', $m)
-            //->where('user_id', $user->id)
             ->max('version') ?? 0;
 
         $existing = null;
@@ -317,10 +326,13 @@ public function saveSeries(Request $request)
             $existing = Forecast::where('client_profit_center_id', $cpcId)
                 ->where('fiscal_year', $y)->where('month', $m)
                 ->where('version', $curVer)
-                // ->where('user_id', $user->id)
                 ->value('volume');
         }
-        if ($existing !== null && abs((float)$existing - $val) < $eps) continue;
+
+        if ($existing !== null && abs((float)$existing - $val) < $eps) {
+            $unchanged[] = ['index'=>$idx,'month'=>$ym,'value'=>$val];
+            continue;
+        }
 
         Forecast::create([
             'client_profit_center_id' => $cpcId,
@@ -328,12 +340,33 @@ public function saveSeries(Request $request)
             'month'                   => $m,
             'version'                 => $curVer + 1,
             'volume'                  => $val,
-            'user_id'                 => $user->id, // guarda quién creó la versión
+            'user_id'                 => $user->id,
         ]);
         $saved++;
+        $changes[] = [
+            'index'        => $idx,
+            'month'        => $ym,
+            'from'         => $existing,
+            'to'           => $val,
+            'version_from' => $curVer,
+            'version_to'   => $curVer + 1,
+        ];
     }
 
-    return response()->json(['saved' => $saved]);
+    $message = $saved > 0
+        ? "Es wurden {$saved} Feld(er) geändert und gespeichert."
+        : "Gespeichert. Keine Änderungen erkannt.";
+
+    return response()->json([
+        'ok'              => true,
+        'changed_count'   => $saved,     // número de campos cambiados
+        'changed_fields'  => $changes,   // detalle por campo
+        'unchanged_count' => count($unchanged),
+        'locked_count'    => count($locked),
+        'unchanged'       => $unchanged,
+        'locked'          => $locked,
+        'message'         => $message,
+    ]);
 }
 
     // ========================= Helpers =========================
