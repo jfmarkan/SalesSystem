@@ -1,44 +1,33 @@
 <template>
   <div class="pctable">
-    <div class="toolbar">
-      <strong>Einheiten:</strong>
-      <div class="btn-group">
-        <button :class="{active: unit==='VK-EH'}" @click="$emit('unitChange','VK-EH')">VK-EH</button>
-        <button :class="{active: unit==='M3'}"    @click="$emit('unitChange','M3')">m³</button>
-        <button :class="{active: unit==='EUR'}"   @click="$emit('unitChange','EUR')">€</button>
-      </div>
-    </div>
     <div class="table-wrap">
       <table class="tbl">
         <thead>
           <tr>
             <th>PC</th>
-            <th class="num">Verkäufe</th>
+            <th class="num">Ist</th>
             <th class="num">Prognose</th>
             <th class="num">Budget</th>
-            <th class="num">% Erfüllung</th>
-            <th class="num">% Prognosefehler</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="r in rows" :key="r.pcId">
-            <td><div class="pc-name">{{ r.pcName }}</div></td>
-            <td class="num">{{ fmt(r.sales) }}</td>
-            <td class="num">{{ fmt(r.forecast) }}</td>
-            <td class="num">{{ fmt(r.budget) }}</td>
-            <td class="num">{{ fmtPct(r.budget === 0 ? 0 : (r.sales / r.budget * 100)) }}</td>
-            <td class="num">
-              {{ fmtPct(r.sales === 0 ? 0 : (Math.abs(r.forecast - r.sales) / r.sales * 100)) }}
+            <td class="pc-cell">
+              <div class="pc-code">{{ r.pcIdNumeric ?? r.pcId }}</div>
+              <div class="pc-name">{{ r.pcName }}</div>
             </td>
+            <td class="num">{{ fmtAbs(r.sales) }}</td>
+            <td class="num">{{ fmtAbs(r.forecast) }}</td>
+            <td class="num">{{ fmtAbs(r.budget) }}</td>
           </tr>
         </tbody>
-        <tfoot>
+
+        <tfoot v-if="showTotals">
           <tr class="total">
             <td>Summe</td>
-            <td class="num">{{ fmt(totals.sales) }}</td>
-            <td class="num">{{ fmt(totals.forecast) }}</td>
-            <td class="num">{{ fmt(totals.budget) }}</td>
-            <td class="num" colspan="2"><small>Einheit: {{ unit }}</small></td>
+            <td class="num">{{ fmtAbs(totals.sales) }}</td>
+            <td class="num">{{ fmtAbs(totals.forecast) }}</td>
+            <td class="num">{{ fmtAbs(totals.budget) }}</td>
           </tr>
         </tfoot>
       </table>
@@ -49,35 +38,28 @@
 <script setup>
 // Code/vars/comments in English
 const props = defineProps({
-  rows: { type: Array, required: true },
-  totals: { type: Object, required: true },
-  unit: { type: String, default: 'VK-EH' }
+  rows:      { type: Array,  required: true }, // [{ pcId, pcIdNumeric, pcName, sales, forecast, budget }]
+  totals:    { type: Object, required: true }, // { sales, forecast, budget }
+  unit:      { type: String, default: 'm³' },
+  showTotals:{ type: Boolean, default: true }  // only true for EUR/M3, false for VK-EH
 })
-defineEmits(['unitChange'])
 
-function fmt(n){
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1_000_000) return sign + (abs/1_000_000).toFixed(2) + 'M'
-  if (abs >= 1_000) return sign + (abs/1_000).toFixed(1) + 'k'
-  return sign + abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
-}
-function fmtPct(p){ return `${p.toFixed(1)}%` }
+// Absolute numbers, dot as thousand separator (de-DE)
+const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 })
+function fmtAbs(n){ return nf0.format(Math.round(n ?? 0)) }
 </script>
 
 <style scoped>
 .pctable{ height: 100%; display: flex; flex-direction: column; }
-.toolbar{ display:flex; gap:.5rem; align-items:center; margin-bottom:.5rem; justify-content:flex-end; }
-.btn-group{
-  background: rgba(255,255,255,.25); border:1px solid rgba(0,0,0,.1); border-radius:8px; overflow:hidden;
-}
-.btn-group button{ padding:.35rem .6rem; font-size:.8rem; border:0; background:transparent; cursor:pointer; }
-.btn-group button.active{ background: rgba(255,255,255,.5); font-weight:700; }
 .table-wrap{ overflow:auto; flex:1; }
-.tbl{ width:100%; border-collapse:collapse; }
-.tbl th, .tbl td{ padding:.5rem .6rem; border-bottom:1px solid rgba(0,0,0,.05); }
-.tbl thead th{ position: sticky; top:0; background: rgba(255,255,255,.6); backdrop-filter: blur(4px); }
-.tbl .num{ text-align:right; }
+.tbl{ width:100%; border-collapse:collapse; font-size: 0.86rem; }
+.tbl th, .tbl td{ padding:.35rem .5rem; border-bottom:1px solid rgba(0,0,0,.05); vertical-align: middle; }
+.tbl thead th{ position: sticky; top:0; background: rgba(255,255,255,.7); backdrop-filter: blur(4px); font-weight: 700; }
+.tbl .num{ text-align:right; white-space: nowrap; }
+
+.pc-cell{ line-height: 1.05; }
+.pc-code{ font-weight: 800; font-size: 0.95rem; }
+.pc-name{ font-size: 0.70rem; color:#374151; opacity: .9; }
+
 .tbl tfoot .total td{ font-weight: 700; border-top: 2px solid rgba(0,0,0,.15); }
-.pc-name{ font-weight:600; }
 </style>

@@ -11,11 +11,15 @@ use App\Http\Controllers\Auth\OtpController as OtpController;
 use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\UserDetailController;
+use App\Http\Controllers\DashboardController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
 Route::middleware('auth:sanctum')->group(function () {
+    
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    
     Route::prefix('me')->group(function () {
         Route::get('/clients',        [ForecastController::class, 'getClients']);
         Route::get('/profit-centers', [ForecastController::class, 'getProfitCenters']);

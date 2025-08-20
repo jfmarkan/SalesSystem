@@ -1,3 +1,4 @@
+<!-- src/views/HomeDashboard.vue -->
 <template>
   <div class="dash-wrapper">
     <grid-layout
@@ -15,6 +16,15 @@
         :x="item.x" :y="item.y" :w="item.w" :h="item.h" :i="item.i"
       >
         <GlassCard :title="getTitle(item)">
+          <!-- Unit toggle (only for chart & table) -->
+          <template #header-extra>
+            <div v-if="item.type==='chart' || item.type==='table'" class="unit-toggle">
+              <button class="btn" :class="{active: unit==='M3'}"   @click="setUnit('M3')">m³</button>
+              <button class="btn" :class="{active: unit==='VKEH'}" @click="setUnit('VKEH')">VK-EH</button>
+              <button class="btn" :class="{active: unit==='EUR'}"  @click="setUnit('EUR')">€</button>
+            </div>
+          </template>
+
           <component
             v-if="getWidgetComponent(item.type)"
             :is="getWidgetComponent(item.type)"
@@ -30,7 +40,7 @@
 
 <script setup>
 // UI must be German; all code/variables/comments in English.
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
 import GlassCard from '@/components/ui/GlassCard.vue'
 
@@ -43,116 +53,117 @@ import ListCard from '@/components/widgets/ListCard.vue'
 import OrderList from '@/components/lists/OrderList.vue'
 import ProfitCentersTable from '@/components/widgets/ProfitCentersTable.vue'
 
+// Axios (Sanctum client -> http://localhost:8000)
+import api from '@/plugins/axios'
+
 // Grid edit state
 const isEditable = ref(false)
 
-// Shared unit across widgets: 'VK-EH' | 'M3' | 'EUR'
-const unit = ref('VK-EH')
+// Shared unit: 'M3' | 'VKEH' | 'EUR'
+const unit = ref('M3')
 
-// Profit centers (sample; replace with API)
-const profitCenters = ref([
-  { id: 'PC01', name: 'Zentrum Nord' },
-  { id: 'PC02', name: 'Zentrum Süd' },
-  { id: 'PC03', name: 'Zentrum Ost' },
-  { id: 'PC04', name: 'Zentrum West' }
-])
+// Backend state
+const kpiItems       = ref([])     // [{ id,label,value,unit,details? }]
+const chartRaw       = ref({ pc_codes: [], labels: [], series: [], unit: 'VKEH' }) // series in VKEH
+const tableRowsVKEH  = ref([])     // [{ pc_code, pc_name, sales, forecast, budget }] in VKEH
+const tableTotalsVKEH= ref({ sales:0, forecast:0, budget:0, unit:'VKEH' })
+const calendarEvents = ref([])
+const conversions    = ref({})     // { [pc]: { factor_to_m3, factor_to_euro } }
+const loading        = ref(false)
+const errorMsg       = ref('')
 
-// Conversion factors per PC from VK-EH to target units
-const unitConversions = ref({
-  PC01: { 'VK-EH->M3': 0.72, 'VK-EH->EUR': 48.5 },
-  PC02: { 'VK-EH->M3': 0.80, 'VK-EH->EUR': 51.0 },
-  PC03: { 'VK-EH->M3': 0.66, 'VK-EH->EUR': 46.2 },
-  PC04: { 'VK-EH->M3': 0.75, 'VK-EH->EUR': 49.7 }
-})
+// Fetch dashboard
+async function fetchDashboard() {
+  loading.value = true; errorMsg.value = ''
+  try {
+    const { data } = await api.get('/api/dashboard')
+    kpiItems.value        = data?.kpis?.items ?? []
+    chartRaw.value        = data?.chart ?? { pc_codes: [], labels: [], series: [], unit:'VKEH' }
+    tableRowsVKEH.value   = data?.table?.rows ?? []
+    tableTotalsVKEH.value = data?.table?.totals ?? { sales:0, forecast:0, budget:0, unit:'VKEH' }
+    calendarEvents.value  = data?.calendar?.events ?? []
 
-// Metrics per PC (base in VK-EH)
-const metricsByPc = ref({
-  PC01: { sales: 1200, forecast: 1350, budget: 1300 },
-  PC02: { sales: 900,  forecast: 1000, budget: 1100 },
-  PC03: { sales: 650,  forecast: 700,  budget: 800  },
-  PC04: { sales: 1050, forecast: 1150, budget: 1200 }
-})
-
-// Action plan events for calendar
-const actionPlan = ref([
-  { id: 1, title: 'Promo PC01 starten', pcId: 'PC01', date: '2025-08-19', status: 'done' },
-  { id: 2, title: 'Teamtraining PC02',   pcId: 'PC02', date: '2025-08-20', status: 'pending' },
-  { id: 3, title: 'Portfolio-Check PC03',pcId: 'PC03', date: '2025-08-18', status: 'overdue' },
-  { id: 4, title: 'Preisupdate PC04',    pcId: 'PC04', date: '2025-08-22', status: 'pending' }
-])
-
-// ----- Conversion helpers
-function toUnit(pcId, valueVKEH, targetUnit) {
-  if (targetUnit === 'VK-EH') return valueVKEH
-  const conv = unitConversions.value[pcId] || { 'VK-EH->M3': 1, 'VK-EH->EUR': 1 }
-  if (targetUnit === 'M3')  return valueVKEH * (conv['VK-EH->M3']  ?? 1)
-  if (targetUnit === 'EUR') return valueVKEH * (conv['VK-EH->EUR'] ?? 1)
-  return valueVKEH
-}
-function sumField(field, targetUnit) {
-  return profitCenters.value.reduce((acc, pc) => {
-    const base = metricsByPc.value[pc.id]?.[field] ?? 0
-    return acc + toUnit(pc.id, base, targetUnit)
-  }, 0)
-}
-
-// ----- Aggregates for KPIs (VK-EH for ratio computations)
-const totalSales          = computed(() => sumField('sales', unit.value))
-const totalBudgetVK       = computed(() => sumField('budget', 'VK-EH'))
-const totalSalesVK        = computed(() => sumField('sales', 'VK-EH'))
-const totalForecastVK     = computed(() => sumField('forecast', 'VK-EH'))
-const fulfillmentPct      = computed(() => totalBudgetVK.value === 0 ? 0 : (totalSalesVK.value / totalBudgetVK.value) * 100)
-const budgetGap           = computed(() =>
-  profitCenters.value.reduce((acc, pc) => {
-    const b = metricsByPc.value[pc.id]?.budget ?? 0
-    const s = metricsByPc.value[pc.id]?.sales ?? 0
-    const gapVK = b - s
-    if (unit.value === 'VK-EH') return acc + gapVK
-    return acc + toUnit(pc.id, Math.abs(gapVK), unit.value) * Math.sign(gapVK)
-  }, 0)
-)
-const forecastAccuracyPct = computed(() => {
-  // 100 - simple MAPE (using VK-EH totals)
-  const denom = totalSalesVK.value || 1
-  const absErr = Math.abs(totalForecastVK.value - totalSalesVK.value)
-  const mape = (absErr / denom) * 100
-  return Math.max(0, 100 - mape)
-})
-
-// ----- Radar chart series (German labels in UI)
-const radarLabels = computed(() => profitCenters.value.map(pc => pc.name))
-const radarSeries = computed(() => {
-  const s = profitCenters.value.map(pc => toUnit(pc.id, metricsByPc.value[pc.id]?.sales    ?? 0, unit.value))
-  const f = profitCenters.value.map(pc => toUnit(pc.id, metricsByPc.value[pc.id]?.forecast ?? 0, unit.value))
-  const b = profitCenters.value.map(pc => toUnit(pc.id, metricsByPc.value[pc.id]?.budget   ?? 0, unit.value))
-  return [
-    { name: 'Verkäufe', data: s },
-    { name: 'Forecast', data: f },
-    { name: 'Budget',   data: b }
-  ]
-})
-
-// ----- Table rows per PC
-const tableRows = computed(() => profitCenters.value.map(pc => {
-  const base = metricsByPc.value[pc.id] || { sales: 0, forecast: 0, budget: 0 }
-  return {
-    pcId: pc.id,
-    pcName: pc.name,
-    sales: toUnit(pc.id, base.sales, unit.value),
-    forecast: toUnit(pc.id, base.forecast, unit.value),
-    budget: toUnit(pc.id, base.budget, unit.value)
+    // conversions from payload (recommended)
+    if (data?.conversions) {
+      conversions.value = data.conversions
+    } else {
+      // optional endpoint if you prefer to keep payload slim
+      try {
+        const conv = await api.get('/api/unit-conversions')
+        if (conv?.data?.conversions) conversions.value = conv.data.conversions
+      } catch {}
+    }
+  } catch (e) {
+    console.error('Dashboard load failed', e)
+    errorMsg.value = 'Fehler beim Laden des Dashboards.'
+  } finally {
+    loading.value = false
   }
-}))
+}
+onMounted(fetchDashboard)
 
-// ----- KPI map (German labels)
-const kpis = computed(() => ({
-  users:      { label: 'Gesamtverkäufe',          value: totalSales.value,            unit: unit.value },
-  revenue:    { label: 'Erfüllung vs. Budget', value: fulfillmentPct.value,        unit: '%' },
-  conversion: { label: 'Lücke vs. Budget',     value: budgetGap.value,             unit: unit.value },
-  bounce:     { label: 'Forecast-Genauigkeit',    value: forecastAccuracyPct.value,   unit: '%' }
-}))
+// Helpers
+function toUnit(pc, vkeh, u){
+  const v = Number(vkeh ?? 0)
+  const c = conversions.value?.[pc] || {}
+  if (u === 'M3')  return v * (c.factor_to_m3  ?? 1)
+  if (u === 'EUR') return v * (c.factor_to_euro ?? 1)
+  if (u === 'VKEH') return v // base
+  return v
+}
+function pcNumeric(code){
+  const m = String(code ?? '').match(/\d+/g)
+  return m ? m.join('') : String(code ?? '')
+}
+function displayUnit(u){
+  if (u === 'M3' || u === 'm³') return 'm³'
+  if (u === 'EUR') return '€'
+  if (u === 'VKEH') return 'VK-EH'
+  return u
+}
 
-// ----- Grid layout
+// Chart (convert using pc_codes)
+const radarLabels = computed(() => (chartRaw.value.pc_codes || []).map(pcNumeric))
+const radarSeries = computed(() => {
+  const codes = chartRaw.value.pc_codes || []
+  const srcSeries = chartRaw.value.series || []
+  return srcSeries.map(ds => ({
+    name: ds.name,
+    data: (ds.data || []).map((v, i) => toUnit(codes[i], v, unit.value))
+  }))
+})
+
+// Table (convert row by row)
+const tableRows = computed(() =>
+  (tableRowsVKEH.value || []).map(r => ({
+    pcId: r.pc_code,
+    pcIdNumeric: pcNumeric(r.pc_code),
+    pcName: r.pc_name,
+    sales:    toUnit(r.pc_code, r.sales,    unit.value),
+    forecast: toUnit(r.pc_code, r.forecast, unit.value),
+    budget:   toUnit(r.pc_code, r.budget,   unit.value)
+  }))
+)
+// Totals only for M3/EUR
+const showTotals = computed(() => unit.value === 'M3' || unit.value === 'EUR')
+const tableTotals = computed(() => {
+  if (!showTotals.value) return { sales:0, forecast:0, budget:0 }
+  const sum = k => tableRows.value.reduce((a, r) => a + (Number(r[k] ?? 0)), 0)
+  return { sales: sum('sales'), forecast: sum('forecast'), budget: sum('budget') }
+})
+
+// KPIs (backend-driven)
+const kpis = computed(() => {
+  const byId = Object.fromEntries((kpiItems.value || []).map(i => [i.id, i]))
+  return {
+    users:      byId['perf_vs_forecast_pct'] || { label:'Ist vs Prognose (%)', value:0, unit:'%' },
+    conversion: byId['perf_vs_budget_pct']   || { label:'Ist vs Budget (%)',   value:0, unit:'%' },
+    revenue:    byId['sales_total_eur']      || { label:'Gesamt-Ist (€)',      value:0, unit:'€' },
+    bounce:     byId['extra_quota_m3']       || { label:'Zusatzquote (m³)',    value:0, unit:'m³' }
+  }
+})
+
+// Layout
 const layout = ref([
   { i: '0',  x: 0,  y: 0,  w: 2, h: 4,  type: 'kpi', kpiId: 'users' },
   { i: '1',  x: 2,  y: 0,  w: 2, h: 4,  type: 'kpi', kpiId: 'conversion' },
@@ -161,22 +172,22 @@ const layout = ref([
   { i: '4',  x: 8,  y: 0,  w: 4, h: 12, type: 'calendar' },
   { i: '7',  x: 0,  y: 4,  w: 5, h: 17, type: 'chart' },
   { i: '8',  x: 5,  y: 4,  w: 3, h: 17, type: 'table' },
-  { i: '9',  x: 8,  y: 17, w: 4, h: 9,  type: 'task' },
-//  { i: '10', x: 0,  y: 21, w: 5, h: 16, type: 'orders', title: 'Bestellungen' },
-//  { i: '11', x: 5,  y: 21, w: 5, h: 16, type: 'list' },
-//  { i: '12', x: 10, y: 21, w: 2, h: 16, type: 'list' }
-  
+  { i: '9',  x: 8,  y: 17, w: 4, h: 9,  type: 'task' }
 ])
 
-// ----- Title helpers
-function displayUnit(u){
-  if (u === 'M3')  return 'm³'
-  if (u === 'EUR') return '€'
-  if (u === '%')   return '%'
-  return 'VK-EH'
+// Titles (German) — include current unit on chart/table
+function getTitle(item) {
+  if (item.type === 'kpi') {
+    const k = kpis.value[item.kpiId] ?? { label:'KPI', unit:'' }
+    return `${k.label}${k.unit ? ` (${displayUnit(k.unit)})` : ''}`
+  }
+  if (item.type === 'chart') return `Diagramm (${displayUnit(unit.value)})`
+  if (item.type === 'table') return `Profitcenter (${displayUnit(unit.value)})`
+  if (item.title) return item.title
+  return { calendar:'Kalender', task:'Aufgaben', list:'Liste', orders:'Bestellungen' }[item.type] || 'Widget'
 }
 
-// ----- Component registry
+// Registry
 function getWidgetComponent(type) {
   return {
     kpi: KpiCard,
@@ -189,57 +200,32 @@ function getWidgetComponent(type) {
   }[type] || null
 }
 
-// ----- Titles (German). For KPI: use label + unit in parentheses.
-function getTitle(item) {
-  if (item.type === 'kpi') {
-    const k = kpis.value[item.kpiId] ?? { label: 'KPI', unit: '' }
-    const unitSuffix = k.unit ? ` (${displayUnit(k.unit)})` : ''
-    return `${k.label}${unitSuffix}`
-  }
-  if (item.title) return item.title
-  return {
-    calendar: 'Kalender',
-    chart: 'Diagramm',
-    task: 'Aufgaben',
-    list: 'Liste',
-    table: 'Profitcenter'
-  }[item.type] || 'Widget'
-}
-
-// ----- Props per widget
+// Props per widget
 function getPropsForType(item) {
   if (item.type === 'kpi') {
     return {
       modelValue: item.kpiId,
-      'onUpdate:modelValue': val => (item.kpiId = val),
+      'onUpdate:modelValue': v => (item.kpiId = v),
       kpis: kpis.value,
-      unit: unit.value
+      unit: kpis.value[item.kpiId]?.unit || ''
     }
   }
   if (item.type === 'chart') {
-    return {
-      labels: radarLabels.value,
-      series: radarSeries.value,
-      unit: unit.value,
-      onUnitChange: (u) => (unit.value = u)
-    }
+    return { labels: radarLabels.value, series: radarSeries.value, unit: displayUnit(unit.value) }
   }
   if (item.type === 'table') {
-    return {
-      rows: tableRows.value,
-      totals: {
-        sales: sumField('sales', unit.value),
-        forecast: sumField('forecast', unit.value),
-        budget: sumField('budget', unit.value)
-      },
-      unit: unit.value,
-      onUnitChange: (u) => (unit.value = u)
-    }
+    return { rows: tableRows.value, totals: tableTotals.value, unit: displayUnit(unit.value), showTotals: showTotals.value }
   }
   if (item.type === 'calendar') {
-    return { events: actionPlan.value, profitCenters: profitCenters.value }
+    return { events: calendarEvents.value }
   }
   return {}
+}
+
+// Handlers
+function setUnit(u){
+  if (u === unit.value) return
+  unit.value = u
 }
 </script>
 
@@ -251,5 +237,17 @@ function getPropsForType(item) {
 .grid-placeholder{
   height: 100%; width: 100%; background: transparent; color: #111827;
   display: flex; align-items: center; justify-content: center;
+}
+/* Header unit toggle (selected = rgba(31,86,115,.8)) */
+.unit-toggle{
+  display: inline-flex; gap: .25rem; background: rgba(255,255,255,.25);
+  border: 1px solid rgba(0,0,0,.08); border-radius: 8px; padding: .15rem;
+}
+.unit-toggle .btn{
+  border: 0; padding: .25rem .55rem; font-size: .8rem; background: transparent;
+  color: #0f172a; border-radius: 6px; cursor: pointer;
+}
+.unit-toggle .btn.active{
+  background: rgba(31,86,115,.8); color: #fff; font-weight: 700;
 }
 </style>

@@ -11,6 +11,7 @@ import ForecastPanel from '@/views/dashboard/ForecastPanel.vue';
 import DeviationPanel from '@/views/dashboard/DeviationPanel.vue';
 import UserProfile from '@/views/dashboard/UserProfile.vue';
 import DashboardEditor from '@/views/dashboard/DashboardEditor.vue';
+import ExtraQuotaPanel from '@/views/dashboard/ExtraQuotaPanel.vue';
 
 const routes = [
     {
@@ -48,8 +49,29 @@ const routes = [
                 }
             },
             { 
+                path: '/forecasts', 
+                component: ForecastPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
                 path: '/deviations', 
                 component: DeviationPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/extra-quotas', 
+                component: ExtraQuotaPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/forecasts', 
+                component: ForecastPanel, 
                 meta: { 
                     requiresAuth: true 
                 }
