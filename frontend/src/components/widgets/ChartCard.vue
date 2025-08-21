@@ -23,9 +23,9 @@ const props = defineProps({
 })
 
 const palette = [
-  { border: 'rgba(59,130,246,1)',  bg: 'rgba(59,130,246,.20)' },
-  { border: 'rgba(16,185,129,1)',  bg: 'rgba(16,185,129,.20)' },
-  { border: 'rgba(244,63,94,1)',   bg: 'rgba(244,63,94,.20)' },
+  { border: 'rgba(69,98,135, 1)',  bg: 'rgba(69,98,135,.20)' },
+  { border: 'rgba(255,194,14,1)',   bg: 'rgba(255,194,14,.20)' },
+  { border: 'rgba(116,134,61,1)',  bg: 'rgba(116,134,61,.20)' },
 ]
 
 const chartData = computed(() => ({
