@@ -32,7 +32,6 @@ const sid = computed({
 
 <template>
   <div class="filter-wrap">
-    <div class="mb-2 text-600 text-sm">Filtern nach</div>
     <div class="flex align-items-center gap-3 mb-3">
       <div class="flex align-items-center gap-2">
         <RadioButton inputId="rb-client" v-model="m" value="client" name="mode" />

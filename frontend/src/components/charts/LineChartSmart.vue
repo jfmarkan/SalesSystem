@@ -14,11 +14,10 @@ const props = defineProps({
   profitCenterId: { type: [Number, String], default: null },
   apiPrefix: { type: String, default: '/api' },
   autoFetch: { type: Boolean, default: true },
-  cumData: { type: Object, default: null },        // { months, sales_cum, budget_cum, forecast_cum, budget_fy|budget_fy_line }
+  cumData: { type: Object, default: null },        // { months, sales_cum, budget_cum, forecast_cum, budget_fy|budget_fy_line, overlay_best?, overlay_worst? }
   versionsData: { type: Object, default: null },   // soporta formatos alternativos
   logo: { type: String, default: '' },
   logoSize: { type: Number, default: 64 },
-  /* nuevo: permite forzar estado de carga externo (ej: mientras el panel trae series) */
   busy: { type: Boolean, default: false }
 })
 
@@ -49,12 +48,39 @@ function mapCumulative(d){
     ? d.budget_fy_line.map(Number)
     : m.map(()=> Number(d.budget_fy ?? 0))
   labels.value = m
-  datasets.value = [
-    { label:'Ist',  data:sales,    borderColor:'#456287', backgroundColor:'rgba(255,255,255,0)',  tension:.25, pointRadius:0, fill:false },
+  const base = [
+    { label:'Ist',      data:sales,    borderColor:'#456287', backgroundColor:'rgba(255,255,255,0)',  tension:.25, pointRadius:0, fill:false },
     { label:'Budget',   data:budget,   borderColor:'#9DBB61', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
     { label:'Forecast', data:forecast, borderColor:'#FFC20E', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
-    { label:'Ziel Budget',          data:fyLine,   borderColor:'#44512A', borderDash:[6,6],                       tension:0,   pointRadius:0, fill:false }
+    { label:'Ziel Budget', data:fyLine, borderColor:'#44512A', borderDash:[6,6], tension:0, pointRadius:0, fill:false }
   ]
+
+  // --- overlays (opcionales) ---
+  if (Array.isArray(d.overlay_best) && d.overlay_best.length === m.length) {
+    base.push({
+      label:'Best Case',
+      data: d.overlay_best.map(Number),
+      borderColor:'#16a34a',                // verde
+      backgroundColor:'rgba(255,255,255,0)',
+      borderDash:[6,6],
+      tension:.25,
+      pointRadius:0,
+      fill:false
+    })
+  }
+  if (Array.isArray(d.overlay_worst) && d.overlay_worst.length === m.length) {
+    base.push({
+      label:'Worst Case',
+      data: d.overlay_worst.map(Number),
+      borderColor:'#EF4444',                // rojo
+      backgroundColor:'rgba(255,255,255,0)',
+      borderDash:[6, 6],
+      tension:.25,
+      pointRadius:0,
+      fill:false
+    })
+  }
+  datasets.value = base
 }
 
 function mapVersions(d, budgetValue = null){
@@ -178,6 +204,7 @@ const options = {
 }
 watch([labels, datasets], ()=>{ chartRef.value?.chart?.update('none') })
 </script>
+
 
 <template>
   <div class="chart-shell">

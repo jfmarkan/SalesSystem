@@ -1,4 +1,5 @@
 <template>
+  
   <div class="chart-area">
     <Radar v-if="chartData" :data="chartData" :options="chartOptions" />
   </div>
