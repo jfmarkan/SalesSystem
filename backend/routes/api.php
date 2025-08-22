@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/',        [BudgetCaseController::class, 'store']);  // save/update
         Route::get('/',         [BudgetCaseController::class, 'show']);   // fetch one by clientPC+FY (query params)
         Route::post('/simulate', [BudgetCaseSimulatorController::class, 'simulate']);
+        Route::post('/sales-ytd', [BudgetCaseSimulatorController::class, 'salesYtd']);
         
     });
 
