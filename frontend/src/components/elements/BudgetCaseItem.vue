@@ -103,12 +103,13 @@ function logIncoming(){
 onMounted(logIncoming)
 watch(() => [props.clientGroupNumber, props.profitCenterCode], logIncoming)
 
-/* Save (local clean) */
-async function save(){
-  origBest.value  = Number(bestCase.value ?? 0)
-  origWorst.value = Number(worstCase.value ?? 0)
-  emit('dirty-change', false)
+/* Compute next fiscal year (current FY + 1) */
+function currentFY(){
+  const now = new Date()
+  const fy = (now.getMonth()+1) < 4 ? (now.getFullYear()-1) : now.getFullYear()
+  return fy
 }
+
 
 /* Simulate: ONLY the two IDs + percentages (all numeric) */
 async function simulate(){
@@ -123,14 +124,7 @@ async function simulate(){
       worst_case: Number(worstCase.value ?? 0),
       compare_current: true
     }
-    console.log('[BudgetCasePanel] Sending payload:', payload, {
-      types: {
-        cgn: typeof payload.client_group_number,
-        pcc: typeof payload.profit_center_code,
-        best: typeof payload.best_case,
-        worst: typeof payload.worst_case
-      }
-    })
+    console.log('[BudgetCasePanel] Sending payload:', payload)
 
     const { data } = await api.post('/api/budget-cases/simulate', payload, { withCredentials:true })
 
@@ -142,7 +136,11 @@ async function simulate(){
       totalBest:     b.totalBest ?? 0,
       totalWorst:    b.totalWorst ?? 0
     }
-    console.log('[BudgetCasePanel] Simulation response (summary):', summary.value)
+    console.log('[BudgetCasePanel] Simulation summary:', summary.value)
+
+    // asegurar que el padre vea el estado sucio si los valores difieren de los guardados
+    emit('dirty-change', dirty.value)
+
     emit('simulated', { seriesTarget: data?.seriesTarget || [] })
   } catch(e){
     summary.value = null
@@ -152,14 +150,48 @@ async function simulate(){
   } finally { loading.value = false }
 }
 
-/* Reset */
+/* Reset (soft: vuelve a valores guardados) */
 function reset(){
   bestCase.value = origBest.value
   worstCase.value = origWorst.value
+  summary.value = null
+  error.value = ''
   emit('dirty-change', false)
 }
 
-defineExpose({ save, reset })
+function toNumSafe(v){ const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+watch([bestCase, worstCase], ([b, w]) => {
+  const payload = { best_case: toNumSafe(b), worst_case: toNumSafe(w) }
+  // siempre que cambie algo, avisamos: mantiene el botón Guardar activo
+  emit('dirty-change', true)
+  emit('values-change', payload)
+  console.log('[BudgetCasePanel] values-change ->', payload)
+})
+
+function getValues() {
+  const out = { best_case: toNumSafe(bestCase.value), worst_case: toNumSafe(worstCase.value) }
+  console.log('[BudgetCasePanel] getValues ->', out)
+  return out
+}
+function markSaved() {
+  origBest.value  = toNumSafe(bestCase.value)
+  origWorst.value = toNumSafe(worstCase.value)
+  emit('dirty-change', false)
+}
+function hardReset() {
+  bestCase.value = null
+  worstCase.value = null
+  origBest.value = 0
+  origWorst.value = 0
+  summary.value = null
+  error.value = ''
+  emit('dirty-change', false)
+  emit('values-change', { best_case: 0, worst_case: 0 })
+  console.log('[BudgetCasePanel] hardReset')
+}
+
+defineExpose({ getValues, markSaved, hardReset })
 </script>
 
 <style scoped>
