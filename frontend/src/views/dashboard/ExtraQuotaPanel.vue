@@ -3,14 +3,10 @@
   <div class="forecast-wrapper">
     <Toast />
 
-    <!-- Unsaved changes -->
     <Dialog
       v-model:visible="confirmVisible"
-      :modal="true"
-      :draggable="false"
-      :dismissableMask="true"
-      header="Ungespeicherte Änderungen"
-      :style="{ width:'520px' }"
+      :modal="true" :draggable="false" :dismissableMask="true"
+      header="Ungespeicherte Änderungen" :style="{ width:'520px' }"
     >
       <p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
       <div class="flex justify-content-end gap-2">
@@ -21,19 +17,11 @@
     </Dialog>
 
     <GridLayout
-      :layout="layout"
-      :col-num="12"
-      :row-height="8"
-      :is-draggable="false"
-      :is-resizable="false"
-      :margin="[10,10]"
+      :layout="layout" :col-num="12" :row-height="8"
+      :is-draggable="false" :is-resizable="false" :margin="[10,10]"
       :use-css-transforms="true"
     >
-      <GridItem
-        v-for="item in layout"
-        :key="item.i"
-        :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h"
-      >
+      <GridItem v-for="item in layout" :key="item.i" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
         <GlassCard :class="{ 'no-strip': item.type==='title' }" :title="getTitle(item)">
           <!-- TITLE -->
           <div v-if="item.type==='title'" class="h-full p-3 flex align-items-center justify-content-between">
@@ -47,7 +35,6 @@
               <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
               <div class="caption">Wird geladen…</div>
             </div>
-
             <template v-else>
               <Listbox
                 v-if="listOptions.length"
@@ -62,26 +49,25 @@
                   <div class="row-item">
                     <div class="top">
                       <span class="pc">{{ slotProps.option.pc }}</span>
-                      <span class="meta">v{{ slotProps.option.version }}</span>
+                      <span class="meta">{{ '' }}</span>
                     </div>
                     <div class="mid">{{ slotProps.option.name || '—' }}</div>
                     <div class="bot">
-                      <span class="amt">€ {{ num(slotProps.option.amount) }}</span>
+                      <span class="amt">{{ fmtInt(slotProps.option.amount) }}</span>
                       <span class="pct">{{ slotProps.option.pct }}%</span>
                     </div>
                   </div>
                 </template>
               </Listbox>
-
               <div v-else class="text-500">Keine Chancen vorhanden.</div>
             </template>
           </div>
 
-          <!-- CENTER: CHANCE FORM (labels above, compact spacing) -->
+          <!-- CENTER: FORM -->
           <div v-else-if="item.type==='form'" class="h-full p-3">
             <template v-if="createMode || selectedGroupId">
               <div class="form-card-body">
-                <!-- Top row: Potential account + pick + Status (labels above) -->
+                <!-- Top row -->
                 <div class="form-toprow">
                   <div class="top-cell">
                     <label class="lbl">Potenzieller Kunde</label>
@@ -95,83 +81,64 @@
                     <Dropdown
                       v-model="opForm.status"
                       :options="statusOpts"
-                      optionLabel="label"
-                      optionValue="value"
+                      optionLabel="label" optionValue="value"
                       class="w-full"
                     />
                   </div>
                 </div>
 
-                <!-- Two columns: left 30% stacked fields; right rest comment + bottom buttons -->
+                <!-- Two columns -->
                 <div class="form-two-col">
-                  <!-- LEFT 30% -->
                   <div class="left-col">
-                    <div>
+                    <div class="mt-1">
                       <label class="lbl">Profitcenter</label>
                       <Dropdown
                         v-model="opForm.profit_center_code"
                         :options="assignedPcOptions"
-                        optionLabel="label"
-                        optionValue="value"
+                        optionLabel="label" optionValue="value"
                         placeholder="Profitcenter…"
                         class="w-full"
-                      />
+                        @change="updateAvailabilityForPc"
+                        />
                     </div>
-
-                    <div class="">
-                      <label class="lbl">Volumen</label>
-                      <InputNumber
-                        v-model="opForm.opportunity_ammount"
-                        mode="decimal"
-                        :minFractionDigits="2"
-                        :maxFractionDigits="2"
-                        :step="0.01"
-                        inputClass="w-full"
-                      />
+                    <div class="mt-1">
+                      <label class="lbl">Volume</label>
+                      <div class="vol-inline">
+                        <InputNumber
+                          v-model="opForm.volume"
+                          :min="0" :step="1" :useGrouping="false" :maxFractionDigits="0"
+                          inputClass="w-full"
+                        />
+                        <span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
+                      </div>
                     </div>
 
                     <div class="mt-1">
                       <label class="lbl">Start (Monat/Jahr)</label>
                       <Calendar
                         v-model="opMonthModel"
-                        view="month"
-                        dateFormat="mm/yy"
-                        :manualInput="false"
-                        showIcon
-                        class="w-full"
-                        @update:modelValue="syncMonthYear"
+                        view="month" dateFormat="mm/yy" :manualInput="false" showIcon
+                        class="w-full" @update:modelValue="syncMonthYear"
                       />
                     </div>
 
                     <div class="mt-1">
                       <label class="lbl">Wahrscheinlichkeit</label>
                       <div class="prob-wrap">
-                        <Slider
-                          v-model="opForm.probability_pct"
-                          :min="0"
-                          :max="100"
-                          :step="10"
-                          class="flex-1"
-                          @slideend="snapProb"
-                          @change="snapProb"
-                        />
+                        <Slider v-model="opForm.probability_pct" :min="0" :max="100" :step="10" class="flex-1" @slideend="snapProb" @change="snapProb" />
                         <span class="pct">{{ opForm.probability_pct }}%</span>
                       </div>
-                      <!-- marquitas cada 10% -->
                       <div class="tickbar" aria-hidden="true"></div>
                     </div>
                   </div>
 
-                  <!-- RIGHT rest -->
                   <div class="right-col">
                     <div class="right-top">
                       <label class="lbl">Kommentare</label>
-                      <Textarea v-model="opForm.comments" rows="7" autoResize class="w-full comment-box" />
+                      <Textarea v-model="opForm.comments" rows="8" autoResize class="w-full comment-box" />
                     </div>
-
                     <div class="right-bottom">
                       <div class="flex gap-2 justify-content-end">
-                        <!-- ONLY Budget erstellen in create mode -->
                         <Button
                           v-if="createMode"
                           label="Budget erstellen"
@@ -180,10 +147,9 @@
                           :disabled="!canCreateBudget"
                           @click="onGenerateBudget"
                         />
-                        <!-- Keep version save for existing -->
                         <Button
                           v-else
-                          label="Neue Version speichern"
+                          label="Aktualisieren"
                           icon="pi pi-save"
                           class="p-button-outlined"
                           :disabled="!opDirty"
@@ -195,7 +161,6 @@
                 </div>
               </div>
             </template>
-
             <div v-else class="text-500">Bitte Chance auswählen oder „neue Chance“ drücken…</div>
           </div>
 
@@ -207,8 +172,7 @@
               <Listbox
                 v-model="selectedVersion"
                 :options="versionOptions"
-                optionLabel="label"
-                optionValue="value"
+                optionLabel="label" optionValue="value"
                 class="w-full dark-list"
                 @change="e => onSelectVersion(e.value)"
               />
@@ -227,13 +191,15 @@
                 <div class="caption">Wird geladen…</div>
               </div>
               <template v-else>
-                <ComponentTable
-                  :months="months"
-                  :ventas="ventas"
-                  :budget="budget"
-                  :forecast="forecast"
-                  @edit-forecast="({index,value}) => { const n=Number(value); forecast[index]=Number.isFinite(n)?n:0 }"
-                />
+                <div class="ctbl-wrap">
+                  <ComponentTable
+                    :months="months"
+                    :ventas="sales"
+                    :budget="budget"
+                    :forecast="forecast"
+                    @edit-forecast="onEditForecastInt"
+                  />
+                </div>
                 <div class="mt-2 flex gap-2 justify-content-end" v-if="selectedGroupId">
                   <Button label="Budget speichern" icon="pi pi-save" class="p-button-outlined" :disabled="changedBudgetCount===0" @click="saveBudget" />
                   <Button label="Forecast speichern" icon="pi pi-check" :disabled="changedForecastCount===0" @click="saveForecast" />
@@ -249,8 +215,7 @@
 </template>
 
 <script setup>
-// Code in English; UI texts in German.
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
@@ -270,6 +235,9 @@ import GlassCard from '@/components/ui/GlassCard.vue'
 import ComponentTable from '@/components/tables/ComponentTable.vue'
 
 const toast = useToast()
+
+// arriba con el resto
+const sales = ref(Array(12).fill(0))
 
 /* Layout */
 const layout = ref([
@@ -291,7 +259,7 @@ function getTitle(item){
 /* Guards */
 const confirmVisible = ref(false)
 const pendingChange = ref(null)
-function cloneDeep(v){ return JSON.parse(JSON.stringify(v)) }
+const cloneDeep = (v) => JSON.parse(JSON.stringify(v))
 
 /* List */
 const listLoading = ref(false)
@@ -299,26 +267,37 @@ const listOptions = ref([])
 const selectedGroupId = ref(null)
 const selectedVersion = ref(null)
 const latestMeta = ref({})
+function fmtInt(v){ return Number(v||0).toLocaleString('de-DE', { maximumFractionDigits:0 }) }
 
 async function loadList(){
   listLoading.value = true
   try{
     await ensureCsrf()
-    const { data } = await api.get('/api/extra-quota/opportunities', { params: { page: 1 } })
-    const rows = Array.isArray(data?.data) ? data.data : []
-    listOptions.value = rows.map(r => ({
-      value: Number(r.opportunity_group_id),
-      label: r.potential_client_name || `Gruppe ${r.opportunity_group_id}`,
-      pc: String(r.profit_center_code || ''),
-      version: Number(r.version || 1),
-      name: r.potential_client_name || '',
-      amount: Number(r.opportunity_ammount || 0),
-      pct: Number(r.probability_pct || 0),
-    }))
-  } finally { listLoading.value = false }
+    const { data } = await api.get('/api/extra-quota/opportunities')
+    const rows = Array.isArray(data) ? data : []
+    listOptions.value = rows.map(r => {
+      const code = String(r.profit_center_code || '')
+      const name = String(r.profit_center_name || code)
+      return {
+        value: Number(r.opportunity_group_id),
+        label: r.potential_client_name || `Gruppe ${r.opportunity_group_id}`,
+        pc: `${code} — ${name}`,
+        version: Number(r.version || 1),
+        name: r.potential_client_name || '',
+        amount: Number(r.volume || 0),
+        pct: Number(r.probability_pct || 0),
+      }
+    })
+  } catch (e) {
+    listOptions.value = []
+    toast.add({ severity:'error', summary:'Fehler', detail:'Chancen konnten nicht geladen werden', life:2500 })
+  } finally {
+    listLoading.value = false
+  }
 }
 
-async function onSelectGroup(gid){
+
+function onSelectGroup(gid){
   if (dirtyAny()){ confirmVisible.value=true; pendingChange.value={ kind:'group', value: gid }; return }
   applyChange('group', gid)
 }
@@ -330,22 +309,20 @@ function onSelectVersion(v){
 /* Create mode */
 const createMode = ref(false)
 const showBudgetTable = ref(false)
-
 function startCreateMode(){
   if (dirtyAny()){ confirmVisible.value=true; pendingChange.value={ kind:'new' }; return }
   enterCreateMode()
 }
-function enterCreateMode(){
+async function enterCreateMode(){
   createMode.value = true
   selectedGroupId.value = null
   selectedVersion.value = null
   showBudgetTable.value = false
-
   opForm.value = {
     user_id: null,
     fiscal_year: new Date().getFullYear(),
     profit_center_code: '',
-    opportunity_ammount: 0,
+    volume: 0,
     probability_pct: 0,
     estimated_start_date: null,
     comments: '',
@@ -355,39 +332,44 @@ function enterCreateMode(){
   }
   opBaseline.value = cloneDeep(opForm.value)
   opMonthModel.value = null
-
+  availableForSelected.value = 0
+  await loadAssignedPcs()
   initBlankTable()
 }
 
-function snapProb(){
-  const v = Number(opForm.value.probability_pct || 0)
-  const snapped = Math.round(v / 10) * 10
-  opForm.value.probability_pct = Math.min(100, Math.max(0, snapped))
+/* PCs del usuario publicados + nombre + volumen asignado */
+const assignedPcOptions = ref([])
+const assignedMap = ref({}) // code -> { name, assigned_volume }
+async function loadAssignedPcs () {
+  await ensureCsrf()
+  const fy = opForm.value?.fiscal_year || new Date().getFullYear()
+  const { data } = await api.get('/api/extra-quota/assignments/my-profit-centers', { params: { fiscal_year: fy } })
+  const rows = Array.isArray(data) ? data : []
+
+  const out = []
+  const map = {}
+  for (const r of rows) {
+    const code = String(r.profit_center_code || '').trim()
+    const name = String(r.profit_center_name || code)
+    out.push({ label: name, value: code })
+    map[code] = { name, assigned_volume: Number(r.assigned_volume || 0) }
+  }
+  assignedPcOptions.value = out
+  assignedMap.value = map
 }
 
-/* Profit Centers strictly by Extra Quota Assignment (fallback to me/profit-centers) */
-const assignedPcOptions = ref([])
-async function loadAssignedPcs() {
-  try {
-    await ensureCsrf()
-    let pcs = []
-    try {
-      const res = await api.get('/api/extra-quota/assignments/my-profit-centers')
-      pcs = Array.isArray(res.data) ? res.data : []
-    } catch {
-      const res = await api.get('/api/me/profit-centers')
-      pcs = Array.isArray(res.data) ? res.data : []
-    }
-    const out = []; const seen = new Set()
-    for (const r of pcs) {
-      const code = String(r.profit_center_code ?? r.code ?? '').trim()
-      if (!code || seen.has(code)) continue
-      seen.add(code)
-      const name = String(r.name ?? code)
-      out.push({ label: `${code} — ${name}`, value: code })
-    }
-    assignedPcOptions.value = out
-  } catch { assignedPcOptions.value = [] }
+/* Disponible (asignado – usado) */
+const availableForSelected = ref(0)
+async function updateAvailabilityForPc(){
+  const code = opForm.value.profit_center_code
+  const fy   = opForm.value.fiscal_year
+  availableForSelected.value = 0
+  if (!code || !fy) return
+  await ensureCsrf()
+  const { data } = await api.get('/api/extra-quota/assignments/my-availability', {
+    params: { profit_center_code: code, fiscal_year: fy }
+  })
+  availableForSelected.value = Number(data?.available || 0)
 }
 
 /* Form */
@@ -398,15 +380,13 @@ const statusOpts = ref([
   { label:'Verloren',value:'lost'  },
 ])
 const creating = ref(false)
-const probTouched = ref(false)
-const voucherGuide = ref('') // UI-only
-
 const opMonthModel = ref(null)
+
 const opForm = ref({
   user_id: null,
   fiscal_year: new Date().getFullYear(),
   profit_center_code: '',
-  opportunity_ammount: 0,
+  volume: 0,
   probability_pct: 0,
   estimated_start_date: null,
   comments: '',
@@ -417,44 +397,44 @@ const opForm = ref({
 const opBaseline = ref(cloneDeep(opForm.value))
 const opDirty = computed(() => {
   const active = !!selectedGroupId.value || !!createMode.value
-  if (!active) return false
-  if (!opBaseline.value) return false
+  if (!active || !opBaseline.value) return false
   return JSON.stringify(opForm.value) !== JSON.stringify(opBaseline.value)
 })
 const canCreateBudget = computed(() =>
   !!opForm.value.potential_client_name &&
   !!opForm.value.profit_center_code &&
-  Number(opForm.value.opportunity_ammount) > 0 &&
+  Number(opForm.value.volume) > 0 &&
   !!opForm.value.estimated_start_date &&
   Number(opForm.value.probability_pct) > 0
 )
-
-function pickExistingClient(){ /* TODO: open client picker dialog */ }
+function pickExistingClient(){ /* hook picker */ }
 function syncMonthYear(d) {
   if (!d) { opForm.value.estimated_start_date = null; return }
   const dt = new Date(d)
-  const y = dt.getFullYear()
-  const m = dt.getMonth() + 1
+  const y = dt.getFullYear(), m = dt.getMonth() + 1
   opForm.value.estimated_start_date = `${y}-${String(m).padStart(2,'0')}-01`
   opForm.value.fiscal_year = (m < 4) ? y - 1 : y
+  loadAssignedPcs().then(updateAvailabilityForPc)
+}
+function snapProb(){
+  const v = Number(opForm.value.probability_pct || 0)
+  opForm.value.probability_pct = Math.min(100, Math.max(0, Math.round(v/10)*10))
 }
 
 /* Table */
 const months   = ref([])
-const ventas   = ref(Array(12).fill(0))
 const budget   = ref([])
 const forecast = ref([])
 const baseBudget   = ref([])
 const baseForecast = ref([])
 const tableLoading = ref(false)
+const salesEmpty = computed(() => Array(months.value.length || 12).fill(0))
 
 function fiscalIndexFromCalMonth(calM){ const map = {4:1,5:2,6:3,7:4,8:5,9:6,10:7,11:8,12:9,1:10,2:11,3:12}; return map[calM] || 1 }
 function calMonthFromFiscalIndex(idx){ const arr=[4,5,6,7,8,9,10,11,12,1,2,3]; return arr[idx-1] || 4 }
 function ym(y,m){ return `${y}-${String(m).padStart(2,'0')}` }
 function fiscalMonths(fy){ return Array.from({length:12},(_,i)=>{ const m=calMonthFromFiscalIndex(i+1); const y=(m>=4)?fy:fy+1; return ym(y,m) }) }
-function num(v){ return Number(v||0).toLocaleString('de-DE',{ minimumFractionDigits:2, maximumFractionDigits:2 }) }
-function near(a,b,eps=1e-9){ return Math.abs(Number(a||0)-Number(b||0))<=eps }
-
+function num0(v){ return Number(v||0) }
 function initBlankTable(){
   const fy = opForm.value.fiscal_year || new Date().getFullYear()
   months.value = fiscalMonths(fy)
@@ -463,50 +443,84 @@ function initBlankTable(){
   baseBudget.value = [...budget.value]
   baseForecast.value = [...forecast.value]
 }
+const changedBudgetCount = computed(() => budget.value.reduce((n, v, i) => n + (v !== baseBudget.value[i] ? 1 : 0), 0))
+const changedForecastCount = computed(() => forecast.value.reduce((n, v, i) => n + (v !== baseForecast.value[i] ? 1 : 0), 0))
 
-const changedBudgetCount = computed(() => budget.value.reduce((n, v, i) => n + (!near(v, baseBudget.value[i]) ? 1 : 0), 0))
-const changedForecastCount = computed(() => forecast.value.reduce((n, v, i) => n + (!near(v, baseForecast.value[i]) ? 1 : 0), 0))
-
-/* Seasonality */
-const seasonality = ref(Array(12).fill(1))
+async function getSeasonalityForPc(){ return Array(12).fill(1) }
 function remainingIndicesFromStart(estimatedYmd){
-  if (!estimatedYmd) return { startIdx:1, indices:[...Array(12).keys()].map(i=>i+1) }
+  if (!estimatedYmd) return { indices:[...Array(12).keys()].map(i=>i+1) }
   const [, mS] = estimatedYmd.split('-'); const m = +mS
   const startIdx = fiscalIndexFromCalMonth(m)
   const indices = []; for (let i=startIdx;i<=12;i++) indices.push(i)
-  return { startIdx, indices }
+  return { indices }
 }
 
-/* Generate budget */
-function onGenerateBudget(){
-  const amt = Number(opForm.value.opportunity_ammount || 0)
-  const pct = Number(opForm.value.probability_pct || 0)
+/* Genera SOLO Budget y muestra tabla abajo SIEMPRE */
+async function onGenerateBudget(){
   if (!canCreateBudget.value) return
+
+  const amt = Math.max(0, Math.round(num0(opForm.value.volume)))
+  const pct = Math.max(0, Math.round(num0(opForm.value.probability_pct)))
+  const expected = Math.round(amt * (pct/100))
 
   const fy = Number(opForm.value.fiscal_year || new Date().getFullYear())
   months.value = fiscalMonths(fy)
 
-  const expected = amt * (pct / 100)
+  const seasonal = await getSeasonalityForPc()
   const { indices } = remainingIndicesFromStart(opForm.value.estimated_start_date)
-
-  const weights = indices.map(fi => Number(seasonality.value[fi-1] || 1))
-  const sumW = weights.reduce((a,b)=>a+b,0) || 1
-  const alloc = weights.map(w => expected * (w / sumW))
+  const weights = indices.map(fi => Number(seasonal[fi-1] || 0))
+  const sumW = weights.reduce((a,b)=>a+b,0)
 
   const newBudget = Array(12).fill(0)
-  indices.forEach((fi, k) => { newBudget[fi-1] = alloc[k] })
+  if (!sumW){
+    if (indices.length) newBudget[indices[0]-1] = expected
+  } else {
+    const raw = weights.map(w => expected * (w / sumW))
+    const base = raw.map(Math.floor)
+    let rest = expected - base.reduce((a,b)=>a+b,0)
+    const rema = raw.map((v,i)=>({ i, frac: v - base[i] })).sort((a,b)=>b.frac - a.frac)
+    for (let k=0; k<rema.length && rest>0; k++, rest--) base[rema[k].i] += 1
+    indices.forEach((fi, k) => { newBudget[fi-1] = base[k] })
+  }
 
   budget.value = newBudget
-  forecast.value = newBudget.slice()
   baseBudget.value = newBudget.slice()
-  baseForecast.value = newBudget.slice()
+
+  forecast.value = Array(12).fill(0)
+  baseForecast.value = forecast.value.slice()
 
   showBudgetTable.value = true
+
+  // Crear v1 si aún no existe para poder persistir luego
+  if (createMode.value && !selectedGroupId.value) {
+    try {
+      await ensureCsrf()
+      const payload = {
+        fiscal_year:        opForm.value.fiscal_year,
+        profit_center_code: opForm.value.profit_center_code,
+        volume:             amt,
+        probability_pct:    pct,
+        estimated_start_date: opForm.value.estimated_start_date,
+        comments:             opForm.value.comments,
+        potential_client_name: opForm.value.potential_client_name,
+        client_group_number:   opForm.value.client_group_number,
+        status:               opForm.value.status || 'open',
+      }
+      const { data } = await api.post('/api/extra-quota/opportunities', payload)
+      selectedGroupId.value = Number(data?.opportunity_group_id)
+      selectedVersion.value = Number(data?.version || 1)
+      createMode.value = false
+      await loadList()
+      await updateAvailabilityForPc() // ← refresca disponible
+      toast.add({ severity:'success', summary:'Gespeichert', detail:'Chance erstellt (v1)', life:1400 })
+    } catch {
+      toast.add({ severity:'error', summary:'Fehler', detail:'Chance konnte nicht erstellt werden', life:2200 })
+    }
+  }
 }
 
-/* Backend loads/saves */
+/* Backend */
 const versionOptions = ref([])
-
 async function loadGroupMeta(){
   if (!selectedGroupId.value) return
   await ensureCsrf()
@@ -516,12 +530,13 @@ async function loadGroupMeta(){
   const vers = Array.isArray(data?.versions) ? data.versions.map(v => Number(v.version)).sort((a,b)=>a-b) : []
   versionOptions.value = vers.map(v => ({ value: v, label: `v${v}` }))
   if (!selectedVersion.value && vers.length) selectedVersion.value = vers[vers.length-1]
+
   opForm.value = {
     user_id: latest.user_id ?? null,
     fiscal_year: latest.fiscal_year ?? new Date().getFullYear(),
     profit_center_code: latest.profit_center_code ?? '',
-    opportunity_ammount: Number(latest.opportunity_ammount ?? 0),
-    probability_pct: Number(latest.probability_pct ?? 0),
+    volume: Math.round(num0(latest.volume)),
+    probability_pct: Math.round(num0(latest.probability_pct)),
     estimated_start_date: latest.estimated_start_date ?? null,
     comments: latest.comments ?? '',
     potential_client_name: latest.potential_client_name ?? '',
@@ -530,13 +545,14 @@ async function loadGroupMeta(){
   }
   opBaseline.value = cloneDeep(opForm.value)
   opMonthModel.value = opForm.value.estimated_start_date ? new Date(opForm.value.estimated_start_date) : null
+
+  await loadAssignedPcs()
+  await updateAvailabilityForPc()
+
   showBudgetTable.value = false
 }
-
 async function loadSeries(){
-  if (!selectedGroupId.value || !selectedVersion.value){
-    initBlankTable(); return
-  }
+  if (!selectedGroupId.value || !selectedVersion.value){ initBlankTable(); return }
   tableLoading.value = true
   try{
     await ensureCsrf()
@@ -547,42 +563,47 @@ async function loadSeries(){
     const b = Array.isArray(bRes.data) ? bRes.data : []
     const f = Array.isArray(fRes.data) ? fRes.data : []
     months.value   = b.length ? b.map(r => ym(r.fiscal_year, r.month)) : fiscalMonths(opForm.value.fiscal_year)
-    budget.value   = b.length ? b.map(r => Number(r.volume||0)) : Array(12).fill(0)
-    forecast.value = f.length ? f.map(r => Number(r.volume||0)) : Array(12).fill(0)
+    budget.value   = b.length ? b.map(r => Math.round(num0(r.volume))) : Array(12).fill(0)
+    forecast.value = f.length ? f.map(r => Math.round(num0(r.volume))) : Array(12).fill(0)
     baseBudget.value = [...budget.value]
     baseForecast.value = [...forecast.value]
     showBudgetTable.value = true
   } finally { tableLoading.value = false }
 }
 
+/* forecast edit -> enteros */
+function onEditForecastInt({ index, value }){
+  const n = Math.max(0, Math.round(Number(value) || 0))
+  forecast.value[index] = n
+}
+
+/* Save */
 async function saveNewVersion(){
   if (!selectedGroupId.value) return
   await ensureCsrf()
   const payload = {
-    user_id:            opForm.value.user_id,
     fiscal_year:        opForm.value.fiscal_year,
     profit_center_code: opForm.value.profit_center_code,
-    opportunity_ammount:opForm.value.opportunity_ammount,
-    probability_pct:    opForm.value.probability_pct,
-    estimated_start_date:opForm.value.estimated_start_date,
-    comments:           opForm.value.comments,
+    volume:             Math.max(0, Math.round(num0(opForm.value.volume))),
+    probability_pct:    Math.max(0, Math.round(num0(opForm.value.probability_pct))),
+    estimated_start_date: opForm.value.estimated_start_date,
+    comments:             opForm.value.comments,
     potential_client_name: opForm.value.potential_client_name,
-    client_group_number: opForm.value.client_group_number,
-    status:             opForm.value.status || 'open'
+    client_group_number:   opForm.value.client_group_number,
+    status:               opForm.value.status || 'open'
   }
   const { data } = await api.post(`/api/extra-quota/opportunities/${selectedGroupId.value}/version`, payload)
   selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
   opBaseline.value = cloneDeep(opForm.value)
-  toast.add({ severity:'success', summary:'Gespeichert', detail:'Neue Version gespeichert', life:1400 })
-  await loadGroupMeta()
-  await loadSeries()
-  await loadList()
+  toast.add({ severity:'success', summary:'Gespeichert', detail:'Aktualisiert', life:1400 })
+  await loadGroupMeta(); await loadSeries(); await loadList(); await updateAvailabilityForPc()
 }
 
+/* Budget/Forecast persistencia */
 async function saveBudget(){
   if (!selectedGroupId.value || changedBudgetCount.value===0) return
   await ensureCsrf()
-  const items = months.value.map((ym,i)=>{ const [y,m]=ym.split('-').map(n=>parseInt(n,10)); return { month:m, fiscal_year:y, volume:Number(budget.value[i]||0) } })
+  const items = months.value.map((ym,i)=>{ const [y,m]=ym.split('-').map(n=>parseInt(n,10)); return { month:m, fiscal_year:y, volume: Number(budget.value[i]||0) } })
   await api.post(`/api/extra-quota/budget/${selectedGroupId.value}/${selectedVersion.value}/save`, { items })
   baseBudget.value = [...budget.value]
   toast.add({ severity:'success', summary:'Gespeichert', detail:'Budget gespeichert', life:1400 })
@@ -590,13 +611,13 @@ async function saveBudget(){
 async function saveForecast(){
   if (!selectedGroupId.value || changedForecastCount.value===0) return
   await ensureCsrf()
-  const items = months.value.map((ym,i)=>{ const [y,m]=ym.split('-').map(n=>parseInt(n,10)); return { month:m, fiscal_year:y, volume:Number(forecast.value[i]||0) } })
+  const items = months.value.map((ym,i)=>{ const [y,m]=ym.split('-').map(n=>parseInt(n,10)); return { month:m, fiscal_year:y, volume: Number(forecast.value[i]||0) } })
   await api.post(`/api/extra-quota/forecast/${selectedGroupId.value}/${selectedVersion.value}/save`, { items })
   baseForecast.value = [...forecast.value]
   toast.add({ severity:'success', summary:'Gespeichert', detail:'Forecast gespeichert', life:1400 })
 }
 
-/* Guard logic */
+/* Guards */
 function dirtyAny(){
   const active = !!selectedGroupId.value || !!createMode.value
   if (!active) return false
@@ -644,9 +665,14 @@ function applyChange(kind, value){
   }
 }
 
+/* Reacciones */
+watch(() => opForm.value.profit_center_code, () => { updateAvailabilityForPc() })
+
+
 /* Mount */
 onMounted(async () => {
-  await loadAssignedPcs()
+    await loadAssignedPcs()
+    await updateAvailabilityForPc()
   await loadList()
 })
 </script>
@@ -662,20 +688,21 @@ onMounted(async () => {
 .row-item .top{ display:flex; justify-content:space-between; color:#cbd5e1; font-size:12px; }
 .row-item .mid{ color:#e5e7eb; font-weight:600; }
 .row-item .bot{ display:flex; justify-content:space-between; color:#cbd5e1; font-size:12px; }
+/* oculta versión */
+.dark-list :deep(.meta){ display:none !important; }
 
-/* FORM CARD LAYOUT */
+/* FORM */
 .form-card-body{ display:flex; flex-direction:column; gap:10px; height:100%; overflow:hidden; }
-
-/* Top row: two cells; labels above */
 .form-toprow{
   display:grid; grid-template-columns: minmax(0,2fr) minmax(180px,1fr);
   gap:10px; align-items:start;
   padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08);
 }
-.top-cell{ display:flex; flex-direction:column; gap:4px; }
+.top-cell{ display:flex; flex-direction:column; gap:6px; }
 .inline-input{ display:flex; align-items:center; gap:8px; }
+/* status altura normal */
+:deep(.p-dropdown){ height: 2.5rem; }
 
-/* Two columns area with compact gaps, no overflow */
 .form-two-col{
   display:grid; grid-template-columns: 30% 1fr; gap:12px; flex:1 1 auto; min-height:0;
   padding-top:8px;
@@ -684,35 +711,41 @@ onMounted(async () => {
 .right-col{ display:grid; grid-template-rows: 1fr auto; gap:8px; min-height:0; }
 .right-top{ min-height:0; overflow:hidden; }
 .right-bottom{ align-self:end; }
-
-.field{ display:flex; flex-direction:column; gap:4px; }
 .lbl{ color:#cbd5e1; font-weight:600; }
+.comment-box{ min-height:180px; }
 
-/* Comments bigger but contained */
-.comment-box{ min-height:160px; }
+/* volume inline */
+.vol-inline{ display:flex; align-items:center; gap:8px; }
+.assigned{ color:#cbd5e1; white-space:nowrap; }
 
-/* Table/Loader */
+/* Probability ticks */
+.prob-wrap{ display:flex; align-items:center; gap:8px; }
+.tickbar{ width:100%; height:6px; margin-top:4px; position:relative; }
+.tickbar::before{
+  content:''; position:absolute; inset:0;
+  background-image:repeating-linear-gradient(to right,
+    rgba(255,255,255,0.35) 0, rgba(255,255,255,0.35) 1px,
+    transparent 1px, transparent 10%);
+  opacity:.8;
+}
+
+/* TABLE */
+.ctbl-wrap :deep(table){ table-layout: fixed; width: 100%; }
+.ctbl-wrap :deep(th), .ctbl-wrap :deep(td){ width:auto; }
+
+/* ocultar filas/ratios si tu ComponentTable las define */
+.ctbl-wrap :deep(.row-ist),
+.ctbl-wrap :deep(.row-ventas),
+.ctbl-wrap :deep(.row-eist),
+.ctbl-wrap :deep(.row-ratio),
+.ctbl-wrap :deep(.row-ratio-ist-budget),
+.ctbl-wrap :deep(.row-ratio-forecast-budget){ display:none !important; }
+
+/* Loader */
 .local-loader{ position: fixed; inset: 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; z-index:50; }
 .dots{ display:flex; gap:10px; align-items:center; justify-content:center; }
 .dot{ width:10px; height:10px; border-radius:50%; opacity:0.9; animation:bounce 1s infinite ease-in-out; box-shadow:0 2px 6px rgba(0,0,0,0.25); }
 .dot.g{ background:#22c55e; animation-delay:0s; } .dot.r{ background:#ef4444; animation-delay:.15s; } .dot.b{ background:#3b82f6; animation-delay:.3s; }
 @keyframes bounce{ 0%,80%,100%{ transform:translateY(0) scale(1); opacity:.8 } 40%{ transform:translateY(-8px) scale(1.05); opacity:1 } }
 .caption{ font-size:.9rem; color:#e5e7eb; opacity:.9; }
-
-.prob-wrap { display:flex; align-items:center; gap:8px; }
-.tickbar { width:85%; height:6px; margin-top:4px; position:relative; }
-.tickbar::before {
-  content: '';
-  position: absolute; inset: 0;
-  /* línea finita cada 10% */
-  background-image: repeating-linear-gradient(
-    to right,
-    rgba(255,255,255,0.35) 0,
-    rgba(255,255,255,0.35) 1px,
-    transparent 1px,
-    transparent 10%
-  );
-  opacity: 0.8;
-}
-
 </style>

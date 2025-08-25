@@ -17,6 +17,7 @@ class ActionItem extends Model
 
     protected $casts = [
         'due_date' => 'date',
+        'is_completed' => 'boolean',
     ];
 
     public function plan()

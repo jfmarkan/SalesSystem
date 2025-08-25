@@ -23,6 +23,8 @@ return new class extends Migration {
             // Keep it simple: textual objective (from "plan" textarea)
             $t->text('objective')->nullable();
 
+            $t->boolean('is_completed')->default(false)->index();
+
             $t->timestamps();
 
             $t->unique('deviation_id'); // 1 plan per deviation
@@ -41,6 +43,8 @@ return new class extends Migration {
             $t->string('title');           // required
             $t->text('description')->nullable();
             $t->date('due_date')->nullable();
+
+            $t->boolean('is_completed')->default(false)->index();
 
             $t->timestamps();
 

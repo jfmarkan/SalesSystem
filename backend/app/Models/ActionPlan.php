@@ -14,6 +14,11 @@ class ActionPlan extends Model
         'objective',
     ];
 
+    protected $casts = [
+        'is_completed' => 'boolean',
+    ];
+
+
     public function deviation()
     {
         return $this->belongsTo(Deviation::class, 'deviation_id');

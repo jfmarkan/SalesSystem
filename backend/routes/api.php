@@ -55,30 +55,19 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('extra-quota')->group(function () {
-        // Available (CEO totals per FY & PC)
-        Route::get   ('/available',        [ExtraQuotaController::class, 'availableIndex']);
-        Route::post  ('/available',        [ExtraQuotaController::class, 'availableUpsert']);
-        Route::delete('/available/{id}',   [ExtraQuotaController::class, 'availableDelete']);
+        Route::get('/assignments/my-profit-centers', [ExtraQuotaController::class, 'myProfitCenters']);
+        Route::get('/assignments/my-volume',          [ExtraQuotaController::class, 'myAssignedVolume']);
+        Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
 
-        // Assignments (user allocations, publish lock)
-        Route::get   ('/assignments',             [ExtraQuotaController::class, 'assignmentsIndex']);
-        Route::post  ('/assignments',             [ExtraQuotaController::class, 'assignmentsStore']);
-        Route::patch ('/assignments/{id}',        [ExtraQuotaController::class, 'assignmentsUpdate']);
-        Route::post  ('/assignments/{id}/publish',[ExtraQuotaController::class, 'assignmentsPublish']);
-        Route::delete('/assignments/{id}',        [ExtraQuotaController::class, 'assignmentsDelete']);
+        Route::get('/opportunities',                  [ExtraQuotaController::class, 'indexOpportunities']);
+        Route::get('/opportunities/{groupId}',        [ExtraQuotaController::class, 'showOpportunityGroup']);
+        Route::post('/opportunities',                 [ExtraQuotaController::class, 'createOpportunity']);
+        Route::post('/opportunities/{groupId}/version', [ExtraQuotaController::class, 'createVersion']);
 
-        // Sales Opportunities (versioned by group)
-        Route::get  ('/opportunities',                 [ExtraQuotaController::class, 'opportunitiesIndex']);
-        Route::post ('/opportunities',                 [ExtraQuotaController::class, 'opportunitiesStore']);
-        Route::get  ('/opportunities/{group_id}',      [ExtraQuotaController::class, 'opportunityShowLatest']);
-        Route::post ('/opportunities/{group_id}/version', [ExtraQuotaController::class, 'opportunityNewVersion']);
+        Route::get('/budget/{groupId}/{version}',     [ExtraQuotaController::class, 'getBudget']);
+        Route::post('/budget/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveBudget']);
 
-        // Budget
-        Route::get ('/budget/{group_id}/{version}',      [ExtraQuotaController::class, 'budgetGrid']);
-        Route::post('/budget/{group_id}/{version}/save', [ExtraQuotaController::class, 'budgetSave']);
-
-        // Forecast
-        Route::get ('/forecast/{group_id}/{version}',      [ExtraQuotaController::class, 'forecastGrid']);
-        Route::post('/forecast/{group_id}/{version}/save', [ExtraQuotaController::class, 'forecastSave']);
+        Route::get('/forecast/{groupId}/{version}',   [ExtraQuotaController::class, 'getForecast']);
+        Route::post('/forecast/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveForecast']);
     });
 });

@@ -4,10 +4,13 @@ import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 
 const props = defineProps({
-  months: { type: Array, required: true },
-  ventas: { type: Array, required: true },
-  budget: { type: Array, required: true },
-  forecast: { type: Array, required: true },
+  months:   { type: Array,  required: true },
+  sales:    { type: Array,  default: () => [] },     // <-- use this in English
+  budget:   { type: Array,  default: () => [] },
+  forecast: { type: Array,  default: () => [] },
+
+  // TEMP backwards-compat (do not use anymore)
+  ventas:   { type: Array,  default: null },
 })
 const emit = defineEmits(['edit-forecast'])
 
@@ -83,6 +86,12 @@ function pctLabel(num, den) {
   if (!den) return '0%'
   return Math.round((num / den) * 100) + '%'
 }
+
+const salesData = computed(() => {
+  if (Array.isArray(props.sales) && props.sales.length) return props.sales
+  if (Array.isArray(props.ventas)) return props.ventas // fallback (deprecated)
+  return Array(props.months?.length || 12).fill(0)
+})
 </script>
 
 <template>
