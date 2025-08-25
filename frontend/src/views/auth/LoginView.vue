@@ -1,21 +1,21 @@
 <template>
-  <AuthLayout blurBackground>
-    <form @submit.prevent="login" class="login-form">
-      <InputText v-model="email" placeholder="E-Mail" class="glass-field" />
-      <Password
-        v-model="password"
-        placeholder="Passwort"
-        :feedback="false"
-        toggleMask
-        class="glass-field"
-        inputClass="password-inner"
-      />
-      <div class="form-footer">
-        <Button label="Anmelden" icon="pi pi-sign-in" type="submit" class="login-button" />
-        <a href="#" class="forgot-password">Passwort vergessen?</a>
-      </div>
-    </form>
-  </AuthLayout>
+    <AuthLayout blurBackground>
+        <form @submit.prevent="login" class="login-form">
+            <InputText v-model="email" placeholder="E-Mail" class="glass-field" />
+            <Password
+                v-model="password"
+                placeholder="Passwort"
+                :feedback="false"
+                toggleMask
+                class="glass-field"
+                inputClass="password-inner"
+            />
+            <div class="form-footer">
+                <Button label="Anmelden" icon="pi pi-sign-in" type="submit" class="login-button" />
+                <a href="#" class="forgot-password">Passwort vergessen?</a>
+            </div>
+        </form>
+    </AuthLayout>
 </template>
 
 <script setup>

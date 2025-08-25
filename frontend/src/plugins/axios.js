@@ -1,5 +1,6 @@
 // Axios client for Laravel Sanctum (stateful, cookies-based)
 import axios from 'axios';
+import router from '@/router';
 
 // Simple cookie reader
 function readCookie(name) {
@@ -32,5 +33,19 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      // Limpia cookies si hace falta (opcional, dependiendo del logout en el backend)
+      
+      // Redirige al login con un mensaje opcional
+      router.push({ name: 'login', query: { expired: '1' } })
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default api

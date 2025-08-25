@@ -71,7 +71,7 @@ const routes = [
                 }
             },
             { 
-                path: '/forecasts', 
+                path: '/action-plans', 
                 component: ForecastPanel, 
                 meta: { 
                     requiresAuth: true 
