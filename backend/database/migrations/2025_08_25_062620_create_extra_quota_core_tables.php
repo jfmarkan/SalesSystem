@@ -12,17 +12,17 @@ return new class extends Migration {
         Schema::create('extra_quota_available', function (Blueprint $table) {
             $table->id();
             $table->smallInteger('fiscal_year');
-            $table->string('profit_center_code', 50);
+            $table->unsignedSmallInteger('profit_center_code');
             $table->unsignedInteger('volume')->default(0);
             $table->timestamps();
             $table->unique(['fiscal_year','profit_center_code'], 'uq_eq_av_fy_pc');
         });
 
-        // 2) extra_quota_assignment
-        Schema::create('extra_quota_assignment', function (Blueprint $table) {
+        // 2) extra_quota_assignments
+        Schema::create('extra_quota_assignments', function (Blueprint $table) {
             $table->id();
             $table->smallInteger('fiscal_year');
-            $table->string('profit_center_code', 50);
+            $table->unsignedSmallInteger('profit_center_code');
             $table->foreignId('user_id')->constrained('users');
             $table->unsignedInteger('volume')->default(0);
             $table->boolean('is_published')->default(false)->index();
@@ -36,7 +36,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('user_id')->constrained('users');
             $table->smallInteger('fiscal_year');
-            $table->string('profit_center_code', 50);
+            $table->unsignedSmallInteger('profit_center_code');
             $table->unsignedInteger('volume')->default(0);
             $table->unsignedTinyInteger('probability_pct')->default(0);
             $table->date('estimated_start_date')->nullable();
@@ -57,12 +57,12 @@ return new class extends Migration {
         });
 
         // 4) extra_quota_budget
-        Schema::create('extra_quota_budget', function (Blueprint $table) {
+        Schema::create('extra_quota_budgets', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('opportunity_group_id');
             $table->unsignedInteger('version');
-            $table->unsignedTinyInteger('month');    // 1..12 calendar
-            $table->smallInteger('fiscal_year');     // FY of that month
+            $table->unsignedTinyInteger('month');    // 1..12
+            $table->smallInteger('fiscal_year');     // FY del mes
             $table->unsignedInteger('volume')->default(0);
             $table->timestamp('calculation_date')->nullable();
             $table->timestamps();
@@ -74,7 +74,7 @@ return new class extends Migration {
             $table->id();
             $table->unsignedBigInteger('opportunity_group_id');
             $table->unsignedInteger('version');
-            $table->unsignedTinyInteger('month'); // 1..12 calendar
+            $table->unsignedTinyInteger('month'); // 1..12
             $table->smallInteger('fiscal_year');
             $table->unsignedInteger('volume')->default(0);
             $table->foreignId('created_by')->constrained('users');
@@ -86,9 +86,9 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::dropIfExists('extra_quota_forecasts');
-        Schema::dropIfExists('extra_quota_budget');
+        Schema::dropIfExists('extra_quota_budgets');
         Schema::dropIfExists('sales_opportunities');
-        Schema::dropIfExists('extra_quota_assignment');
+        Schema::dropIfExists('extra_quota_assignments');
         Schema::dropIfExists('extra_quota_available');
     }
 };

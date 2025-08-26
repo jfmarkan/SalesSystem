@@ -56,18 +56,32 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('extra-quota')->group(function () {
         Route::get('/assignments/my-profit-centers', [ExtraQuotaController::class, 'myProfitCenters']);
-        Route::get('/assignments/my-volume',          [ExtraQuotaController::class, 'myAssignedVolume']);
-        Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
+    Route::get('/assignments/my-volume', [ExtraQuotaController::class, 'myVolume']);
+    Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
 
-        Route::get('/opportunities',                  [ExtraQuotaController::class, 'indexOpportunities']);
-        Route::get('/opportunities/{groupId}',        [ExtraQuotaController::class, 'showOpportunityGroup']);
-        Route::post('/opportunities',                 [ExtraQuotaController::class, 'createOpportunity']);
-        Route::post('/opportunities/{groupId}/version', [ExtraQuotaController::class, 'createVersion']);
+    // Opportunities
+    Route::get('/opportunities', [ExtraQuotaController::class, 'indexOpportunities']);
+    Route::get('/opportunities/{groupId}', [ExtraQuotaController::class, 'showOpportunityGroup'])->whereNumber('groupId');
+    Route::post('/opportunities', [ExtraQuotaController::class, 'createOpportunity']);
+    Route::post('/opportunities/{groupId}/version', [ExtraQuotaController::class, 'createVersion'])->whereNumber('groupId');
 
-        Route::get('/budget/{groupId}/{version}',     [ExtraQuotaController::class, 'getBudget']);
-        Route::post('/budget/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveBudget']);
+    // Budget
+    Route::get('/budget/{groupId}/{version}', [ExtraQuotaController::class, 'getBudget'])
+        ->whereNumber('groupId')->whereNumber('version');
+    Route::post('/budget/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveBudget'])
+        ->whereNumber('groupId')->whereNumber('version');
 
-        Route::get('/forecast/{groupId}/{version}',   [ExtraQuotaController::class, 'getForecast']);
-        Route::post('/forecast/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveForecast']);
+    // Forecast
+    Route::get('/forecast/{groupId}/{version}', [ExtraQuotaController::class, 'getForecast'])
+        ->whereNumber('groupId')->whereNumber('version');
+    Route::post('/forecast/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveForecast'])
+        ->whereNumber('groupId')->whereNumber('version');
+
+    // Seasonality
+    Route::get('/profit-centers/seasonality', [ExtraQuotaController::class, 'seasonality']);
+
+    // Finalize (won|lost)
+    Route::post('/opportunities/{groupId}/{version}/finalize', [ExtraQuotaController::class, 'finalizeOpportunity'])
+        ->whereNumber('groupId')->whereNumber('version');
     });
 });
