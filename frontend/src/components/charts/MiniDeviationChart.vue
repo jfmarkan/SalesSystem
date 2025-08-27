@@ -20,9 +20,9 @@ const chartData = computed(() => {
     return {
       labels: props.months,
       datasets: [
-        { label:'Ist',      data: Array.isArray(props.sales) ? props.sales : [],      borderColor:'#05a46f', backgroundColor:'rgba(5,164,111,.15)', tension:.2, fill:false },
-        { label:'Budget',   data: Array.isArray(props.budget) ? props.budget : [],    borderColor:'#54849A', backgroundColor:'rgba(84,132,154,.15)', tension:.2, fill:false },
-        { label:'Forecast', data: Array.isArray(props.forecast) ? props.forecast : [], borderColor:'#E88D1E', backgroundColor:'rgba(232,141,30,.15)', tension:.2, fill:false }
+        { label:'Ist',      data: Array.isArray(props.sales) ? props.sales : [],      borderColor:'#456287', backgroundColor:'rgba(69,98,135,.25)', tension:.2, fill:false },
+        { label:'Budget',   data: Array.isArray(props.budget) ? props.budget : [],    borderColor:'#9DBB61', backgroundColor:'rgba(157,187,97,.25)', tension:.2, fill:false },
+        { label:'Forecast', data: Array.isArray(props.forecast) ? props.forecast : [], borderColor:'#FFC20E', backgroundColor:'rgba(255,194,15,.25)', tension:.2, fill:false }
       ]
     }
   }

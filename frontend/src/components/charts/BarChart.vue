@@ -24,14 +24,6 @@ const chartRef = ref(null)
 
 const hasData = computed(() => props.labels.length && props.datasets.length)
 
-const fallback = computed(() => ({
-  labels: ['Q1','Q2','Q3','Q4','Q5','Q6'],
-  datasets: [
-    { label: 'Plan', data: [65, 59, 90, 81, 56, 55] },
-    { label: 'Real', data: [28, 48, 40, 19, 96, 27] }
-  ]
-}))
-
 const data = computed(() => {
   const src = hasData.value ? { labels: props.labels, datasets: props.datasets } : fallback.value
   return {

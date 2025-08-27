@@ -361,10 +361,10 @@ function doSave() {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12) inset;
 }
 .band.sales {
-  background: #749c75;
+  background: #456287;
 }
 .band.forecast {
-  background: #6a5d7b;
+  background: #FFC20E;
 }
 .head-main {
   flex: 1;
@@ -617,7 +617,7 @@ function doSave() {
 }
 .btns{
   display: flex;
-  justify-content: flex-end; /* 👉 alinea a la derecha */
+  justify-content: flex-end;
   margin-top: 8px;
 }
 .fade-enter-active,
