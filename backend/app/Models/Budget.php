@@ -14,14 +14,14 @@ class Budget extends Model
         'client_profit_center_id',
         'fiscal_year',
         'month',
-        'amount',
+        'volume',
     ];
 
     protected $casts = [
         'client_profit_center_id' => 'int',
         'fiscal_year' => 'int',
         'month' => 'int',
-        'amount' => 'int',
+        'volume' => 'int',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

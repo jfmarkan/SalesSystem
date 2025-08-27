@@ -28,10 +28,10 @@
       :margin="[10,10]"
       :use-css-transforms="true"
     >
-      <GridItem v-for="item in layout" :key="item.i + '-' + item.x + '-' + item.y" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
-        <GlassCard>
+      <GridItem v-for="item in layout" :key="item.i" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
+        <GlassCard :class="{ 'no-strip': item.type === 'title' }" :title="getTitle(item)">
           <!-- Filtros -->
-          <div v-if="item.i==='filters'" class="h-full p-3">
+           <div v-if="item.type==='filters'" class="h-full p-3">
             <ForecastFilters
               :mode="mode"
               :primary-options="primaryOptions"
@@ -47,7 +47,7 @@
           </div>
 
           <!-- Título + acciones -->
-          <div v-else-if="item.i==='title'" class="h-full p-3 flex align-items-center justify-content-between">
+          <div v-else-if="item.type==='title'" class="h-full p-3 flex align-items-center justify-content-between">
             <ForecastTitle v-if="hasSelection" :client="selectedClienteName" :kunde="selectedClienteName" :pc="selectedPCName" />
             <div v-if="hasSelection" class="flex gap-2">
               <Button label="Speichern" icon="pi pi-save" :disabled="changedCount===0" @click="saveForecast" />
@@ -55,7 +55,7 @@
           </div>
 
           <!-- Chart principal -->
-          <div v-else-if="item.i==='chart' && item.x===2" class="h-full">
+          <div v-else-if="item.type==='chart'" class="h-full">
             <LineChartSmart
               v-if="hasSelection"
               type="cumulative"
@@ -69,7 +69,7 @@
           </div>
 
           <!-- Chart versiones -->
-          <div v-else-if="item.i==='chart' && item.x===9" class="h-full">
+          <div v-else-if="item.type==='chart-versions'" class="h-full">
             <LineChartSmart
               v-if="hasSelection"
               type="versions"
@@ -81,7 +81,7 @@
           </div>
 
           <!-- Tabla -->
-          <div v-else-if="item.i==='table'" class="h-full">
+          <div v-else-if="item.type==='table'" class="h-full">
             <template v-if="hasSelection">
               <ForecastTable
                 :months="months"
@@ -450,12 +450,21 @@ onMounted(() => { loadMaster() })
 
 /* Grid */
 const layout = ref([
-  { i:'filters', x:0,  y:0,  w:2,  h:47, static:true },
-  { i:'title',   x:2,  y:0,  w:10, h:4,  static:true },
-  { i:'chart',   x:2,  y:4,  w:7,  h:26, static:true },
-  { i:'chart',   x:9,  y:4,  w:3,  h:26, static:true },
-  { i:'table',   x:2,  y:30, w:10, h:17, static:true }
+  { i: 'filters',        x: 0, y: 0,  w: 2,  h: 47, static: true, type: 'filters' },
+  { i: 'title',          x: 2, y: 0,  w: 10, h: 4,  static: true, type: 'title' },
+  { i: 'chart-main',     x: 2, y: 4,  w: 7,  h: 26, static: true, type: 'chart' },
+  { i: 'chart-versions', x: 9, y: 4,  w: 3,  h: 26, static: true, type: 'chart-versions' },
+  { i: 'table',          x: 2, y: 30, w: 10, h: 17, static: true, type: 'table' }
 ])
+
+function getTitle(item){
+  if(item.type === 'title') return ''
+  if(item.type === 'filters') return 'Filter'
+  if(item.type === 'chart') return 'Diagramm'
+  if(item.type === 'chart-versions') return 'Versionen'
+  if(item.type === 'table') return 'Tabelle'
+  return ''
+}
 
 /* IDs actuales para charts */
 const currentClientId = computed(() => mode.value==='client' ? primaryId.value : secondaryId.value)
@@ -467,5 +476,11 @@ const currentPcId     = computed(() => mode.value==='client' ? secondaryId.value
   height: 100vh;
   width: 100%; 
   overflow: hidden; 
+}
+
+.no-strip :deep(.card-header),
+.no-strip :deep(.glass-title),
+.no-strip :deep(.p-card-header){
+  display: none !important;
 }
 </style>

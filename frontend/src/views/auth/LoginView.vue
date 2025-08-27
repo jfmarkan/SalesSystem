@@ -41,19 +41,16 @@ const login = async () => {
       password: password.value,
     })
 
-    console.log('📦 Vollständige Login-Antwort:', response)
-
     if (response?.verify) {
       // Unverified account: show modal and route to OTP with email
       modal.show('Konto nicht verifiziert', 'Gib den Code ein, den wir dir per E-Mail geschickt haben.')
       router.push({ path: '/verify-otp', query: { email: response.email } })
     } else {
       // Normal login: go to dashboard
-      console.log('🔁 Weiterleitung zum Dashboard...')
       router.push('/dashboard')
     }
   } catch (err) {
-    console.error('❌ Login-Fehler:', err)
+    if (import.meta.env.DEV) console.error('❌ Login-Fehler:', err)
     // Generic German UI message; adjust to your backend messages if needed
     modal.show('Zugriffsfehler', 'Ungültige Anmeldedaten oder nicht vorhandenes Konto.')
   }
