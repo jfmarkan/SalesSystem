@@ -64,6 +64,7 @@
 
           <!-- REPORTS / LOGISTICS / CLAIMS solo manager+ -->
           <template v-if="isManagerOrUp">
+            <Button icon="pi pi-users" class="nav-icon-button" @click="$router.push('/sales-force')" />
             <Menu ref="reportsMenu" :model="reportsItems" popup />
             <Button icon="pi pi-file" class="nav-icon-button" @click="reportsMenu.toggle($event)" />
             <Menu ref="logisticsMenu" :model="logisticsItems" popup />
@@ -188,8 +189,8 @@ const salesItems = [
   { label: 'Aktionspläne', icon: 'pi pi-list-check', command: () => router.push('/action-plans') },
 ]
 const reportsItems = [
-  { label: 'Profitcenter-Bericht', icon: 'pi pi-file', command: () => router.push('/reports/pc') },
-  { label: 'Gesamtbericht', icon: 'pi pi-file-o', command: () => router.push('/reports/total') },
+  { label: 'Profitcenter-Bericht', icon: 'pi pi-file', command: () => router.push('/report-generator') },
+  { label: 'Gesamtbericht', icon: 'pi pi-file-o', command: () => router.push('/company-analytics') },
 ]
 const logisticsItems = [
   { label: 'Eingehende Bestellungen', icon: 'pi pi-inbox', command: () => {} },

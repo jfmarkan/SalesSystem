@@ -14,6 +14,9 @@ import DashboardEditor from '@/views/dashboard/DashboardEditor.vue';
 import ExtraQuotaPanel from '@/views/dashboard/ExtraQuotaPanel.vue';
 import BudgetCasePanel from '@/views/dashboard/BudgetCasePanel.vue';
 import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
+import SalesForce from '@/views/dashboard/manager/SalesForce.vue';
+import ReportGenerator from '@/views/dashboard/manager/ReportGenerator.vue';
+import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 
 const routes = [
     {
@@ -74,6 +77,27 @@ const routes = [
             { 
                 path: '/action-plans', 
                 component: ActionPlanPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/sales-force', 
+                component: SalesForce, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/report-generator', 
+                component: ReportGenerator, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/company-analytics', 
+                component: CompanyAnalytics, 
                 meta: { 
                     requiresAuth: true 
                 }

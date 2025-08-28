@@ -8,13 +8,14 @@ use App\Http\Controllers\Auth\VerifyOtpController as VerifyOtpController;
 use App\Http\Controllers\Auth\LoginController as LoginController;
 use App\Http\Controllers\Auth\OtpController as OtpController;
 
-use App\Http\Controllers\DeviationController;
-use App\Http\Controllers\ForecastController;
-use App\Http\Controllers\UserDetailController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\BudgetCaseController;
 use App\Http\Controllers\BudgetCaseSimulatorController;
+use App\Http\Controllers\CompanyAnalyticsController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ExtraQuotaController;
+use App\Http\Controllers\ForecastController;
+use App\Http\Controllers\UserDetailController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
@@ -33,6 +34,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/series',  [ForecastController::class, 'getSeries']);
         Route::put('/series',  [ForecastController::class, 'saveSeries']);
         Route::get('/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
+    });
+
+    Route::prefix('analytics')->group(function () {
+        Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);
+        Route::get('/totals', [CompanyAnalyticsController::class, 'totals']);
     });
     
     Route::prefix('budget-cases')->group(function () {

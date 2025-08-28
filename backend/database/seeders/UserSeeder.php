@@ -187,8 +187,6 @@ class UserSeeder extends Seeder
             $newUser->email = $user['email'];
             $newUser->email_verified_at = $user['email_verified_at'];
             $newUser->password = $user['password'];
-            $newUser->save();
-            $newUser->assignRole($user['role_id']);
             $newUser->role_id = $user['role_id'];
             $newUser->save();
         }
