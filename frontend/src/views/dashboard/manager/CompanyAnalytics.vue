@@ -1,73 +1,47 @@
-<!-- src/views/CompanyAnalytics.vue -->
 <template>
-  <div class="p-3">
+  <div class="p-2">
     <div class="grid">
-      <!-- Árbol -->
-      <div class="col-12 md:col-4 lg:col-3">
+      <!-- Árbol (2 cols) -->
+      <div class="col-12 md:col-2">
         <Card>
           <template #content>
-            <Tree
-              :value="nodes"
-              :expandedKeys="expandedKeys"
-              :lazy="true"
-              filter
-              filterMode="lenient"
-              :filterBy="'label'"
-              v-model:filterValue="treeFilter"
-              selection-mode="single"
-              class="w-full"
-              @node-expand="onNodeExpand"
-              @node-select="onNodeSelect"
-            >
-              <template #default="{ node }">
-                <div class="flex align-items-center gap-2">
-                  <i v-if="node.data?.type==='company'" class="pi pi-home text-primary"></i>
-                  <i v-else-if="node.data?.type==='team'" class="pi pi-sitemap text-500"></i>
-                  <i v-else-if="node.data?.type==='user'" class="pi pi-user"></i>
-                  <i v-else-if="node.data?.type==='pc'" class="pi pi-database text-500"></i>
-                  <i v-else-if="node.data?.type==='client'" class="pi pi-building"></i>
-                  <span>{{ node.label }}</span>
-                </div>
-              </template>
-            </Tree>
+            <div class="tree-wrap p-2">
+              <Tree
+                :value="nodes"
+                :expandedKeys="expandedKeys"
+                filter
+                filterMode="lenient"
+                :filterBy="'label'"
+                v-model:filterValue="treeFilter"
+                selection-mode="single"
+                class="w-full"
+                @node-expand="onNodeExpand"
+                @node-select="onNodeSelect"
+              >
+                <template #default="{ node }">
+                  <div class="flex align-items-center gap-2">
+                    <i v-if="node.data?.type==='company'" class="pi pi-home text-primary"></i>
+                    <i v-else-if="node.data?.type==='team'" class="pi pi-sitemap text-500"></i>
+                    <i v-else-if="node.data?.type==='user'" class="pi pi-user"></i>
+                    <i v-else-if="node.data?.type==='pc'" class="pi pi-database text-500"></i>
+                    <i v-else-if="node.data?.type==='client'" class="pi pi-building"></i>
+                    <span>{{ node.label }}</span>
+                  </div>
+                </template>
+              </Tree>
+            </div>
           </template>
         </Card>
       </div>
 
-      <!-- Totales -->
-      <div class="col-12 md:col-8 lg:col-9">
+      <!-- Derecha: Breadcrumb separado + (la tabla/metrics después) -->
+      <div class="col-12 md:col-10">
         <Card>
           <template #content>
-            <template v-if="totals">
-              <div class="grid mb-3">
-                <div class="col-12 md:col-6">
-                  <div class="flex justify-content-between align-items-center border-1 surface-border p-3 border-round surface-card">
-                    <span class="text-600">Total m³</span>
-                    <span class="font-bold text-xl">{{ fmt(totals.total_absolute.m3) }}</span>
-                  </div>
-                </div>
-                <div class="col-12 md:col-6">
-                  <div class="flex justify-content-between align-items-center border-1 surface-border p-3 border-round surface-card">
-                    <span class="text-600">Total €</span>
-                    <span class="font-bold text-xl">€ {{ fmt(totals.total_absolute.euro) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <DataTable :value="totals.totals_by_pc" dataKey="profit_center_code" size="small" stripedRows>
-                <Column field="profit_center_code" header="Profit Center" />
-                <Column header="m³">
-                  <template #body="{ data }">{{ fmt(data.total_m3) }}</template>
-                </Column>
-                <Column header="€">
-                  <template #body="{ data }">€ {{ fmt(data.total_euro) }}</template>
-                </Column>
-              </DataTable>
-            </template>
-
-            <template v-else>
-              <div class="text-600">Seleccioná un nodo del árbol para ver totales.</div>
-            </template>
+            <div class="p-2">
+              <CompanyBreadcrumb :nodes="nodes" :selectedKey="selectedKey" />
+              <!-- acá abajo dejamos espacio para tus tablas/metrics -->
+            </div>
           </template>
         </Card>
       </div>
@@ -79,21 +53,21 @@
 import { ref, onMounted } from 'vue'
 import Card from 'primevue/card'
 import Tree from 'primevue/tree'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
 import api from '@/plugins/axios'
+import CompanyBreadcrumb from '@/components/analytics/CompanyBreadcrumb.vue'
 
 const nodes = ref([])
 const expandedKeys = ref({})
 const treeFilter = ref('')
-const totals = ref(null)
+const selectedKey = ref('company_main')
 
 function toNode(item){
   return {
-    key: item.id,                 // p.ej.: company_main | team_1 | user_7 | pc_X_u7 | client_123_pcX_u7
+    key: item.id,
     label: item.label,
     leaf: !item.has_children,
-    data: { type: item.type, ...(item.meta || {}) }
+    data: { type: item.type, ...(item.meta || {}) },
+    children: Array.isArray(item.children) ? item.children.map(toNode) : undefined
   }
 }
 
@@ -112,27 +86,36 @@ async function onNodeExpand(evt){
   if (!node) return
   if (!node.children) {
     node.children = await loadChildren(node.key)
+    nodes.value = [...nodes.value]
   }
   expandedKeys.value = { ...expandedKeys.value, [node.key]: true }
 }
 
-async function onNodeSelect(evt){
+function onNodeSelect(evt){
   const node = evt?.node
   if (!node) return
-  totals.value = null // sin loader: limpiamos y luego mostramos
-  const { data } = await api.get('/api/analytics/totals', { params: { node_id: node.key } })
-  totals.value = data
+  selectedKey.value = node.key
 }
 
 onMounted(async () => {
   await loadRoot()
-  // expandir la compañía automáticamente para mostrar Teams
+  // expand Company + Teams (visible de inicio)
   const company = nodes.value?.[0]
+  const ek = {}
   if (company) {
-    company.children = await loadChildren(company.key)
-    expandedKeys.value = { [company.key]: true }
+    ek[company.key] = true
+    if (Array.isArray(company.children)) {
+      for (const t of company.children) ek[t.key] = true
+    }
   }
+  expandedKeys.value = ek
 })
-
-function fmt(v){ return Number(v||0).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 </script>
+
+<style scoped>
+/* altura fija para el árbol con scroll Y */
+.tree-wrap{
+  height: calc(100vh - 70px - 1rem); /* 70px topbar + 0.5rem padding * 2 */
+  overflow-y: auto;
+}
+</style>

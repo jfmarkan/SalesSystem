@@ -20,6 +20,9 @@ use App\Http\Controllers\UserDetailController;
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
+// routes/api.php
+Route::get('/analytics/debug-team-users', [CompanyAnalyticsController::class, 'debugTeamUsers']);
+
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::get('/dashboard', [DashboardController::class, 'index']);
