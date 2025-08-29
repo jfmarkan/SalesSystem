@@ -7,379 +7,206 @@ use Illuminate\Support\Facades\DB;
 
 class CompanyAnalyticsController extends Controller
 {
-public function tree(Request $request)
-{
-    $nodeId = $request->input('node_id', 'root');
+    /* ===========================
+     *  TREE (carga completa)
+     * =========================== */
+    public function tree(Request $request)
+    {
+        $nodeId = $request->input('node_id', 'root');
 
-    if ($nodeId === 'root') {
-        return response()->json([[
-            'id' => 'company_main',
-            'label' => config('app.company_name', env('COMPANY_NAME', 'Steinbacher')),
-            'has_children' => true,
-            'type' => 'company',
-            // ⬇️ cargamos TODO el árbol
-            'children' => $this->treeTeams(),
-        ]]);
-    }
-
-    // Como ya viene todo pre-cargado, las expansiones no necesitan pedir más
-    return response()->json([]);
-}
-
-private function treeTeams(): array
-{
-    $teams = \Illuminate\Support\Facades\DB::table('teams')
-        ->select('id','name','manager_user_id')
-        ->orderBy('name')
-        ->get();
-
-    if ($teams->isEmpty()) return [];
-
-    $teamIds = $teams->pluck('id')->all();
-
-    // Users declarados en team_members
-    $teamMembers = \Illuminate\Support\Facades\DB::table('team_members')
-        ->whereIn('team_members.team_id', $teamIds)
-        ->select('team_members.team_id','team_members.user_id','team_members.role')
-        ->get();
-
-    // Assignments (para PCs y Clientes, y también usuarios activos por team)
-    $as = \Illuminate\Support\Facades\DB::table('assignments')
-        ->whereIn('assignments.team_id', $teamIds)
-        ->leftJoin('client_profit_centers','client_profit_centers.id','=','assignments.client_profit_center_id')
-        ->leftJoin('profit_centers','profit_centers.profit_center_code','=','client_profit_centers.profit_center_code')
-        ->leftJoin('clients','clients.client_group_number','=','client_profit_centers.client_group_number')
-        ->select(
-            'assignments.team_id',
-            'assignments.user_id',
-            'client_profit_centers.profit_center_code',
-            'profit_centers.profit_center_name',
-            'clients.client_group_number',
-            'clients.client_name'
-        )
-        ->get();
-
-    // Conjunto de user_ids por team (manager + members + assignments)
-    $userIdsAll = [];
-    $usersByTeam = [];
-    foreach ($teams as $t) {
-        if ($t->manager_user_id) {
-            $usersByTeam[$t->id][(int)$t->manager_user_id] = 'manager';
-            $userIdsAll[] = (int)$t->manager_user_id;
-        }
-    }
-    foreach ($teamMembers as $m) {
-        $role = strtolower((string)$m->role) === 'manager' ? 'manager' : 'seller';
-        $usersByTeam[$m->team_id][(int)$m->user_id] = $role;
-        $userIdsAll[] = (int)$m->user_id;
-    }
-    foreach ($as as $r) {
-        if ($r->user_id) {
-            $usersByTeam[$r->team_id][(int)$r->user_id] = $usersByTeam[$r->team_id][(int)$r->user_id] ?? 'seller';
-            $userIdsAll[] = (int)$r->user_id;
-        }
-    }
-    $userIdsAll = array_values(array_unique($userIdsAll));
-
-    // Nombres de usuarios "Apellido, Nombre" (fallback a name o "User {id}")
-    $display = $this->fetchUsersDisplay($userIdsAll);
-
-    // Mapa team->user->pc->clients
-    $map = []; // [team][user][pc] => ['pc_name'=>..., 'clients'=>[]]
-    foreach ($as as $r) {
-        if (!$r->user_id) continue;
-        $tid = (int)$r->team_id;
-        $uid = (int)$r->user_id;
-        $pc  = (string)$r->profit_center_code;
-        $pcn = (string)($r->profit_center_name ?? $pc);
-        $cgn = $r->client_group_number ? (string)$r->client_group_number : null;
-        $cnm = $r->client_name ? (string)$r->client_name : null;
-
-        $map[$tid]           = $map[$tid]           ?? [];
-        $map[$tid][$uid]     = $map[$tid][$uid]     ?? [];
-        $map[$tid][$uid][$pc]= $map[$tid][$uid][$pc]?? ['pc_name'=>$pcn,'clients'=>[],'_seen'=>[]];
-
-        if ($cgn && !isset($map[$tid][$uid][$pc]['_seen'][$cgn])) {
-            $map[$tid][$uid][$pc]['clients'][] = ['client_group_number'=>$cgn, 'client_name'=>$cnm ?? $cgn];
-            $map[$tid][$uid][$pc]['_seen'][$cgn] = true;
-        }
-    }
-    // ordenar clientes y limpiar flags
-    foreach ($map as $tid => &$users) {
-        foreach ($users as $uid => &$pcs) {
-            foreach ($pcs as $pc => &$info) {
-                unset($info['_seen']);
-                usort($info['clients'], fn($a,$b)=>strcmp($a['client_name'],$b['client_name']));
-            }
-            ksort($pcs);
-        }
-    }
-    unset($users,$pcs,$info);
-
-    // Construcción de nodos
-    $out = [];
-    foreach ($teams as $t) {
-        $teamNode = [
-            'id' => 'team_' . $t->id,
-            'label' => $t->name,
-            'has_children' => true,
-            'type' => 'team',
-            'children' => [],
-        ];
-
-        $uids = array_keys($usersByTeam[$t->id] ?? []);
-        sort($uids);
-
-        foreach ($uids as $uid) {
-            $isMgr = ($usersByTeam[$t->id][$uid] ?? 'seller') === 'manager';
-            $labelUser = $display[$uid] ?? ('User ' . $uid);
-            $userNode = [
-                'id' => 'user_' . $uid . '_t' . $t->id,
-                'label' => $labelUser . ($isMgr ? ' (Manager)' : ''),
+        if ($nodeId === 'root') {
+            return response()->json([[
+                'id'           => 'company_main',
+                'label'        => config('app.company_name', env('COMPANY_NAME', 'Steinbacher Dämmstoffe')),
                 'has_children' => true,
-                'type' => 'user',
-                'children' => [],
+                'type'         => 'company',
+                'children'     => $this->treeTeams(),
+            ]]);
+        }
+
+        return response()->json([]);
+    }
+
+    private function treeTeams(): array
+    {
+        $teams = DB::table('teams')
+            ->select('id', 'name', 'manager_user_id')
+            ->orderBy('name')
+            ->get();
+
+        if ($teams->isEmpty()) return [];
+
+        $teamIds = $teams->pluck('id')->all();
+
+        $teamMembers = DB::table('team_members')
+            ->whereIn('team_members.team_id', $teamIds)
+            ->select('team_members.team_id', 'team_members.user_id', 'team_members.role')
+            ->get();
+
+        $as = DB::table('assignments')
+            ->whereIn('assignments.team_id', $teamIds)
+            ->leftJoin('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
+            ->leftJoin('profit_centers', 'profit_centers.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+            ->leftJoin('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+            ->select(
+                'assignments.team_id',
+                'assignments.user_id',
+                'client_profit_centers.profit_center_code',
+                'profit_centers.profit_center_name',
+                'clients.client_group_number',
+                'clients.client_name'
+            )
+            ->get();
+
+        $userIdsAll = [];
+        $usersByTeam = [];
+        foreach ($teams as $t) {
+            if ($t->manager_user_id) {
+                $usersByTeam[$t->id][(int)$t->manager_user_id] = 'manager';
+                $userIdsAll[] = (int)$t->manager_user_id;
+            }
+        }
+        foreach ($teamMembers as $m) {
+            $role = strtolower((string)$m->role) === 'manager' ? 'manager' : 'seller';
+            $usersByTeam[$m->team_id][(int)$m->user_id] = $role;
+            $userIdsAll[] = (int)$m->user_id;
+        }
+        foreach ($as as $r) {
+            if ($r->user_id) {
+                $usersByTeam[$r->team_id][(int)$r->user_id] = $usersByTeam[$r->team_id][(int)$r->user_id] ?? 'seller';
+                $userIdsAll[] = (int)$r->user_id;
+            }
+        }
+        $userIdsAll = array_values(array_unique($userIdsAll));
+
+        $display = $this->fetchUsersDisplay($userIdsAll);
+
+        $map = []; // [team][user][pc] => ['pc_name'=>..., 'clients'=>[],'_seen'=>[]]
+        foreach ($as as $r) {
+            if (!$r->user_id) continue;
+            $tid = (int)$r->team_id;
+            $uid = (int)$r->user_id;
+            $pc  = (string)$r->profit_center_code;
+            $pcn = (string)($r->profit_center_name ?? $pc);
+            $cgn = $r->client_group_number ? (string)$r->client_group_number : null;
+            $cnm = $r->client_name ? (string)$r->client_name : null;
+
+            $map[$tid]            = $map[$tid]            ?? [];
+            $map[$tid][$uid]      = $map[$tid][$uid]      ?? [];
+            $map[$tid][$uid][$pc] = $map[$tid][$uid][$pc] ?? ['pc_name' => $pcn, 'clients' => [], '_seen' => []];
+
+            if ($cgn && !isset($map[$tid][$uid][$pc]['_seen'][$cgn])) {
+                $map[$tid][$uid][$pc]['clients'][] = [
+                    'client_group_number' => $cgn,
+                    'client_name'         => $cnm ?? $cgn
+                ];
+                $map[$tid][$uid][$pc]['_seen'][$cgn] = true;
+            }
+        }
+        foreach ($map as $tid => &$users) {
+            foreach ($users as $uid => &$pcs) {
+                foreach ($pcs as $pc => &$info) {
+                    unset($info['_seen']);
+                    usort($info['clients'], fn($a, $b) => strcmp($a['client_name'], $b['client_name']));
+                }
+                ksort($pcs);
+            }
+        }
+        unset($users, $pcs, $info);
+
+        $out = [];
+        foreach ($teams as $t) {
+            $teamNode = [
+                'id'           => 'team_' . $t->id,
+                'label'        => $t->name,
+                'has_children' => true,
+                'type'         => 'team',
+                'children'     => [],
             ];
 
-            // PCs del usuario
-            if (isset($map[$t->id][$uid])) {
-                foreach ($map[$t->id][$uid] as $pcCode => $info) {
-                    $pcNode = [
-                        'id' => 'pc_' . $pcCode . '_u' . $uid . '_t' . $t->id,
-                        'label' => $info['pc_name'], // solo nombre
-                        'has_children' => true,
-                        'type' => 'pc',
-                        'children' => [],
-                    ];
-                    // Clientes del PC
-                    foreach ($info['clients'] as $cl) {
-                        $pcNode['children'][] = [
-                            'id' => 'client_' . $cl['client_group_number'] . '_pc' . $pcCode . '_u' . $uid . '_t' . $t->id,
-                            'label' => $cl['client_name'], // solo nombre
-                            'has_children' => false,
-                            'type' => 'client',
+            $uids = array_keys($usersByTeam[$t->id] ?? []);
+            sort($uids);
+
+            foreach ($uids as $uid) {
+                $isMgr     = ($usersByTeam[$t->id][$uid] ?? 'seller') === 'manager';
+                $labelUser = $display[$uid] ?? ('User ' . $uid);
+
+                $userNode = [
+                    'id'           => 'user_' . $uid . '_t' . $t->id,
+                    'label'        => $labelUser . ($isMgr ? ' (Manager)' : ''),
+                    'has_children' => true,
+                    'type'         => 'user',
+                    'children'     => [],
+                ];
+
+                if (isset($map[$t->id][$uid])) {
+                    foreach ($map[$t->id][$uid] as $pcCode => $info) {
+                        $pcNode = [
+                            'id'           => 'pc_' . $pcCode . '_u' . $uid . '_t' . $t->id,
+                            'label'        => $info['pc_name'],
+                            'has_children' => true,
+                            'type'         => 'pc',
+                            'children'     => [],
                         ];
+                        foreach ($info['clients'] as $cl) {
+                            $pcNode['children'][] = [
+                                'id'           => 'client_' . $cl['client_group_number'] . '_pc' . $pcCode . '_u' . $uid . '_t' . $t->id,
+                                'label'        => $cl['client_name'],
+                                'has_children' => false,
+                                'type'         => 'client',
+                            ];
+                        }
+                        $userNode['children'][] = $pcNode;
                     }
-                    $userNode['children'][] = $pcNode;
                 }
+
+                $teamNode['children'][] = $userNode;
             }
 
-            $teamNode['children'][] = $userNode;
+            $out[] = $teamNode;
         }
 
-        $out[] = $teamNode;
+        return $out;
     }
 
-    return $out;
-}
+    private function fetchUsersDisplay(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (empty($ids)) return [];
 
-private function fetchUsersDisplay(array $ids): array
-{
-    // normalizar IDs
-    $ids = array_values(array_unique(array_map('intval', $ids)));
-    if (empty($ids)) return [];
+        $rows = DB::table('users')->whereIn('users.id', $ids)->get();
 
-    // Trae TODO de users (sin asumir nombres de columnas)
-    $rows = DB::table('users')
-        ->whereIn('users.id', $ids)
-        ->get();
+        $map = [];
+        foreach ($rows as $u) {
+            $id  = (int)($u->id ?? 0);
+            $arr = (array)$u;
 
-    $map = [];
-    foreach ($rows as $u) {
-        $id  = (int)($u->id ?? 0);
-        $arr = (array)$u;
-
-        // Helpers para tomar el primer campo no vacío
-        $pick = function(array $keys) use ($arr): string {
-            foreach ($keys as $k) {
-                if (array_key_exists($k, $arr)) {
-                    $v = trim((string)$arr[$k]);
-                    if ($v !== '') return $v;
+            $pick = function(array $keys) use ($arr): string {
+                foreach ($keys as $k) {
+                    if (array_key_exists($k, $arr)) {
+                        $v = trim((string)$arr[$k]);
+                        if ($v !== '') return $v;
+                    }
                 }
+                return '';
+            };
+
+            $last  = $pick(['last_name','apellido','apellidos','surname','family_name','LastName','lastName']);
+            $first = $pick(['first_name','nombre','given_name','FirstName','firstName']);
+
+            if ($last !== '' || $first !== '') {
+                $label = trim($last . ($last !== '' && $first !== '' ? ', ' : '') . $first, ' ,');
+            } else {
+                $label = $pick(['full_name','display_name','name','username','email']);
+                if ($label === '') $label = 'User ' . $id;
             }
-            return '';
-        };
-
-        // Intento 1: Apellido + Nombre
-        $last  = $pick(['last_name','apellido','apellidos','surname','family_name','LastName','lastName']);
-        $first = $pick(['first_name','nombre','given_name','FirstName','firstName']);
-
-        if ($last !== '' || $first !== '') {
-            $label = trim($last . ($last !== '' && $first !== '' ? ', ' : '') . $first, ' ,');
-        } else {
-            // Intento 2: full/display/name, username, email
-            $label = $pick(['full_name','display_name','name','username','email']);
-            if ($label === '') $label = 'User ' . $id;
+            $map[$id] = $label;
         }
-
-        $map[$id] = $label;
-    }
-
-    // Completar faltantes por si algún id no vino
-    foreach ($ids as $id) {
-        if (!isset($map[$id])) $map[$id] = 'User ' . $id;
-    }
-
-    return $map;
-}
-
-    public function totals(Request $request)
-{
-    $nodeId = (string)$request->input('node_id', '');
-    if ($nodeId === '') {
-        return response()->json(['error' => 'node_id is required'], 422);
-    }
-
-    $ctx = $this->parseNodeId($nodeId);
-
-    // ---- Período opcional
-    $fy   = $request->integer('fiscal_year');   // ej 2025
-    $from = $request->input('from');            // YYYY-MM
-    $to   = $request->input('to');              // YYYY-MM
-
-    // ---- 1) Subconjunto de CPCs por contexto (evita duplicados por múltiples assignments)
-    $cpcs = \Illuminate\Support\Facades\DB::table('assignments')
-        ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
-        ->select('client_profit_centers.id as cpc_id', 'client_profit_centers.profit_center_code')
-        ->when($ctx['type'] === 'team', function($q) use ($ctx) {
-            $q->where('assignments.team_id', $ctx['team_id']);
-        })
-        ->when($ctx['type'] === 'user', function($q) use ($ctx) {
-            $q->where('assignments.team_id', $ctx['team_id'])
-              ->where('assignments.user_id', $ctx['user_id']);
-        })
-        ->when($ctx['type'] === 'pc', function($q) use ($ctx) {
-            $q->where('assignments.team_id', $ctx['team_id'])
-              ->where('assignments.user_id', $ctx['user_id'])
-              ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
-        })
-        ->when($ctx['type'] === 'client', function($q) use ($ctx) {
-            $q->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
-              ->where('assignments.team_id', $ctx['team_id'])
-              ->where('assignments.user_id', $ctx['user_id'])
-              ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
-              ->where('clients.client_group_number', $ctx['client_group_number']);
-        })
-        ->distinct();
-
-    // Helper de período
-    $applyPeriod = function($q, $tbl) use ($fy, $from, $to) {
-        if ($fy) $q->where($tbl . '.fiscal_year', $fy);
-        if ($from && $to && preg_match('/^\d{4}-\d{2}$/',$from) && preg_match('/^\d{4}-\d{2}$/',$to)) {
-            [$yf,$mf] = array_map('intval', explode('-', $from));
-            [$yt,$mt] = array_map('intval', explode('-', $to));
-            $q->whereRaw('(' . $tbl . '.fiscal_year*100 + ' . $tbl . '.month) between ? and ?', [$yf*100+$mf, $yt*100+$mt]);
+        foreach ($ids as $id) {
+            if (!isset($map[$id])) $map[$id] = 'User ' . $id;
         }
-    };
-
-    // ---- 2) SALES (unidades -> m3 -> €)
-    $sales = \Illuminate\Support\Facades\DB::table('sales')
-        ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'sales.client_profit_center_id'); })
-        ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
-    $applyPeriod($sales, 'sales');
-    $salesRows = $sales->select(
-            'cpcs.profit_center_code',
-            \Illuminate\Support\Facades\DB::raw('SUM(sales.volume) as units'),
-            \Illuminate\Support\Facades\DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
-            \Illuminate\Support\Facades\DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
-        )
-        ->groupBy('cpcs.profit_center_code')
-        ->get();
-
-    // ---- 3) BUDGETS (unidades -> m3 -> €)
-    $budgets = \Illuminate\Support\Facades\DB::table('budgets')
-        ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'budgets.client_profit_center_id'); })
-        ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
-    $applyPeriod($budgets, 'budgets');
-    $budgetRows = $budgets->select(
-            'cpcs.profit_center_code',
-            \Illuminate\Support\Facades\DB::raw('SUM(budgets.volume) as units'),
-            \Illuminate\Support\Facades\DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
-            \Illuminate\Support\Facades\DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
-        )
-        ->groupBy('cpcs.profit_center_code')
-        ->get();
-
-    // ---- 4) FORECASTS (última versión)  — si el contexto es de usuario/pc/cliente, usamos solo ese user_id
-    $latestScopeHasUser = in_array($ctx['type'], ['user','pc','client']) && !empty($ctx['user_id']);
-
-    $fcBase = \Illuminate\Support\Facades\DB::table('forecasts')
-        ->when($latestScopeHasUser, function($q) use ($ctx) {
-            $q->where('forecasts.user_id', $ctx['user_id']);
-        })
-        ->select(
-            'forecasts.client_profit_center_id',
-            'forecasts.fiscal_year',
-            'forecasts.month',
-            $latestScopeHasUser ? 'forecasts.user_id' : \Illuminate\Support\Facades\DB::raw('NULL as user_id'),
-            \Illuminate\Support\Facades\DB::raw('MAX(forecasts.version) as max_version')
-        )
-        ->groupBy('forecasts.client_profit_center_id', 'forecasts.fiscal_year', 'forecasts.month')
-        ->when($latestScopeHasUser, function($q){
-            $q->groupBy('forecasts.user_id');
-        });
-
-    $forecasts = \Illuminate\Support\Facades\DB::table('forecasts')
-        ->joinSub($fcBase, 'lv', function($j) use ($latestScopeHasUser) {
-            $j->on('forecasts.client_profit_center_id', '=', 'lv.client_profit_center_id')
-              ->on('forecasts.fiscal_year', '=', 'lv.fiscal_year')
-              ->on('forecasts.month', '=', 'lv.month')
-              ->on('forecasts.version', '=', 'lv.max_version');
-            if ($latestScopeHasUser) {
-                $j->on('forecasts.user_id', '=', 'lv.user_id');
-            }
-        })
-        ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'forecasts.client_profit_center_id'); })
-        ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
-
-    $applyPeriod($forecasts, 'forecasts');
-    if ($latestScopeHasUser) {
-        $forecasts->where('forecasts.user_id', $ctx['user_id']);
+        return $map;
     }
-
-    $forecastRows = $forecasts->select(
-            'cpcs.profit_center_code',
-            \Illuminate\Support\Facades\DB::raw('SUM(forecasts.volume) as units'),
-            \Illuminate\Support\Facades\DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
-            \Illuminate\Support\Facades\DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
-        )
-        ->groupBy('cpcs.profit_center_code')
-        ->get();
-
-    // helper suma
-    $sum = function($rows, $field){ return (float)collect($rows)->sum($field); };
-
-    // En niveles por encima de PC mostramos m3 y €; en PC/cliente también devolvemos units (por si querés mostrarlas)
-    $includeUnits = in_array($ctx['type'], ['pc','client']);
-
-    $resp = [
-        'level' => $ctx,
-        'period' => ['fiscal_year' => $fy, 'from' => $from, 'to' => $to],
-        'sales' => [
-            'by_pc' => $salesRows,
-            'total' => [
-                'm3' => $sum($salesRows, 'm3'),
-                'euro' => $sum($salesRows, 'euro'),
-            ] + ($includeUnits ? ['units' => $sum($salesRows, 'units')] : []),
-        ],
-        'budgets' => [
-            'by_pc' => $budgetRows,
-            'total' => [
-                'm3' => $sum($budgetRows, 'm3'),
-                'euro' => $sum($budgetRows, 'euro'),
-            ] + ($includeUnits ? ['units' => $sum($budgetRows, 'units')] : []),
-        ],
-        'forecasts' => [
-            'by_pc' => $forecastRows,
-            'total' => [
-                'm3' => $sum($forecastRows, 'm3'),
-                'euro' => $sum($forecastRows, 'euro'),
-            ] + ($includeUnits ? ['units' => $sum($forecastRows, 'units')] : []),
-        ],
-    ];
-
-    return response()->json($resp);
-}
 
     private function parseNodeId(string $nodeId): array
     {
@@ -389,17 +216,358 @@ private function fetchUsersDisplay(array $ids): array
         if (preg_match('/^pc_(.+)_u(\d+)_t(\d+)$/', $nodeId, $m)) return ['type' => 'pc', 'pc_code' => $m[1], 'user_id' => (int)$m[2], 'team_id' => (int)$m[3]];
         if (preg_match('/^client_(.+)_pc(.+)_u(\d+)_t(\d+)$/', $nodeId, $m)) {
             return [
-                'type' => 'client',
-                'client_group_number' => $m[1],
-                'pc_code' => $m[2],
-                'user_id' => (int)$m[3],
-                'team_id' => (int)$m[4],
+                'type'                 => 'client',
+                'client_group_number'  => $m[1],
+                'pc_code'              => $m[2],
+                'user_id'              => (int)$m[3],
+                'team_id'              => (int)$m[4],
             ];
         }
         return ['type' => 'unknown'];
     }
 
-    // Controller
+    /* ===========================
+     *  SERIES (FY Abr–Mar)
+     * =========================== */
+    public function series(Request $request)
+    {
+        $nodeId = (string)$request->query('node_id', '');
+        if ($nodeId === '') return response()->json(['error'=>'node_id is required'], 422);
+
+        $ctx = $this->parseNodeId($nodeId);
+
+        $fyStart = (int) $request->query('fiscal_year', (int)date('Y'));
+        if ($fyStart < 2024) $fyStart = 2024;
+
+        $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
+        $labels = [];
+        foreach ($monthsOrdered as $m) {
+            $y = ($m >= 4) ? $fyStart : ($fyStart + 1);
+            $labels[] = sprintf('%04d-%02d', $y, $m);
+        }
+        $fyLabel = 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2);
+
+        $cpcQuery = DB::table('assignments')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
+            ->select('client_profit_centers.id', 'client_profit_centers.profit_center_code');
+
+        if (($ctx['type'] ?? '') === 'team') {
+            $cpcQuery->where('assignments.team_id', $ctx['team_id']);
+        } elseif (($ctx['type'] ?? '') === 'user') {
+            $cpcQuery->where('assignments.team_id', $ctx['team_id'])
+                     ->where('assignments.user_id', $ctx['user_id']);
+        } elseif (($ctx['type'] ?? '') === 'pc') {
+            $cpcQuery->where('assignments.team_id', $ctx['team_id'])
+                     ->where('assignments.user_id', $ctx['user_id'])
+                     ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
+        } elseif (($ctx['type'] ?? '') === 'client') {
+            $cpcQuery->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+                     ->where('assignments.team_id', $ctx['team_id'])
+                     ->where('assignments.user_id', $ctx['user_id'])
+                     ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
+                     ->where('clients.client_group_number', $ctx['client_group_number']);
+        }
+
+        $cpcs = $cpcQuery->distinct()->get();
+        if ($cpcs->isEmpty()) {
+            return response()->json($this->emptyFiscalSeries($fyStart, $ctx));
+        }
+        $cpcIds = $cpcs->pluck('id')->all();
+
+        // FY agrupado
+        $applyFY = function($q, $tbl) use ($fyStart) {
+            $q->where(function($w) use ($tbl, $fyStart) {
+                $w->where(function($a) use ($tbl, $fyStart) {
+                    $a->where($tbl.'.fiscal_year', $fyStart)
+                      ->whereBetween($tbl.'.month', [4,12]);
+                })->orWhere(function($b) use ($tbl, $fyStart) {
+                    $b->where($tbl.'.fiscal_year', $fyStart+1)
+                      ->whereBetween($tbl.'.month', [1,3]);
+                });
+            });
+        };
+
+        $fyIndex = function(int $rowFy, int $month) use ($fyStart): int {
+            return ($rowFy === $fyStart) ? max(0, min(11, $month - 4)) : max(0, min(11, 8 + $month));
+        };
+
+        $make12 = fn() => array_fill(0, 12, 0.0);
+
+        // SALES
+        $salesQ = DB::table('sales')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+            ->whereIn('sales.client_profit_center_id', $cpcIds);
+        $applyFY($salesQ, 'sales');
+        $salesRows = $salesQ->select(
+                'sales.fiscal_year','sales.month',
+                DB::raw('SUM(sales.volume) as units'),
+                DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )->groupBy('sales.fiscal_year','sales.month')->get();
+
+        $salesUnits = $make12(); $salesM3 = $make12(); $salesEuro = $make12();
+        foreach ($salesRows as $r) {
+            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+            $salesUnits[$i] = (float)$r->units;
+            $salesM3[$i]    = (float)$r->m3;
+            $salesEuro[$i]  = (float)$r->euro;
+        }
+
+        // BUDGETS
+        $budQ = DB::table('budgets')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'budgets.client_profit_center_id')
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+            ->whereIn('budgets.client_profit_center_id', $cpcIds);
+        $applyFY($budQ, 'budgets');
+        $budRows = $budQ->select(
+                'budgets.fiscal_year','budgets.month',
+                DB::raw('SUM(budgets.volume) as units'),
+                DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )->groupBy('budgets.fiscal_year','budgets.month')->get();
+
+        $budgetUnits = $make12(); $budgetM3 = $make12(); $budgetEuro = $make12();
+        foreach ($budRows as $r) {
+            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+            $budgetUnits[$i] = (float)$r->units;
+            $budgetM3[$i]    = (float)$r->m3;
+            $budgetEuro[$i]  = (float)$r->euro;
+        }
+
+        // FORECASTS: última versión por (cpc, fy, mes, user_id)
+        $scopeHasUser = in_array($ctx['type'] ?? '', ['user','pc','client']) && !empty($ctx['user_id']);
+
+        $fcBase = DB::table('forecasts')
+            ->when($scopeHasUser, fn($q) => $q->where('forecasts.user_id', $ctx['user_id']))
+            ->select(
+                'forecasts.client_profit_center_id',
+                'forecasts.fiscal_year',
+                'forecasts.month',
+                'forecasts.user_id',
+                DB::raw('MAX(forecasts.version) as max_version')
+            )
+            ->groupBy('forecasts.client_profit_center_id', 'forecasts.fiscal_year', 'forecasts.month', 'forecasts.user_id');
+
+        $fcQ = DB::table('forecasts')
+            ->joinSub($fcBase, 'lv', function($j) {
+                $j->on('forecasts.client_profit_center_id', '=', 'lv.client_profit_center_id')
+                  ->on('forecasts.fiscal_year', '=', 'lv.fiscal_year')
+                  ->on('forecasts.month', '=', 'lv.month')
+                  ->on('forecasts.user_id', '=', 'lv.user_id')
+                  ->on('forecasts.version', '=', 'lv.max_version');
+            })
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'forecasts.client_profit_center_id')
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+            ->whereIn('forecasts.client_profit_center_id', $cpcIds);
+        $applyFY($fcQ, 'forecasts');
+        if ($scopeHasUser) $fcQ->where('forecasts.user_id', $ctx['user_id']);
+
+        $fcRows = $fcQ->select(
+                'forecasts.fiscal_year', 'forecasts.month',
+                DB::raw('SUM(forecasts.volume) as units'),
+                DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )->groupBy('forecasts.fiscal_year','forecasts.month')->get();
+
+        $fcUnits = $make12(); $fcM3 = $make12(); $fcEuro = $make12();
+        foreach ($fcRows as $r) {
+            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+            $fcUnits[$i] = (float)$r->units;
+            $fcM3[$i]    = (float)$r->m3;
+            $fcEuro[$i]  = (float)$r->euro;
+        }
+
+        $unitModeAllowed = in_array($ctx['type'] ?? '', ['pc','client']);
+
+        return response()->json([
+            'context'           => $ctx,
+            'fy_start'          => $fyStart,
+            'fy_label'          => $fyLabel,
+            'months'            => $labels,
+            'unit_mode_allowed' => $unitModeAllowed,
+            'sales'             => ['units'=>$salesUnits,  'm3'=>$salesM3,  'euro'=>$salesEuro],
+            'budgets'           => ['units'=>$budgetUnits, 'm3'=>$budgetM3, 'euro'=>$budgetEuro],
+            'forecasts'         => ['units'=>$fcUnits,     'm3'=>$fcM3,     'euro'=>$fcEuro],
+            'totals' => [
+                'sales'     => ['units'=>array_sum($salesUnits),  'm3'=>array_sum($salesM3),  'euro'=>array_sum($salesEuro)],
+                'budgets'   => ['units'=>array_sum($budgetUnits), 'm3'=>array_sum($budgetM3), 'euro'=>array_sum($budgetEuro)],
+                'forecasts' => ['units'=>array_sum($fcUnits),     'm3'=>array_sum($fcM3),     'euro'=>array_sum($fcEuro)],
+            ],
+        ]);
+    }
+
+    private function emptyFiscalSeries(int $fyStart, array $ctx): array
+    {
+        $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
+        $labels = [];
+        foreach ($monthsOrdered as $m) {
+            $y = ($m >= 4) ? $fyStart : ($fyStart + 1);
+            $labels[] = sprintf('%04d-%02d', $y, $m);
+        }
+        $zeros = array_fill(0, 12, 0.0);
+        return [
+            'context'           => $ctx,
+            'fy_start'          => $fyStart,
+            'fy_label'          => 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2),
+            'months'            => $labels,
+            'unit_mode_allowed' => in_array($ctx['type'] ?? '', ['pc','client']),
+            'sales'             => ['units'=>$zeros,'m3'=>$zeros,'euro'=>$zeros],
+            'budgets'           => ['units'=>$zeros,'m3'=>$zeros,'euro'=>$zeros],
+            'forecasts'         => ['units'=>$zeros,'m3'=>$zeros,'euro'=>$zeros],
+            'totals' => [
+                'sales'     => ['units'=>0,'m3'=>0,'euro'=>0],
+                'budgets'   => ['units'=>0,'m3'=>0,'euro'=>0],
+                'forecasts' => ['units'=>0,'m3'=>0,'euro'=>0],
+            ],
+        ];
+    }
+
+    /* ===========================
+     *  TOTALS (agregados)
+     * =========================== */
+    public function totals(Request $request)
+    {
+        $nodeId = (string)$request->input('node_id', '');
+        if ($nodeId === '') return response()->json(['error' => 'node_id is required'], 422);
+
+        $ctx  = $this->parseNodeId($nodeId);
+        $fy   = $request->integer('fiscal_year');
+        $from = $request->input('from');
+        $to   = $request->input('to');
+
+        $cpcs = DB::table('assignments')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
+            ->select('client_profit_centers.id as cpc_id', 'client_profit_centers.profit_center_code')
+            ->when($ctx['type'] === 'team', function($q) use ($ctx) {
+                $q->where('assignments.team_id', $ctx['team_id']);
+            })
+            ->when($ctx['type'] === 'user', function($q) use ($ctx) {
+                $q->where('assignments.team_id', $ctx['team_id'])
+                  ->where('assignments.user_id', $ctx['user_id']);
+            })
+            ->when($ctx['type'] === 'pc', function($q) use ($ctx) {
+                $q->where('assignments.team_id', $ctx['team_id'])
+                  ->where('assignments.user_id', $ctx['user_id'])
+                  ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
+            })
+            ->when($ctx['type'] === 'client', function($q) use ($ctx) {
+                $q->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+                  ->where('assignments.team_id', $ctx['team_id'])
+                  ->where('assignments.user_id', $ctx['user_id'])
+                  ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
+                  ->where('clients.client_group_number', $ctx['client_group_number']);
+            })
+            ->distinct();
+
+        $applyPeriod = function($q, $tbl) use ($fy, $from, $to) {
+            if ($fy) {
+                $q->where(function($w) use ($tbl, $fy) {
+                    $w->where(function($a) use ($tbl, $fy) {
+                        $a->where($tbl.'.fiscal_year', $fy)
+                          ->whereBetween($tbl.'.month', [4,12]);
+                    })->orWhere(function($b) use ($tbl, $fy) {
+                        $b->where($tbl.'.fiscal_year', $fy+1)
+                          ->whereBetween($tbl.'.month', [1,3]);
+                    });
+                });
+            } elseif ($from && $to && preg_match('/^\d{4}-\d{2}$/',$from) && preg_match('/^\d{4}-\d{2}$/',$to)) {
+                [$yf,$mf] = array_map('intval', explode('-', $from));
+                [$yt,$mt] = array_map('intval', explode('-', $to));
+                $q->whereRaw('(' . $tbl . '.fiscal_year*100 + ' . $tbl . '.month) between ? and ?', [$yf*100+$mf, $yt*100+$mt]);
+            }
+        };
+
+        // SALES
+        $sales = DB::table('sales')
+            ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'sales.client_profit_center_id'); })
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
+        $applyPeriod($sales, 'sales');
+        $salesRows = $sales->select(
+                'cpcs.profit_center_code',
+                DB::raw('SUM(sales.volume) as units'),
+                DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )
+            ->groupBy('cpcs.profit_center_code')
+            ->get();
+
+        // BUDGETS
+        $budgets = DB::table('budgets')
+            ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'budgets.client_profit_center_id'); })
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
+        $applyPeriod($budgets, 'budgets');
+        $budgetRows = $budgets->select(
+                'cpcs.profit_center_code',
+                DB::raw('SUM(budgets.volume) as units'),
+                DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )
+            ->groupBy('cpcs.profit_center_code')
+            ->get();
+
+        // FORECASTS (última versión por (cpc, fy, mes, user_id))
+        $latestScopeHasUser = in_array($ctx['type'], ['user','pc','client']) && !empty($ctx['user_id']);
+
+        $fcBase = DB::table('forecasts')
+            ->when($latestScopeHasUser, function($q) use ($ctx) {
+                $q->where('forecasts.user_id', $ctx['user_id']);
+            })
+            ->select(
+                'forecasts.client_profit_center_id',
+                'forecasts.fiscal_year',
+                'forecasts.month',
+                'forecasts.user_id',
+                DB::raw('MAX(forecasts.version) as max_version')
+            )
+            ->groupBy('forecasts.client_profit_center_id', 'forecasts.fiscal_year', 'forecasts.month', 'forecasts.user_id');
+
+        $forecasts = DB::table('forecasts')
+            ->joinSub($fcBase, 'lv', function($j) {
+                $j->on('forecasts.client_profit_center_id', '=', 'lv.client_profit_center_id')
+                  ->on('forecasts.fiscal_year', '=', 'lv.fiscal_year')
+                  ->on('forecasts.month', '=', 'lv.month')
+                  ->on('forecasts.user_id', '=', 'lv.user_id')
+                  ->on('forecasts.version', '=', 'lv.max_version');
+            })
+            ->joinSub($cpcs, 'cpcs', function($j){ $j->on('cpcs.cpc_id', '=', 'forecasts.client_profit_center_id'); })
+            ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'cpcs.profit_center_code');
+        $applyPeriod($forecasts, 'forecasts');
+        if ($latestScopeHasUser) {
+            $forecasts->where('forecasts.user_id', $ctx['user_id']);
+        }
+
+        $forecastRows = $forecasts->select(
+                'cpcs.profit_center_code',
+                DB::raw('SUM(forecasts.volume) as units'),
+                DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1) * COALESCE(unit_conversions.factor_to_euro,0)) as euro')
+            )
+            ->groupBy('cpcs.profit_center_code')
+            ->get();
+
+        $sum = fn($rows, $f) => (float)collect($rows)->sum($f);
+        $includeUnits = in_array($ctx['type'], ['pc','client']);
+
+        return response()->json([
+            'level'   => $ctx,
+            'period'  => ['fiscal_year' => $fy, 'from' => $from, 'to' => $to],
+            'sales'   => [
+                'by_pc' => $salesRows,
+                'total' => ['m3' => $sum($salesRows, 'm3'), 'euro' => $sum($salesRows, 'euro')] + ($includeUnits ? ['units' => $sum($salesRows, 'units')] : []),
+            ],
+            'budgets' => [
+                'by_pc' => $budgetRows,
+                'total' => ['m3' => $sum($budgetRows, 'm3'), 'euro' => $sum($budgetRows, 'euro')] + ($includeUnits ? ['units' => $sum($budgetRows, 'units')] : []),
+            ],
+            'forecasts' => [
+                'by_pc' => $forecastRows,
+                'total' => ['m3' => $sum($forecastRows, 'm3'), 'euro' => $sum($forecastRows, 'euro')] + ($includeUnits ? ['units' => $sum($forecastRows, 'units')] : []),
+            ],
+        ]);
+    }
+
+    // Opcional para debug
     public function debugTeamUsers(Request $request)
     {
         $teamId = (int)$request->query('team_id');
@@ -428,4 +596,156 @@ private function fetchUsersDisplay(array $ids): array
             )))
         ]);
     }
+
+    public function pcMonthly(Request $request)
+{
+    $pc = trim((string)$request->query('profit_center_code', ''));
+    if ($pc === '') {
+        return response()->json(['error' => 'profit_center_code is required'], 422);
+    }
+
+    // Año fiscal (Abr->Mar)
+    $fyStart = (int)$request->query('fiscal_year', (int)date('Y'));
+    if ($fyStart < 2024) $fyStart = 2024;
+
+    // Labels Apr..Mar + máscara WJ
+    $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
+    $labels = [];
+    foreach ($monthsOrdered as $m) {
+        $y = ($m >= 4) ? $fyStart : ($fyStart + 1);
+        $labels[] = sprintf('%04d-%02d', $y, $m);
+    }
+    $fyLabel = 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2);
+
+    // Todos los CPC ids del PC (compañía completa)
+    $cpcIds = DB::table('client_profit_centers')
+        ->where('client_profit_centers.profit_center_code', $pc)
+        ->pluck('id')
+        ->all();
+
+    if (empty($cpcIds)) {
+        $zeros = array_fill(0, 12, 0.0);
+        return response()->json([
+            'profit_center_code' => $pc,
+            'fy_start' => $fyStart,
+            'fy_label' => $fyLabel,
+            'months' => $labels,
+            'sales'     => ['units'=>$zeros,'m3'=>$zeros,'total'=>['units'=>0,'m3'=>0]],
+            'budgets'   => ['units'=>$zeros,'m3'=>$zeros,'total'=>['units'=>0,'m3'=>0]],
+            'forecasts' => ['units'=>$zeros,'m3'=>$zeros,'total'=>['units'=>0,'m3'=>0]],
+        ]);
+    }
+
+    // FY agrupado: (FY=fyStart & month 4..12) OR (FY=fyStart+1 & month 1..3)
+    $applyFY = function($q, $tbl) use ($fyStart) {
+        $q->where(function($w) use ($tbl, $fyStart) {
+            $w->where(function($a) use ($tbl, $fyStart) {
+                $a->where($tbl.'.fiscal_year', $fyStart)
+                  ->whereBetween($tbl.'.month', [4,12]);
+            })->orWhere(function($b) use ($tbl, $fyStart) {
+                $b->where($tbl.'.fiscal_year', $fyStart+1)
+                  ->whereBetween($tbl.'.month', [1,3]);
+            });
+        });
+    };
+
+    // Índice 0..11 en orden fiscal
+    $fyIndex = function(int $rowFy, int $month) use ($fyStart): int {
+        return ($rowFy === $fyStart) ? max(0,min(11,$month-4)) : max(0,min(11,8+$month));
+    };
+
+    $make12 = fn() => array_fill(0, 12, 0.0);
+
+    /* ---------- SALES ---------- */
+    $salesQ = DB::table('sales')
+        ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+        ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+        ->whereIn('sales.client_profit_center_id', $cpcIds);
+    $applyFY($salesQ, 'sales');
+    $salesRows = $salesQ->select(
+            'sales.fiscal_year','sales.month',
+            DB::raw('SUM(sales.volume) as units'),
+            DB::raw('SUM(sales.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3')
+        )->groupBy('sales.fiscal_year','sales.month')
+         ->get();
+
+    $salesU=$make12(); $salesM=$make12();
+    foreach ($salesRows as $r) {
+        $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+        $salesU[$i] = (float)$r->units;
+        $salesM[$i] = (float)$r->m3;
+    }
+
+    /* ---------- BUDGETS ---------- */
+    $budQ = DB::table('budgets')
+        ->join('client_profit_centers', 'client_profit_centers.id', '=', 'budgets.client_profit_center_id')
+        ->leftJoin('unit_conversions', 'unit_conversions.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+        ->whereIn('budgets.client_profit_center_id', $cpcIds);
+    $applyFY($budQ, 'budgets');
+    $budRows = $budQ->select(
+            'budgets.fiscal_year','budgets.month',
+            DB::raw('SUM(budgets.volume) as units'),
+            DB::raw('SUM(budgets.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3')
+        )->groupBy('budgets.fiscal_year','budgets.month')
+         ->get();
+
+    $budU=$make12(); $budM=$make12();
+    foreach ($budRows as $r) {
+        $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+        $budU[$i] = (float)$r->units;
+        $budM[$i] = (float)$r->m3;
+    }
+
+    /* ---------- FORECASTS (última versión por user_id) ---------- */
+    $fcBase = DB::table('forecasts')
+        ->whereIn('forecasts.client_profit_center_id', $cpcIds)
+        ->select(
+            'forecasts.client_profit_center_id',
+            'forecasts.fiscal_year',
+            'forecasts.month',
+            'forecasts.user_id',
+            DB::raw('MAX(forecasts.version) as max_version')
+        )
+        ->groupBy('forecasts.client_profit_center_id','forecasts.fiscal_year','forecasts.month','forecasts.user_id');
+
+    $fcQ = DB::table('forecasts')
+        ->joinSub($fcBase, 'lv', function($j){
+            $j->on('forecasts.client_profit_center_id','=','lv.client_profit_center_id')
+              ->on('forecasts.fiscal_year','=','lv.fiscal_year')
+              ->on('forecasts.month','=','lv.month')
+              ->on('forecasts.user_id','=','lv.user_id')
+              ->on('forecasts.version','=','lv.max_version');
+        })
+        ->leftJoin('unit_conversions', function($j) {
+            $j->on('unit_conversions.profit_center_code', '=', DB::raw('(SELECT profit_center_code FROM client_profit_centers WHERE id = forecasts.client_profit_center_id)'));
+        })
+        ->whereIn('forecasts.client_profit_center_id', $cpcIds);
+    $applyFY($fcQ, 'forecasts');
+    // Nota: sin filtro de user_id: sumamos últimas versiones de cada user
+
+    $fcRows = $fcQ->select(
+            'forecasts.fiscal_year','forecasts.month',
+            DB::raw('SUM(forecasts.volume) as units'),
+            DB::raw('SUM(forecasts.volume * COALESCE(unit_conversions.factor_to_m3,1)) as m3')
+        )->groupBy('forecasts.fiscal_year','forecasts.month')
+         ->get();
+
+    $fcU=$make12(); $fcM=$make12();
+    foreach ($fcRows as $r) {
+        $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+        $fcU[$i] = (float)$r->units;
+        $fcM[$i] = (float)$r->m3;
+    }
+
+    return response()->json([
+        'profit_center_code' => $pc,
+        'fy_start' => $fyStart,
+        'fy_label' => $fyLabel,
+        'months'   => $labels,
+        'sales'     => ['units'=>$salesU, 'm3'=>$salesM, 'total'=>['units'=>array_sum($salesU),'m3'=>array_sum($salesM)]],
+        'budgets'   => ['units'=>$budU,   'm3'=>$budM,  'total'=>['units'=>array_sum($budU),'m3'=>array_sum($budM)]],
+        'forecasts' => ['units'=>$fcU,    'm3'=>$fcM,   'total'=>['units'=>array_sum($fcU),'m3'=>array_sum($fcM)]],
+    ]);
+}
+
 }

@@ -20,8 +20,7 @@ use App\Http\Controllers\UserDetailController;
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
-// routes/api.php
-Route::get('/analytics/debug-team-users', [CompanyAnalyticsController::class, 'debugTeamUsers']);
+Route::get('/analytics/pc-monthly', [CompanyAnalyticsController::class, 'pcMonthly']);
 
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -42,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('analytics')->group(function () {
         Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);
         Route::get('/totals', [CompanyAnalyticsController::class, 'totals']);
+        Route::get('/series', [CompanyAnalyticsController::class, 'series']);
     });
     
     Route::prefix('budget-cases')->group(function () {
