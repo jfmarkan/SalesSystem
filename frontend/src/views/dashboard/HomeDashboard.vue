@@ -14,7 +14,7 @@
         :key="item.i"
         :x="item.x" :y="item.y" :w="item.w" :h="item.h" :i="item.i"
       >
-        <GlassCard :title="getTitle(item)">
+        <GlassCard :title="item.type==='kpi' ? '' : getTitle(item)">
           <!-- Einheit-Umschalter (nur Diagramm & Tabelle) -->
           <template #header-extra v-if="item.type==='chart' || item.type==='table'">
             <div class="unit-toggle">
@@ -136,7 +136,7 @@ const layout = ref([
   { i:'4', x:8, y:0, w:4, h:12, type:'calendar' },
   { i:'7', x:0, y:4, w:5, h:17, type:'chart' },
   { i:'8', x:5, y:4, w:3, h:17, type:'table' },
-  { i:'9', x:8, y:12,w:4, h:6,  type:'tasks' }
+  { i:'9', x:8, y:12,w:4, h:9,  type:'tasks' }
 ])
 
 // titles (UI German)

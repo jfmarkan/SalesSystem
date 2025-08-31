@@ -1,19 +1,72 @@
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  rows:   { type: Array,  default: () => [] }, // [{ pcId, pcName, sales, forecast, budget }]
+  totals: { type: Object, default: () => ({ sales:0, forecast:0, budget:0 }) },
+  unit:   { type: String, default: '' },
+  sortLocale: { type: String, default: '' }     // opcional: ej. 'de', 'es'
+})
+
+function fmt(n){
+  const v = Number(n) || 0
+  return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+const showTotals = computed(() => {
+  const U = String(props.unit || '').toUpperCase()
+  return U === 'M3' || U === 'EUR'
+})
+
+function normalizeName(s){
+  const t = (s ?? '').toString()
+    .normalize('NFKC')
+    .replace(/[\u00A0\u2000-\u200D\uFEFF]/g, ' ') // NBSP y ZWSP
+    .replace(/\s+/g, ' ')
+    .trim()
+  return t
+}
+
+const collator = computed(() =>
+  new Intl.Collator(props.sortLocale || undefined, { numeric: true, sensitivity: 'base' })
+)
+
+const sortedRows = computed(() => {
+  const arr = [...(props.rows || [])]
+  arr.sort((a,b) => {
+    const an = normalizeName(a.pcName)
+    const bn = normalizeName(b.pcName)
+    const c = collator.value.compare(an, bn)
+    if (c !== 0) return c
+    // desempate estable
+    return String(a.pcId ?? '').localeCompare(String(b.pcId ?? ''), props.sortLocale || undefined, { numeric: true, sensitivity: 'base' })
+  })
+  return arr
+})
+</script>
+
 <template>
-  <div class="pctable">
-    <div class="table-wrap">
+  <div class="pc-table">
+    <div class="tbl-wrap">
       <table class="tbl">
+        <colgroup>
+          <col style="width:46%" />
+          <col style="width:18%" />
+          <col style="width:18%" />
+          <col style="width:18%" />
+        </colgroup>
+
         <thead>
           <tr>
-            <th>PC</th>
-            <th class="num">Ist</th>
-            <th class="num">Prognose</th>
-            <th class="num">Budget</th>
+            <th class="th-name">Profit-Center</th>
+            <th>Ist</th>
+            <th>Prognose</th>
+            <th>Budget</th>
           </tr>
         </thead>
+
         <tbody>
-          <tr v-for="r in rows" :key="r.pcId">
-            <td>
-              <div class="pc-code">{{ r.pcId }}</div>
+          <tr v-for="r in sortedRows" :key="r.pcId || r.pcName">
+            <td class="td-name">
               <div class="pc-name">{{ r.pcName }}</div>
             </td>
             <td class="num">{{ fmt(r.sales) }}</td>
@@ -22,10 +75,9 @@
           </tr>
         </tbody>
 
-        <!-- show totals only when unit != VKEH -->
-        <tfoot v-if="unit !== 'VKEH'">
-          <tr class="total">
-            <td>Summe</td>
+        <tfoot v-if="showTotals">
+          <tr class="totals">
+            <td>Total</td>
             <td class="num">{{ fmt(totals.sales) }}</td>
             <td class="num">{{ fmt(totals.forecast) }}</td>
             <td class="num">{{ fmt(totals.budget) }}</td>
@@ -36,27 +88,89 @@
   </div>
 </template>
 
-<script setup>
-// Code in English
-const props = defineProps({
-  rows: { type: Array, required: true },   // [{pcId, pcName, sales, forecast, budget}]
-  totals: { type: Object, required: true },// {sales, forecast, budget}
-  unit: { type: String, default: 'VKEH' }
-})
-
-function fmt(n){
-  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(Number(n || 0))
-}
-</script>
-
 <style scoped>
-.pctable{ height: 100%; display: flex; flex-direction: column; }
-.table-wrap{ overflow:auto; flex:1; }
-.tbl{ width:100%; border-collapse:collapse; }
-.tbl th, .tbl td{ padding:.45rem .55rem; border-bottom:1px solid rgba(0,0,0,.06); white-space:nowrap; }
-.tbl thead th{ position: sticky; top:0; background: rgba(255,255,255,.6); backdrop-filter: blur(4px); }
-.tbl .num{ text-align:right; }
-.tbl tfoot .total td{ font-weight: 700; border-top: 2px solid rgba(0,0,0,.15); }
-.pc-code{ font-weight:700; font-size:.95rem; line-height:1; }
-.pc-name{ font-size:.75rem; opacity:.9; line-height:1.1; }
+.pc-table{ height:100%; display:flex; }
+.tbl-wrap{ flex:1 1 auto; min-height:0; overflow:auto; }
+
+.tbl{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  table-layout:fixed;
+  font-size:.9rem;
+  line-height:1.25;
+}
+
+/* Cabecera compacta, sticky */
+thead th{
+  position:sticky; top:0; z-index:1;
+  text-align:left;
+  font-weight:600;
+  padding:8px 10px;
+  border-bottom:1px solid rgba(2,6,23,.12);
+  background: rgba(255,255,255,.35);
+  backdrop-filter: blur(6px);
+}
+@media (prefers-color-scheme: dark){
+  thead th{
+    border-bottom-color: rgba(255,255,255,.16);
+    background: rgba(0,0,0,.25);
+  }
+}
+:global(.dark) thead th{
+  border-bottom-color: rgba(255,255,255,.16);
+  background: rgba(0,0,0,.25);
+}
+
+tbody td{
+  padding:6px 10px;
+  border-bottom:1px solid rgba(2,6,23,.08);
+  vertical-align:top;
+}
+@media (prefers-color-scheme: dark){
+  tbody td{ border-bottom-color: rgba(255,255,255,.12); }
+}
+:global(.dark) tbody td{ border-bottom-color: rgba(255,255,255,.12); }
+
+/* Nombre en 2–3 filas, sin overflow lateral */
+.td-name{ color:inherit; }
+.pc-name{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:normal;
+  line-height:1.25;
+  -webkit-line-clamp:2;                 /* 2 filas por defecto */
+  max-height: calc(1.25em * 2);
+}
+@media (min-width: 1400px){
+  .pc-name{
+    -webkit-line-clamp:3;               /* 3 filas en pantallas grandes */
+    max-height: calc(1.25em * 3);
+  }
+}
+
+/* Números derecha */
+.num{ text-align:right; }
+
+/* Totales solo para M3 y EUR */
+tfoot td{
+  padding:8px 10px;
+  font-weight:700;
+  border-top:1px solid rgba(2,6,23,.12);
+  background: rgba(255,255,255,.25);
+}
+@media (prefers-color-scheme: dark){
+  tfoot td{
+    border-top-color: rgba(255,255,255,.16);
+    background: rgba(0,0,0,.2);
+  }
+}
+:global(.dark) tfoot td{
+  border-top-color: rgba(255,255,255,.16);
+  background: rgba(0,0,0,.2);
+}
+
+th, td{ outline:0; }
 </style>
