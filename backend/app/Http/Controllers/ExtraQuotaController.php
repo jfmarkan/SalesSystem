@@ -435,8 +435,8 @@ public function indexOpportunities(Request $request)
         abort(422, 'invalid status');
     }
 
-    return \DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
-        $op = \DB::table('sales_opportunities')
+    return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
+        $op = DB::table('sales_opportunities')
             ->where('opportunity_group_id', $group)
             ->where('version', $version)
             ->where('user_id', $uid)
@@ -445,7 +445,7 @@ public function indexOpportunities(Request $request)
         if (!$op) abort(404, 'Opportunity version not found');
 
         if ($status === 'lost') {
-            \DB::table('sales_opportunities')
+            DB::table('sales_opportunities')
               ->where('opportunity_group_id',$group)
               ->where('version',$version)
               ->update(['status'=>'lost']);
@@ -488,7 +488,7 @@ public function indexOpportunities(Request $request)
         if (!$teamId) abort(422, 'team not found for user');
 
         // Assignment
-        \DB::table('assignments')->insert([
+        DB::table('assignments')->insert([
             'client_profit_center_id' => $cpc->id,
             'team_id'                 => $teamId,
             'user_id'                 => $op->user_id,
@@ -497,12 +497,12 @@ public function indexOpportunities(Request $request)
         ]);
 
         // Mover presupuesto/forecast extra → permanentes
-        $bud = \DB::table('extra_quota_budgets')
+        $bud = DB::table('extra_quota_budgets')
             ->where('opportunity_group_id',$group)
             ->where('version',$version)
             ->get();
         foreach ($bud as $r) {
-            \DB::table('budgets')->insert([
+            DB::table('budgets')->insert([
                 'client_profit_center_id' => $cpc->id,
                 'fiscal_year'             => $r->fiscal_year,
                 'month'                   => $r->month,
@@ -512,12 +512,12 @@ public function indexOpportunities(Request $request)
             ]);
         }
 
-        $fc = \DB::table('extra_quota_forecasts')
+        $fc = DB::table('extra_quota_forecasts')
             ->where('opportunity_group_id',$group)
             ->where('version',$version)
             ->get();
         foreach ($fc as $r) {
-            \DB::table('forecasts')->insert([
+            DB::table('forecasts')->insert([
                 'client_profit_center_id' => $cpc->id,
                 'fiscal_year'             => $r->fiscal_year,
                 'month'                   => $r->month,
@@ -529,7 +529,7 @@ public function indexOpportunities(Request $request)
         }
 
         // Marcar ganada y guardar CGN
-        \DB::table('sales_opportunities')
+        DB::table('sales_opportunities')
           ->where('opportunity_group_id',$group)
           ->where('version',$version)
           ->update([
@@ -696,4 +696,105 @@ return response()->noContent();
             'open'      => $open        // m³
         ]);
     }
+
+    public function analysisSummary(Request $req)
+{
+    $userId = (int)$req->user()->id;
+    $fy     = $this->fiscalYear($req);
+
+    // Factor expresión
+    $factorExpr = '1';
+    $hasConv = $this->hasConv();
+    if ($hasConv) {
+        $factorExpr = $this->convFactorExpr('uc');
+    }
+
+    // Subquery: asignado por PC (m³)
+    $assignQ = DB::table('extra_quota_assignments as a')
+        ->where('a.user_id', $userId)
+        ->where('a.is_published', true)
+        ->where('a.fiscal_year', $fy);
+
+    if ($hasConv) $assignQ->leftJoin('unit_conversions as uc','uc.profit_center_code','=','a.profit_center_code');
+    if (Schema::hasTable('profit_centers')) {
+        $assignQ->leftJoin('profit_centers as pc','pc.profit_center_code','=','a.profit_center_code');
+    }
+
+    $assignSub = $assignQ->selectRaw("
+            a.profit_center_code,
+            COALESCE(SUM(CAST(a.volume AS DECIMAL(32,8)) * ($factorExpr)),0) AS assigned_m3,
+            COALESCE(MAX(pc.profit_center_name), NULL) AS profit_center_name
+        ")
+        ->groupBy('a.profit_center_code');
+
+    // Subquery: oportunidades últimas versiones por grupo
+    $lv = DB::table('sales_opportunities')
+        ->select('opportunity_group_id', DB::raw('MAX(version) AS max_version'))
+        ->where('user_id', $userId)
+        ->where('fiscal_year', $fy)
+        ->groupBy('opportunity_group_id');
+
+    $opsQ = DB::table('sales_opportunities as s')
+        ->joinSub($lv, 'lv', function ($j) {
+            $j->on('lv.opportunity_group_id','=','s.opportunity_group_id')
+              ->on('lv.max_version','=','s.version');
+        });
+
+    if ($hasConv) $opsQ->leftJoin('unit_conversions as uc','uc.profit_center_code','=','s.profit_center_code');
+    if (Schema::hasTable('profit_centers')) {
+        $opsQ->leftJoin('profit_centers as pc','pc.profit_center_code','=','s.profit_center_code');
+    }
+
+    $opsSub = $opsQ->selectRaw("
+            s.profit_center_code,
+            COALESCE(SUM(CASE WHEN s.status='won'  THEN CAST(s.volume AS DECIMAL(32,8)) * ($factorExpr) ELSE 0 END),0) AS converted_m3,
+            COALESCE(SUM(CASE WHEN s.status='open' THEN CAST(s.volume AS DECIMAL(32,8)) * ($factorExpr) ELSE 0 END),0) AS in_progress_m3,
+            COUNT(*) AS count_total,
+            SUM(CASE WHEN s.status='open' THEN 1 ELSE 0 END)  AS count_open,
+            SUM(CASE WHEN s.status='won'  THEN 1 ELSE 0 END)  AS count_won,
+            SUM(CASE WHEN s.status='lost' THEN 1 ELSE 0 END)  AS count_lost,
+            COALESCE(MAX(pc.profit_center_name), NULL) AS pc_name_ops
+        ")
+        ->groupBy('s.profit_center_code');
+
+    // Merge asignado + ops por PC (dirigido por asignaciones)
+    $rows = DB::query()
+        ->fromSub($assignSub, 'a')
+        ->leftJoinSub($opsSub, 'o', 'o.profit_center_code', '=', 'a.profit_center_code')
+        ->selectRaw("
+            a.profit_center_code,
+            COALESCE(a.profit_center_name, o.pc_name_ops, a.profit_center_code) AS profit_center_name,
+            a.assigned_m3,
+            COALESCE(o.converted_m3,0)  AS converted_m3,
+            COALESCE(o.in_progress_m3,0) AS in_progress_m3,
+            GREATEST(0, a.assigned_m3 - COALESCE(o.converted_m3,0) - COALESCE(o.in_progress_m3,0)) AS available_m3,
+            COALESCE(o.count_total,0) AS count_total,
+            COALESCE(o.count_open,0)  AS count_open,
+            COALESCE(o.count_won,0)   AS count_won,
+            COALESCE(o.count_lost,0)  AS count_lost
+        ")
+        ->orderBy('a.profit_center_code')
+        ->get();
+
+    // Totales
+    $tot = [
+        'assigned_m3'    => 0,
+        'converted_m3'   => 0,
+        'in_progress_m3' => 0,
+        'available_m3'   => 0,
+        'count_total'    => 0
+    ];
+    foreach ($rows as $r) {
+        $tot['assigned_m3']    += (float)$r->assigned_m3;
+        $tot['converted_m3']   += (float)$r->converted_m3;
+        $tot['in_progress_m3'] += (float)$r->in_progress_m3;
+        $tot['available_m3']   += (float)$r->available_m3;
+        $tot['count_total']    += (int)$r->count_total;
+    }
+
+    return response()->json([
+        'totals' => $tot,
+        'items'  => $rows,
+    ]);
+}
 }

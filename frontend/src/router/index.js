@@ -17,6 +17,7 @@ import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
 import SalesForce from '@/views/dashboard/manager/SalesForce.vue';
 import ReportGenerator from '@/views/dashboard/manager/ReportGenerator.vue';
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
+import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
 
 const routes = [
     {
@@ -70,6 +71,13 @@ const routes = [
             { 
                 path: '/extra-quotas', 
                 component: ExtraQuotaPanel, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/extra-quota/analyse', 
+                component: ExtraQuotaAnalysis, 
                 meta: { 
                     requiresAuth: true 
                 }

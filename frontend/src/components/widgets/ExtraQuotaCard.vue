@@ -1,18 +1,22 @@
+<!-- src/components/widgets/ExtraQuotaCard.vue -->
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   title: { type: String, default: 'Zusatzquoten' },
-  unit: { type: String, default: 'M3' }, // visual only
-  target: { type: Number, default: 0 },  // assigned in m³
-  achieved: { type: Number, default: 0 },// used in m³
-  items: { type: Array, default: () => [] }, // kept for header KPIs
-  mix: { type: [Array, Object], default: null }, // [{ key,label,amount(m³),color? }]
+  unit: { type: String, default: 'M3' },
+  target: { type: Number, default: 0 },
+  achieved: { type: Number, default: 0 },
+  items: { type: Array, default: () => [] },
+  mix: { type: [Array, Object], default: null },
   scope: { type: String, default: 'self' },
   currentUserId: { type: [String, Number], default: null },
   currentUserName: { type: String, default: '' },
-  pcDetail: { type: Object, default: () => null } // { pcId, pcName, allocated, won, lost, open, mix? (m³) }
+  pcDetail: { type: Object, default: () => null }
 })
+
+const router = useRouter()
 
 const PALETTE = ['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f97316','#06b6d4','#22c55e','#eab308']
 const pick = i => PALETTE[i % PALETTE.length]
@@ -26,7 +30,6 @@ function normalizeMix(m){
   return { segs: withColor.map(s=>({ ...s, pct: s.amount*100/total })), total }
 }
 
-/* Header KPIs derived only from target/achieved (already m³) */
 const totals = computed(()=>{
   const totalAssigned = Math.max(0, Number(props.target)||0)
   const totalUsed     = Math.max(0, Number(props.achieved)||0)
@@ -34,19 +37,23 @@ const totals = computed(()=>{
   const pctAvail      = totalAssigned>0 ? (totalAvail*100/totalAssigned) : 0
   return { totalAssigned, totalUsed, totalAvail, pctAvail }
 })
-function level(p){ if(p>=50) return 'ok'; if(p>=20) return 'mid'; return 'low' }
+function level(p){
+  if (p >= 80) return 'red'
+  if (p >= 60) return 'orange-deep'
+  if (p >= 35) return 'orange'
+  if (p >= 10) return 'yellow'
+  return 'green'
+}
 
-/* User portfolio stack (only backend mix, already in m³) */
 const base = computed(()=> normalizeMix(props.mix))
 
-/* PC indicator + optional PC stack mix if provided */
 const pc = computed(()=>{
   const d = props.pcDetail
   if(!d) return null
   const allocated = Math.max(0, Number(d.allocated)||0)
   const won  = Math.max(0, Math.min(allocated, Number(d.won)||0))
-  const lost = Math.max(0, Math.min(allocated-won, Number(d.lost)||0))
-  const open = Math.max(0, Number(d.open)!=null ? Number(d.open) : allocated - won - lost)
+  const lost = Math.max(0, Math.min(Math.max(0, allocated-won), Number(d.lost)||0))
+  const open = Math.max(0, Number(d.open)!=null ? Number(d.open) : Math.max(0, allocated - won - lost))
   const sum  = (won+lost+open)||1
   const mix  = d.mix ? normalizeMix(d.mix) : { segs:[], total:0 }
   return {
@@ -62,15 +69,27 @@ const pc = computed(()=>{
 
 const expanded = ref(false)
 watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
+
+function goAnalysis(){
+  // intenta por nombre; si falla, usa path
+  try {
+    router.push({ name: 'ExtraQuotasAnalysis' })
+  } catch (_e) {
+    router.push('/extra-quota/analyse')
+  }
+}
 </script>
 
 <template>
   <div class="xq-root">
     <div class="xq-title-row">
       <div class="xq-title">{{ title }}</div>
-      <button v-if="pc" class="xq-toggle" @click="expanded=!expanded">
-        {{ expanded ? 'Details ausblenden' : 'Details anzeigen' }}
-      </button>
+      <div class="xq-actions">
+        <button class="xq-more" @click.stop.prevent="goAnalysis">Mehr</button>
+        <button v-if="pc" class="xq-toggle" @click.stop.prevent="expanded=!expanded">
+          {{ expanded ? 'Details ausblenden' : 'Details anzeigen' }}
+        </button>
+      </div>
     </div>
 
     <div class="xq-row">
@@ -86,7 +105,6 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
       <div class="xq-badge" :class="level(totals.pctAvail)"><span>{{ Math.round(totals.pctAvail) }}%</span></div>
     </div>
 
-    <!-- Portfolio stack (m³, apilada) -->
     <div v-if="base.segs.length" class="xq-stack" aria-label="Zusammensetzung">
       <div v-for="s in base.segs" :key="s.key" class="xq-seg" :style="{ width: s.pct+'%', background: s.color }" :title="`${s.label}: ${fmt(s.amount)} m³ (${s.pct.toFixed(1)}%)`"></div>
       <div class="xq-marker" :style="{ left: (Math.min(100, (totals.totalUsed/Math.max(1, totals.totalAssigned))*100)) + '%' }" title="Verbrauch"></div>
@@ -101,11 +119,9 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
       </div>
     </div>
 
-    <!-- Detail PC dentro de la tarjeta -->
     <transition name="fade">
       <div v-if="expanded && pc" class="pc-detail">
         <div class="pc-title">{{ pc.pcName }}</div>
-
         <div class="pc-bar"><div v-for="s in pc.segs" :key="s.key" class="pc-seg" :style="{ width: s.pct+'%', background: s.color }"></div></div>
         <div class="pc-legend">
           <span class="pitem"><i class="dot dot-win"></i> Gewonnen: {{ fmt(pc.won) }} {{ unitLabel() }}</span>
@@ -114,8 +130,6 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
           <span class="pitem sep"></span>
           <span class="pitem total">Zugewiesen: {{ fmt(pc.allocated) }} {{ unitLabel() }}</span>
         </div>
-
-        <!-- PC mix apilado si backend lo envía, también en m³ -->
         <div v-if="pc.mix.segs.length" class="xq-stack pc-stack" aria-label="PC-Zusammensetzung">
           <div v-for="s in pc.mix.segs" :key="s.key" class="xq-seg" :style="{ width: s.pct+'%', background: s.color }" :title="`${s.label}: ${fmt(s.amount)} m³ (${s.pct.toFixed(1)}%)`"></div>
         </div>
@@ -129,8 +143,13 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
 .xq-title-row{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
 .xq-title{ font-size:.9rem; font-weight:500; color:#334155; }
 @media (prefers-color-scheme: dark){ .xq-title{ color:#e5e7eb; } }
-.xq-toggle{ border:1px solid rgba(2,6,23,.15); background:transparent; color:inherit; border-radius:.5rem; padding:.25rem .5rem; font-size:.8rem; cursor:pointer; }
-@media (prefers-color-scheme: dark){ .xq-toggle{ border-color: rgba(255,255,255,.25); } }
+.xq-actions{ display:flex; gap:.4rem; }
+.xq-more, .xq-toggle{
+  border:1px solid rgba(2,6,23,.15); background:transparent; color:inherit; border-radius:.5rem;
+  padding:.25rem .5rem; font-size:.8rem; cursor:pointer;
+}
+@media (prefers-color-scheme: dark){ .xq-more, .xq-toggle{ border-color: rgba(255,255,255,.25); } }
+
 .xq-row{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
 .xq-kpis{ display:flex; flex-direction:column; gap:.15rem; }
 .xq-value{ font-size:1.5rem; font-weight:800; color:#0f172a; }
@@ -138,10 +157,13 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
 .xq-unit{ font-size:.95rem; font-weight:600; opacity:.85; }
 .xq-sub{ font-size:.85rem; color:#64748b; display:flex; gap:.5rem; flex-wrap:wrap; }
 @media (prefers-color-scheme: dark){ .xq-sub{ color:#cbd5e1; } }
+
 .xq-badge{ min-width:3.25rem; height:2rem; padding:0 .5rem; border-radius:.75rem; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; background: linear-gradient(to bottom,#94a3b8,#475569); }
-.xq-badge.ok{  background: linear-gradient(to bottom,#34d399,#059669); }
-.xq-badge.mid{ background: linear-gradient(to bottom,#fb923c,#ea580c); }
-.xq-badge.low{ background: linear-gradient(to bottom,#f87171,#dc2626); }
+.xq-badge.green{ background: linear-gradient(to bottom,#34d399,#059669); color:#f0fdf4; }
+.xq-badge.yellow{ background: linear-gradient(to bottom,#fde047,#f59e0b); color:#111827; }
+.xq-badge.orange{ background: linear-gradient(to bottom,#f59e0b,#ea580c); color:#111827; }
+.xq-badge.orange-deep{ background: linear-gradient(to bottom,#ea580c,#c2410c); }
+.xq-badge.red{ background: linear-gradient(to bottom,#ef4444,#b91c1c); }
 
 .xq-stack{ position:relative; height:12px; border-radius:999px; overflow:hidden; display:flex; width:100%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
 @media (prefers-color-scheme: dark){ .xq-stack{ box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); } }
@@ -164,5 +186,9 @@ watch(()=>props.pcDetail, v=>{ expanded.value = !!v })
 .pitem.sep{ flex:0 0 8px; }
 .dot-win{ background:#10b981; } .dot-open{ background:#f59e0b; } .dot-lost{ background:#ef4444; }
 .pc-stack{ margin-top:.25rem; }
+
+.xq-empty{ font-size:.85rem; opacity:.8; color:#475569; }
+@media (prefers-color-scheme: dark){ .xq-empty{ color:#cbd5e1; } }
+
 .fade-enter-active,.fade-leave-active{ transition:opacity .15s ease } .fade-enter-from,.fade-leave-to{ opacity:0 }
 </style>

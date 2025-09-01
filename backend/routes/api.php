@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('extra-quota')->group(function () {
+        Route::get('/analysis/summary', [ExtraQuotaController::class, 'analysisSummary']);
         Route::get('/assignments/my-profit-centers', [ExtraQuotaController::class, 'myProfitCenters']);
         Route::get('/assignments/my-volume', [ExtraQuotaController::class, 'myVolume']);
         Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
