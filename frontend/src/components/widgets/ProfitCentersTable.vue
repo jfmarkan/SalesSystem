@@ -141,12 +141,12 @@ tbody td{
   text-overflow:ellipsis;
   white-space:normal;
   line-height:1.25;
-  -webkit-line-clamp:2;                 /* 2 filas por defecto */
+  -webkit-line-clamp:2;
   max-height: calc(1.25em * 2);
 }
 @media (min-width: 1400px){
   .pc-name{
-    -webkit-line-clamp:3;               /* 3 filas en pantallas grandes */
+    -webkit-line-clamp:3;
     max-height: calc(1.25em * 3);
   }
 }

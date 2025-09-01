@@ -16,6 +16,7 @@ use App\Models\TeamMember;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class ExtraQuotaController extends Controller
 {
@@ -425,116 +426,274 @@ public function indexOpportunities(Request $request)
 }
 
     public function finalizeOpportunity(Request $req, int $group, int $version)
-    {
-        $uid    = $req->user()->id;
-        $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
-        $cgn    = trim((string) $req->input('client_group_number', ''));
+{
+    $uid    = $req->user()->id;
+    $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
+    $cgn    = trim((string) $req->input('client_group_number', ''));
 
-        if (!in_array($status, ['won','lost'])) {
-            abort(422, 'invalid status');
+    if (!in_array($status, ['won','lost'])) {
+        abort(422, 'invalid status');
+    }
+
+    return \DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
+        $op = \DB::table('sales_opportunities')
+            ->where('opportunity_group_id', $group)
+            ->where('version', $version)
+            ->where('user_id', $uid)
+            ->lockForUpdate()->first();
+
+        if (!$op) abort(404, 'Opportunity version not found');
+
+        if ($status === 'lost') {
+            \DB::table('sales_opportunities')
+              ->where('opportunity_group_id',$group)
+              ->where('version',$version)
+              ->update(['status'=>'lost']);
+            // NO se borra nada de extra_* para mantener trazabilidad
+            return response()->noContent();
         }
 
-        return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
-            $op = DB::table('sales_opportunities')
-                ->where('opportunity_group_id', $group)
-                ->where('version', $version)
-                ->where('user_id', $uid)
-                ->lockForUpdate()->first();
+        // -------- WON ----------
+        if ($cgn === '') abort(422, 'client_group_number required');
 
-            if (!$op) abort(404, 'Opportunity version not found');
+        $clientName = (string) $req->input('client_name', $op->potential_client_name ?? '—');
 
-            if ($status === 'lost') {
-                DB::table('sales_opportunities')
-                ->where('opportunity_group_id',$group)
-                ->where('version',$version)
-                ->update(['status'=>'lost']);
-                return response()->noContent();
-            }
+        // Cliente por CGN
+        $client = \App\Models\Client::withTrashed()->find((int)$cgn);
+        if (!$client) {
+            $client = \App\Models\Client::create([
+                'client_group_number' => (int)$cgn,
+                'client_name'         => $clientName,
+                'classification_id'   => 2,
+            ]);
+        } elseif ($client->classification_id === null) {
+            $client->classification_id = 2;
+            $client->save();
+        }
 
-            // WON
-            // WON
-if ($cgn === '') abort(422, 'client_group_number required');
+        // Vinculación cliente–PC
+        $cpc = \App\Models\ClientProfitCenter::withTrashed()->firstOrCreate([
+            'client_group_number' => (int)$cgn,
+            'profit_center_code'  => (int)$op->profit_center_code,
+        ]);
+        if (method_exists($cpc, 'restore') && $cpc->trashed()) {
+            $cpc->restore();
+        }
 
-$clientName = (string) $req->input('client_name', $op->potential_client_name ?? '—');
+        // TeamId por user
+        $teamId = \App\Models\TeamMember::query()
+            ->where('user_id', $op->user_id)
+            ->orderByDesc('updated_at')
+            ->value('team_id');
+        if (!$teamId) abort(422, 'team not found for user');
 
-// Cliente PK = client_group_number; default classification_id = 2
-$client = Client::withTrashed()->find((int)$cgn);
-if (!$client) {
-    $client = Client::create([
-        'client_group_number' => (int)$cgn,
-        'client_name'         => $clientName,
-        'classification_id'   => 2,
-    ]);
-} elseif ($client->classification_id === null) {
-    $client->classification_id = 2;
-    $client->save();
-}
+        // Assignment
+        \DB::table('assignments')->insert([
+            'client_profit_center_id' => $cpc->id,
+            'team_id'                 => $teamId,
+            'user_id'                 => $op->user_id,
+            'created_at'              => now(),
+            'updated_at'              => now(),
+        ]);
 
-// Vínculo cliente–profit center (client_profit_centers)
-$cpc = ClientProfitCenter::withTrashed()->firstOrCreate([
-    'client_group_number' => (int)$cgn,
-    'profit_center_code'  => (int)$op->profit_center_code,
-]);
-if (method_exists($cpc, 'restore') && $cpc->trashed()) {
-    $cpc->restore();
-}
+        // Mover presupuesto/forecast extra → permanentes
+        $bud = \DB::table('extra_quota_budgets')
+            ->where('opportunity_group_id',$group)
+            ->where('version',$version)
+            ->get();
+        foreach ($bud as $r) {
+            \DB::table('budgets')->insert([
+                'client_profit_center_id' => $cpc->id,
+                'fiscal_year'             => $r->fiscal_year,
+                'month'                   => $r->month,
+                'volume'                  => $r->volume,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+        }
 
-// TeamID desde team_members por user_id
-$teamId = TeamMember::query()
-    ->where('user_id', $op->user_id)
-    ->orderByDesc('updated_at')
-    ->value('team_id');
-if (!$teamId) abort(422, 'team not found for user');
+        $fc = \DB::table('extra_quota_forecasts')
+            ->where('opportunity_group_id',$group)
+            ->where('version',$version)
+            ->get();
+        foreach ($fc as $r) {
+            \DB::table('forecasts')->insert([
+                'client_profit_center_id' => $cpc->id,
+                'fiscal_year'             => $r->fiscal_year,
+                'month'                   => $r->month,
+                'volume'                  => $r->volume,
+                'user_id'                 => $op->user_id,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+        }
 
-// Assignment SIN fiscal_year
-$assignId = DB::table('assignments')->insertGetId([
-    'client_profit_center_id' => $cpc->id, // = SID
-    'team_id'                 => $teamId,
-    'user_id'                 => $op->user_id,
-    'created_at'              => now(),
-    'updated_at'              => now(),
-]);
-
-// Mover budget/forecast extra → permanentes
-$bud = DB::table('extra_quota_budgets')
-    ->where('opportunity_group_id',$group)->where('version',$version)->get();
-foreach ($bud as $r) {
-    DB::table('budgets')->insert([
-        'client_profit_center_id' => $cpc->id,
-        'fiscal_year'             => $r->fiscal_year,
-        'month'                   => $r->month,
-        'volume'                  => $r->volume,
-        'created_at'              => now(),
-        'updated_at'              => now(),
-    ]);
-}
-
-$fc = DB::table('extra_quota_forecasts')
-    ->where('opportunity_group_id',$group)->where('version',$version)->get();
-foreach ($fc as $r) {
-    DB::table('forecasts')->insert([
-        'client_profit_center_id' => $cpc->id,
-        'fiscal_year'             => $r->fiscal_year,
-        'month'                   => $r->month,
-        'volume'                  => $r->volume,
-        'user_id'                 => $op->user_id,
-        'created_at'              => now(),
-        'updated_at'              => now(),
-    ]);
-}
-
-// Marcar ganada y setear CGN
-DB::table('sales_opportunities')
-  ->where('opportunity_group_id',$group)
-  ->where('version',$version)
-  ->update(['status'=>'won', 'client_group_number'=>$cgn]);
+        // Marcar ganada y guardar CGN
+        \DB::table('sales_opportunities')
+          ->where('opportunity_group_id',$group)
+          ->where('version',$version)
+          ->update([
+              'status' => 'won',
+              'client_group_number' => $cgn,
+              // opcional: sello de tiempo para auditoría
+              'updated_at' => now(),
+          ]);
 
 // Limpiar extra
-DB::table('extra_quota_budgets')->where('opportunity_group_id',$group)->where('version',$version)->delete();
-DB::table('extra_quota_forecasts')->where('opportunity_group_id',$group)->where('version',$version)->delete();
+//DB::table('extra_quota_budgets')->where('opportunity_group_id',$group)->where('version',$version)->delete();
+//DB::table('extra_quota_forecasts')->where('opportunity_group_id',$group)->where('version',$version)->delete();
 
 return response()->noContent();
 
         });
+    }
+
+    private function fiscalYear(Request $req): int {
+        $raw = $req->query('fiscal_year', $req->query('fy', $req->query('year', date('Y'))));
+        return (int)preg_replace('/\D+/', '', (string)$raw);
+    }
+
+    private function hasConv(): bool {
+        return Schema::hasTable('unit_conversions');
+    }
+
+    /** factor a m³ soportando nombres de columna posibles */
+    private function convFactorExpr(string $alias = 'uc'): string {
+        foreach (['factor_to_m3','factos_to_m3','to_m3_factor','factor_m3'] as $c) {
+            if (Schema::hasColumn('unit_conversions', $c)) return "COALESCE($alias.$c,1)";
+        }
+        return '1';
+    }
+
+    /** SUM assignments -> m³ (join por PC) */
+    private function sumAssignmentsM3(int $userId, int $fy, ?string $pcCode = null): float {
+        $q = DB::table('extra_quota_assignments as a')
+            ->where('a.user_id', $userId)
+            ->where('a.is_published', true)
+            ->where('a.fiscal_year', $fy);
+
+        if ($pcCode !== null) $q->where('a.profit_center_code', $pcCode);
+
+        $factor = '1';
+        if ($this->hasConv()) {
+            $q->leftJoin('unit_conversions as uc', 'uc.profit_center_code', '=', 'a.profit_center_code');
+            $factor = $this->convFactorExpr('uc');
+        }
+
+        $sql = "COALESCE(SUM(CAST(a.volume AS DECIMAL(32,8)) * ($factor)),0)";
+        return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
+    }
+
+    /** SUM oportunidades -> m³ (join por PC, última versión por grupo) */
+    private function sumOpportunitiesM3(int $userId, int $fy, array $statuses, ?string $pcCode = null): float {
+        $lv = DB::table('sales_opportunities')
+            ->select('opportunity_group_id', DB::raw('MAX(version) AS max_version'))
+            ->where('user_id', $userId)
+            ->where('fiscal_year', $fy)
+            ->groupBy('opportunity_group_id');
+
+        $q = DB::table('sales_opportunities as s')
+            ->joinSub($lv, 'lv', function ($j) {
+                $j->on('lv.opportunity_group_id','=','s.opportunity_group_id')
+                  ->on('lv.max_version','=','s.version');
+            })
+            ->whereIn('s.status', $statuses);
+
+        if ($pcCode !== null) $q->where('s.profit_center_code', $pcCode);
+
+        $factor = '1';
+        if ($this->hasConv()) {
+            $q->leftJoin('unit_conversions as uc', 'uc.profit_center_code', '=', 's.profit_center_code');
+            $factor = $this->convFactorExpr('uc');
+        }
+
+        $sql = "COALESCE(SUM(CAST(s.volume AS DECIMAL(32,8)) * ($factor)),0)";
+        return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
+    }
+
+    /** Mix apilado por Profit-Center en m³ */
+    private function buildPcMixM3(int $userId, int $fy): array {
+        $q = DB::table('extra_quota_assignments as a')
+            ->where('a.user_id', $userId)
+            ->where('a.is_published', true)
+            ->where('a.fiscal_year', $fy);
+
+        // factor por PC
+        $factor = '1';
+        if ($this->hasConv()) {
+            $q->leftJoin('unit_conversions as uc', 'uc.profit_center_code', '=', 'a.profit_center_code');
+            $factor = $this->convFactorExpr('uc');
+        }
+
+        // nombre de PC si existe tabla
+        $labelExpr = "a.profit_center_code";
+        if (Schema::hasTable('profit_centers') &&
+            Schema::hasColumn('profit_centers','profit_center_code')) {
+            $q->leftJoin('profit_centers as pc', 'pc.profit_center_code', '=', 'a.profit_center_code');
+            if (Schema::hasColumn('profit_centers','profit_center_name')) {
+                $labelExpr = "CONCAT(a.profit_center_code, ' · ', COALESCE(pc.profit_center_name,''))";
+            }
+        }
+
+        $rows = $q->selectRaw("$labelExpr AS label, a.profit_center_code AS code, COALESCE(SUM(CAST(a.volume AS DECIMAL(32,8)) * ($factor)),0) AS amount")
+                  ->groupBy('a.profit_center_code', DB::raw($labelExpr))
+                  ->orderByDesc(DB::raw("SUM(CAST(a.volume AS DECIMAL(32,8)) * ($factor))"))
+                  ->get();
+
+        $out = [];
+        foreach ($rows as $i => $r) {
+            $label = trim((string)($r->label ?? $r->code ?? '—'));
+            $out[] = [
+                'key'    => Str::slug((string)$r->code) ?: "pc-$i",
+                'code'   => (string)$r->code,
+                'label'  => $label === '' ? (string)$r->code : $label,
+                'amount' => (float)$r->amount, // m³ por PC
+            ];
+        }
+        return $out;
+    }
+
+    /* ---------- endpoints ---------- */
+
+    // GET /api/extra/portfolio  -> ahora mix = distribución por Profit-Center en m³
+    public function portfolio(Request $req)
+    {
+        $user   = $req->user();
+        $userId = (int)$user->id;
+        $name   = (string)($user->name ?? '—');
+        $fy     = $this->fiscalYear($req);
+
+        $assigned = $this->sumAssignmentsM3($userId, $fy, null);               // m³
+        $used     = $this->sumOpportunitiesM3($userId, $fy, ['open','won']);   // m³
+        $mixPc    = $this->buildPcMixM3($userId, $fy);                          // m³ por PC
+
+        return response()->json([
+            'title'    => 'Zusatzquoten',
+            'target'   => $assigned,   // total m³
+            'achieved' => $used,       // total m³
+            'mix'      => $mixPc,      // <<< apilado por Profit-Center
+            'mix_pc'   => $mixPc,      // alias
+            'items'    => [[ 'name'=>$name, 'userId'=>$userId, 'assigned'=>$assigned, 'used'=>$used ]]
+        ]);
+    }
+
+    // GET /api/profit-centers/{code}/extra-portfolio  (sin cambios)
+    public function pcPortfolio(Request $req, string $code)
+    {
+        $userId   = (int)$req->user()->id;
+        $fy       = $this->fiscalYear($req);
+
+        $allocated = $this->sumAssignmentsM3($userId, $fy, $code);
+        $won       = $this->sumOpportunitiesM3($userId, $fy, ['won'],  $code);
+        $lost      = $this->sumOpportunitiesM3($userId, $fy, ['lost'], $code);
+        $open      = max(0.0, $allocated - $won - $lost);
+
+        // opcional: mix interno del PC por grupo material, etc. (mantengo como antes si lo necesitas)
+        return response()->json([
+            'allocated' => $allocated,  // m³
+            'won'       => $won,        // m³
+            'lost'      => $lost,       // m³
+            'open'      => $open        // m³
+        ]);
     }
 }

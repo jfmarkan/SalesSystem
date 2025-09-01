@@ -101,13 +101,13 @@
                   <div class="top-cell">
                     <label class="lbl">Potenzieller Kunde</label>
                     <div class="inline-input">
-                      <InputText v-model="opForm.potential_client_name" class="flex-1" />
-                      <Button label="Kunde wählen" class="p-button-text p-button-sm" @click="pickExistingClient" />
+                      <InputText v-model="opForm.potential_client_name" class="flex-1" :disabled="isLocked" />
+                      <Button label="Kunde wählen" class="p-button-text p-button-sm" :disabled="isLocked" @click="pickExistingClient" />
                     </div>
                   </div>
                   <div class="top-cell">
                     <label class="lbl">Status</label>
-                    <Dropdown v-model="opForm.status" :options="statusOpts" optionLabel="label" optionValue="value" class="w-full" />
+                    <Dropdown v-model="opForm.status" :options="statusOpts" optionLabel="label" optionValue="value" class="w-full" :disabled="isLocked" />
                   </div>
                 </div>
 
@@ -123,26 +123,27 @@
                         placeholder="Profitcenter…"
                         class="w-full"
                         @change="updateAvailabilityForPc"
+                        :disabled="isLocked"
                       />
                     </div>
 
                     <div class="mt-1">
                       <label class="lbl">Volume</label>
                       <div class="vol-inline">
-                        <InputNumber v-model="opForm.volume" :min="0" :step="1" :useGrouping="false" :maxFractionDigits="0" inputClass="w-full" />
+                        <InputNumber v-model="opForm.volume" :min="0" :step="1" :useGrouping="false" :maxFractionDigits="0" inputClass="w-full" :disabled="isLocked" />
                         <span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
                       </div>
                     </div>
 
                     <div class="mt-1">
                       <label class="lbl">Start (Monat/Jahr)</label>
-                      <Calendar v-model="opMonthModel" view="month" dateFormat="mm/yy" :manualInput="false" showIcon class="w-full" @update:modelValue="syncMonthYear" />
+                      <Calendar v-model="opMonthModel" view="month" dateFormat="mm/yy" :manualInput="false" showIcon class="w-full" @update:modelValue="syncMonthYear" :disabled="isLocked" />
                     </div>
 
                     <div class="mt-1">
                       <label class="lbl">Wahrscheinlichkeit</label>
                       <div class="prob-wrap">
-                        <Slider v-model="opForm.probability_pct" :min="0" :max="100" :step="10" class="flex-1" @slideend="snapProb" @change="snapProb" />
+                        <Slider v-model="opForm.probability_pct" :min="0" :max="100" :step="10" class="flex-1" @slideend="snapProb" @change="snapProb" :disabled="isLocked" />
                         <span class="pct">{{ opForm.probability_pct }}%</span>
                       </div>
                       <div class="tickbar" aria-hidden="true"></div>
@@ -152,7 +153,7 @@
                   <div class="right-col">
                     <div class="right-top">
                       <label class="lbl">Kommentare</label>
-                      <Textarea v-model="opForm.comments" rows="8" autoResize class="w-full comment-box" />
+                      <Textarea v-model="opForm.comments" rows="8" autoResize class="w-full comment-box" :disabled="isLocked" />
                     </div>
                     <div class="right-bottom">
                       <div class="flex gap-2 justify-content-end">
@@ -161,7 +162,7 @@
                           label="Budget erstellen"
                           icon="pi pi-table"
                           class="p-button-outlined"
-                          :disabled="!canCreateBudget"
+                          :disabled="isLocked || !canCreateBudget"
                           @click="onGenerateBudget"
                         />
                         <Button
@@ -169,7 +170,7 @@
                           label="Aktualisieren"
                           icon="pi pi-save"
                           class="p-button-outlined"
-                          :disabled="!opDirty"
+                          :disabled="isLocked || !opDirty"
                           @click="saveNewVersion"
                         />
                       </div>
@@ -206,13 +207,13 @@
 
           <!-- BOTTOM: TABLE -->
           <div v-else-if="item.type === 'table'" class="h-full p-2">
-            <template v-if="(selectedGroupId && selectedVersion) || showBudgetTable">
+            <template v-if="createMode || selectedGroupId">
               <div v-if="tableLoading" class="local-loader">
                 <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
                 <div class="caption">Wird geladen…</div>
               </div>
               <template v-else>
-                <div class="ctbl-wrap">
+                <div class="ctbl-wrap" :class="{ locked: isLocked }">
                   <ComponentTable
                     :months="months"
                     :ventas="sales"
@@ -222,7 +223,7 @@
                   />
                 </div>
                 <div class="mt-2 flex gap-2 justify-content-end" v-if="selectedGroupId">
-                  <Button label="Forecast speichern" icon="pi pi-check" :disabled="changedForecastCount === 0" @click="saveForecast()" />
+                  <Button label="Forecast speichern" icon="pi pi-check" :disabled="isLocked || changedForecastCount === 0" @click="saveForecast()" />
                 </div>
               </template>
             </template>
@@ -236,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
@@ -421,6 +422,9 @@ const finalizing = ref(false)
 const creating = ref(false)
 const opMonthModel = ref(null)
 
+/* suprime el watch cuando cargamos */
+const suppressStatusWatch = ref(false)
+
 const opForm = ref({
   user_id: null,
   fiscal_year: new Date().getFullYear(),
@@ -460,8 +464,13 @@ function snapProb(){
   opForm.value.probability_pct = Math.min(100, Math.max(0, Math.round(v/10)*10))
 }
 
+/* Locking */
+const statusNormalized = computed(() => normStatus(opForm.value.status))
+const isLocked = computed(() => statusNormalized.value === 'won' || statusNormalized.value === 'lost')
+
 /* Status change */
 watch(() => opForm.value.status, async (st, prev) => {
+  if (suppressStatusWatch.value) return
   if (!st || st === prev) return
   if (!selectedGroupId.value) return
   if (st === 'won') {
@@ -632,33 +641,39 @@ const versionOptions = ref([])
 async function loadGroupMeta() {
   if (!selectedGroupId.value) return
   await ensureCsrf()
-  const { data } = await api.get(`/api/extra-quota/opportunities/${selectedGroupId.value}`)
-  const latest = data?.latest || {}
-  latestMeta.value = latest
 
-  const vers = Array.isArray(data?.versions) ? data.versions.map(v => Number(v.version)).sort((a,b)=>a-b) : []
-  versionOptions.value = vers.map(v => ({ value: v, label: `v${v}` }))
-  selectedVersion.value = vers.length ? vers[vers.length - 1] : 1
+  suppressStatusWatch.value = true
+  try {
+    const { data } = await api.get(`/api/extra-quota/opportunities/${selectedGroupId.value}`)
+    const latest = data?.latest || {}
+    latestMeta.value = latest
 
-  opForm.value = {
-    user_id: latest.user_id ?? null,
-    fiscal_year: latest.fiscal_year ?? new Date().getFullYear(),
-    profit_center_code: latest.profit_center_code != null ? Number(latest.profit_center_code) : null,
-    volume: Math.round(num0(latest.volume)),
-    probability_pct: Math.round(num0(latest.probability_pct)),
-    estimated_start_date: latest.estimated_start_date ?? null,
-    comments: latest.comments ?? '',
-    potential_client_name: latest.potential_client_name ?? '',
-    client_group_number: latest.client_group_number ?? '',
-    status: latest.status || 'open',
+    const vers = Array.isArray(data?.versions) ? data.versions.map(v => Number(v.version)).sort((a,b)=>a-b) : []
+    versionOptions.value = vers.map(v => ({ value: v, label: `v${v}` }))
+    selectedVersion.value = vers.length ? vers[vers.length - 1] : 1
+
+    opForm.value = {
+      user_id: latest.user_id ?? null,
+      fiscal_year: latest.fiscal_year ?? new Date().getFullYear(),
+      profit_center_code: latest.profit_center_code != null ? Number(latest.profit_center_code) : null,
+      volume: Math.round(num0(latest.volume)),
+      probability_pct: Math.round(num0(latest.probability_pct)),
+      estimated_start_date: latest.estimated_start_date ?? null,
+      comments: latest.comments ?? '',
+      potential_client_name: latest.potential_client_name ?? '',
+      client_group_number: latest.client_group_number ?? '',
+      status: latest.status || 'open',
+    }
+    opBaseline.value = cloneDeep(opForm.value)
+    opMonthModel.value = opForm.value.estimated_start_date ? new Date(opForm.value.estimated_start_date) : null
+
+    await loadAssignedPcs()
+    await updateAvailabilityForPc()
+    await loadSeries()
+  } finally {
+    await nextTick()
+    suppressStatusWatch.value = false
   }
-  opBaseline.value = cloneDeep(opForm.value)
-  opMonthModel.value = opForm.value.estimated_start_date ? new Date(opForm.value.estimated_start_date) : null
-
-  await loadAssignedPcs()
-  await updateAvailabilityForPc()
-  await loadSeries()
-  showBudgetTable.value = true
 }
 async function loadSeries() {
   if (!selectedGroupId.value || !selectedVersion.value) { initBlankTable(); return }
@@ -676,12 +691,12 @@ async function loadSeries() {
     forecast.value = f.length ? f.map(r => Math.round(num0(r.volume))) : Array(12).fill(0)
     baseBudget.value = [...budget.value]
     baseForecast.value = [...forecast.value]
-    showBudgetTable.value = true
   } finally { tableLoading.value = false }
 }
 
 /* Edits */
 function onEditForecastInt({ index, value }) {
+  if (isLocked.value) return
   const n = Math.max(0, Math.round(Number(value) || 0))
   forecast.value[index] = n
 }
@@ -747,7 +762,6 @@ async function finalizeWon() {
   try {
     scaleForecastForWinning()
 
-
     const mustVersion =
       opBaseline.value.volume !== opForm.value.volume ||
       100 !== opBaseline.value.probability_pct ||
@@ -783,10 +797,18 @@ async function finalizeWon() {
       { status: 'won', client_group_number: cg, client_name: cn }
     )
 
+    suppressStatusWatch.value = true
     opForm.value.status = 'won'
+    await nextTick()
+    suppressStatusWatch.value = false
+
     wonDialogVisible.value = false
     clientGroupInput.value = ''
     clientNameInput.value = ''
+    opBaseline.value = cloneDeep(opForm.value)
+    baseBudget.value = [...budget.value]
+    baseForecast.value = [...forecast.value]
+
     toast.add({ severity:'success', summary:'Überführt', detail:'In Stamm-Budget übernommen', life:1600 })
     await loadList()
     selectedGroupId.value = null
@@ -799,7 +821,6 @@ async function finalizeWon() {
     finalizing.value = false
   }
 }
-// escala forecast de meses NO pasados por el factor (nuevo_expected / viejo_expected)
 function scaleForecastForWinning(){
   const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
   const oldPct = Math.max(0, Math.round(num0(opBaseline.value?.probability_pct ?? 0)))
@@ -809,7 +830,6 @@ function scaleForecastForWinning(){
   const oldExp = oldAmt * (oldPct/100)
   const newExp = newAmt * (newPct/100)
 
-  // si no hay base para escalar, no tocamos pasados y copiamos budget en futuros
   if (oldExp <= 0) {
     forecast.value = forecast.value.map((v,i)=> isPastYM(months.value[i]) ? v : budget.value[i])
     return
@@ -817,8 +837,6 @@ function scaleForecastForWinning(){
 
   const r = newExp / oldExp
   const raw = forecast.value.map((v,i)=> isPastYM(months.value[i]) ? v : v * r)
-
-  // redondeo con conservación de suma en futuros
   const base = raw.map(v => Math.floor(v))
   let rest = Math.round(raw.reduce((a,b)=>a+b,0)) - base.reduce((a,b)=>a+b,0)
   const order = raw.map((v,i)=>({i, frac: v - base[i]}))
@@ -848,7 +866,7 @@ async function finalizeLost() {
         probability_pct:      Math.max(0, Math.round(Number(opForm.value.probability_pct)||0)),
         estimated_start_date: opForm.value.estimated_start_date,
         comments:             opForm.value.comments,
-        potential_client_name:opForm.value.potential_client_name,
+        potential_client_name: opForm.value.potential_client_name,
         client_group_number:  opForm.value.client_group_number,
         status:               opBaseline.value.status || 'open',
       }
@@ -865,7 +883,15 @@ async function finalizeLost() {
       { status: 'lost' }
     )
 
+    suppressStatusWatch.value = true
     opForm.value.status = 'lost'
+    await nextTick()
+    suppressStatusWatch.value = false
+
+    opBaseline.value = cloneDeep(opForm.value)
+    baseBudget.value = [...budget.value]
+    baseForecast.value = [...forecast.value]
+
     toast.add({ severity:'success', summary:'Geschlossen', detail:'Menge freigegeben', life:1400 })
     await loadList()
     selectedGroupId.value = null
@@ -881,6 +907,7 @@ async function finalizeLost() {
 function dirtyAny(){
   const active = !!selectedGroupId.value || !!createMode.value
   if (!active) return false
+  if (isLocked.value) return false
   return opDirty.value || changedBudgetCount.value>0 || changedForecastCount.value>0
 }
 async function saveAndApply(){
@@ -914,7 +941,7 @@ function applyChange(kind, value){
     selectedVersion.value = null
     createMode.value = false
     showBudgetTable.value = false
-    loadGroupMeta() // carga meta + series + muestra tabla
+    loadGroupMeta()
     return
   }
   if (kind==='version'){
@@ -993,10 +1020,11 @@ onMounted(async () => {
 /* TABLE */
 .ctbl-wrap :deep(table){ table-layout: fixed; width: 100%; }
 .ctbl-wrap :deep(th), .ctbl-wrap :deep(td){ width:auto; }
-
 /* ocultar filas de IST e IST/Budget (1ra y 4ta) */
 .ctbl-wrap :deep(tbody > tr:nth-child(1)),
 .ctbl-wrap :deep(tbody > tr:nth-child(4)){ display:none !important; }
+/* bloqueo cuando cerrada */
+.ctbl-wrap.locked{ pointer-events:none; opacity:.6; }
 
 /* Loader */
 .local-loader{ position: fixed; inset: 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; z-index:50; }

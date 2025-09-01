@@ -14,8 +14,7 @@
         :key="item.i"
         :x="item.x" :y="item.y" :w="item.w" :h="item.h" :i="item.i"
       >
-        <GlassCard :title="item.type==='kpi' ? '' : getTitle(item)">
-          <!-- Einheit-Umschalter (nur Diagramm & Tabelle) -->
+        <GlassCard :title="item.type==='kpi' || item.type==='extra' ? '' : getTitle(item)">
           <template #header-extra v-if="item.type==='chart' || item.type==='table'">
             <div class="unit-toggle">
               <button :class="['u-btn', unit==='VKEH' && 'active']" @click="changeUnit('VKEH')">VK-EH</button>
@@ -41,7 +40,7 @@
 </template>
 
 <script setup>
-// UI in German; code/comments in English.
+// UI in German; code in English.
 import { ref, computed, onMounted, watch } from 'vue'
 import { GridLayout, GridItem } from 'vue3-grid-layout'
 import api from '@/plugins/axios'
@@ -51,21 +50,29 @@ import KpiCard from '@/components/widgets/KpiCard.vue'
 import CalendarCard from '@/components/widgets/CalendarCard.vue'
 import ChartCard from '@/components/widgets/ChartCard.vue'
 import ProfitCentersTable from '@/components/widgets/ProfitCentersTable.vue'
-import TaskCard from '@/components/widgets/TaskCard.vue'
+import ExtraQuotaCard from '@/components/widgets/ExtraQuotaCard.vue'
 
 const isEditable = ref(false)
 const unit   = ref('VKEH')
 const period = ref(new Date().toISOString().slice(0,7)) // YYYY-MM
+const fiscalYear = computed(() => Number((period.value || '').slice(0,4)) || new Date().getFullYear())
 
 // backend state
+const me              = ref({ id:null, name:'' })
 const kpiItems        = ref([])
 const chartCodes      = ref([])
 const chartSeries     = ref([])
 const tableRowsRaw    = ref([])
 const tableTotalsRaw  = ref({})
-const calendarEvents  = ref([])   // [{ id,title,description?,due_date?,is_completed?,status? }]
-const loading         = ref(false)
-const errorMsg        = ref('')
+const calendarEvents  = ref([])
+const extraQuota      = ref({ title:'Zusatzquoten', target:0, achieved:0, items:[], mix:null })
+
+// selection
+const selectedPcId = ref(null)
+const pcDetail     = ref(null)
+
+const loading  = ref(false)
+const errorMsg = ref('')
 
 // helpers
 function toDate(val){
@@ -80,15 +87,31 @@ async function fetchDashboard() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const { data } = await api.get('/api/dashboard', {
-      params: { unit: unit.value, period: period.value }
-    })
-    kpiItems.value       = data?.kpis?.items ?? []
-    chartCodes.value     = data?.chart?.codes ?? data?.chart?.labels ?? []
-    chartSeries.value    = data?.chart?.series ?? []
-    tableRowsRaw.value   = data?.table?.rows ?? []
-    tableTotalsRaw.value = data?.table?.totals ?? { ist:0, prognose:0, budget:0, unit: unit.value }
-    calendarEvents.value = data?.calendar?.events ?? []
+    const paramsDash  = { unit: unit.value, period: period.value }
+    const paramsExtra = { unit: unit.value, fiscal_year: fiscalYear.value }
+
+    const [dash, extra] = await Promise.all([
+      api.get('/api/dashboard', { params: paramsDash }),
+      api.get('/api/extra/portfolio', { params: paramsExtra })
+    ])
+
+    const d = dash.data || {}
+    me.value             = d.me || { id:null, name:'' }
+    kpiItems.value       = d?.kpis?.items ?? []
+    chartCodes.value     = d?.chart?.codes ?? d?.chart?.labels ?? []
+    chartSeries.value    = d?.chart?.series ?? []
+    tableRowsRaw.value   = d?.table?.rows ?? []
+    tableTotalsRaw.value = d?.table?.totals ?? { ist:0, prognose:0, budget:0, unit: unit.value }
+    calendarEvents.value = d?.calendar?.events ?? []
+
+    const ex = extra.data || {}
+    extraQuota.value = {
+      title: ex.title ?? 'Zusatzquoten',
+      target: Number(ex.target ?? 0),
+      achieved: Number(ex.achieved ?? 0),
+      items: Array.isArray(ex.items) ? ex.items : [],
+      mix: ex.mix ?? null
+    }
   } catch (e) {
     console.error('Dashboard load failed', e)
     errorMsg.value = 'Fehler beim Laden.'
@@ -101,7 +124,7 @@ watch(unit, fetchDashboard)
 
 function changeUnit(next) { if (next !== unit.value) unit.value = next }
 
-// KPI titles
+// KPI map
 const kpisById = computed(() => {
   const by = Object.fromEntries(kpiItems.value.map(i => [i.id, i]))
   return {
@@ -136,7 +159,7 @@ const layout = ref([
   { i:'4', x:8, y:0, w:4, h:12, type:'calendar' },
   { i:'7', x:0, y:4, w:5, h:17, type:'chart' },
   { i:'8', x:5, y:4, w:3, h:17, type:'table' },
-  { i:'9', x:8, y:12,w:4, h:9,  type:'tasks' }
+  { i:'9', x:8, y:12,w:4, h:9,  type:'extra' }
 ])
 
 // titles (UI German)
@@ -155,19 +178,19 @@ function getTitle(item) {
     const u = k.unit ? ` (${displayUnit(k.unit)})` : ''
     return `${k.label}${u}`
   }
-  return { calendar:'Kalender', chart:'Diagramm', table:'Profit-Center', tasks:'Aufgaben (Heute)' }[item.type] || 'Widget'
+  return { calendar:'Kalender', chart:'Diagramm', table:'Profit-Center', extra:'Zusatzquoten' }[item.type] || 'Widget'
 }
 
 // registry
 function getWidgetComponent(type) {
-  return { kpi:KpiCard, calendar:CalendarCard, chart:ChartCard, table:ProfitCentersTable, tasks:TaskCard }[type] || null
+  return { kpi:KpiCard, calendar:CalendarCard, chart:ChartCard, table:ProfitCentersTable, extra:ExtraQuotaCard }[type] || null
 }
 
-// calendar props (timeless)
+// props per widget
 function getPropsForType(item) {
   if (item.type === 'kpi')   return { modelValue:item.kpiId, kpis:kpisById.value, unit:unit.value }
   if (item.type === 'chart') return { labels:radarLabels.value, series:radarSeries.value, unit:unit.value }
-  if (item.type === 'table') return { rows:tableRows.value, totals:tableTotals.value, unit:unit.value }
+  if (item.type === 'table') return { rows:tableRows.value, totals:tableTotals.value, unit:unit.value, selectedId: selectedPcId.value }
   if (item.type === 'calendar') {
     const evs = (calendarEvents.value || []).map(e => {
       const start = toDate(e.due_date ?? e.start)
@@ -185,39 +208,69 @@ function getPropsForType(item) {
     })
     return { events: evs }
   }
-  if (item.type === 'tasks') return { tasks: [] }
+  if (item.type === 'extra') {
+    return {
+      title: extraQuota.value.title,
+      unit: unit.value,
+      target: extraQuota.value.target,
+      achieved: extraQuota.value.achieved,
+      items: extraQuota.value.items,
+      mix: extraQuota.value.mix,
+      scope: 'self',
+      currentUserId: me.value.id,
+      currentUserName: me.value.name,
+      pcDetail: pcDetail.value
+    }
+  }
   return {}
 }
 
-// listeners (Calendar -> Dashboard)
+// listeners
 function getListenersForType(type){
-  if (type !== 'calendar') return {}
-  return { 'update-action': onUpdateAction }
+  if (type === 'calendar') return { 'update-action': onUpdateAction }
+  if (type === 'table')    return { 'row-select': onSelectPc }
+  return {}
 }
 
-// persist + optimistic update
+// persist + optimistic update (calendar)
 async function onUpdateAction({ id, due_date, status }) {
   const list = calendarEvents.value || []
   const idx = list.findIndex(x => String(x.id) === String(id))
   if (idx !== -1) {
     const cur = { ...list[idx] }
     if (due_date) cur.due_date = due_date
-    if (status) {
-      cur.status = status
-      cur.is_completed = status === 'completed'
-    }
+    if (status) { cur.status = status; cur.is_completed = status === 'completed' }
     list.splice(idx, 1, cur)
     calendarEvents.value = [...list]
   }
   try {
-    await api.patch(`/api/action-items/${id}`, {
-      due_date,
-      status,
-      is_completed: status === 'completed'
-    })
+    await api.patch(`/api/action-items/${id}`, { due_date, status, is_completed: status === 'completed' })
   } catch (e) {
     console.error('Update failed', e)
     errorMsg.value = 'Änderung konnte nicht gespeichert werden.'
+  }
+}
+
+// select PC -> load portfolio indicator
+async function onSelectPc(row){
+  selectedPcId.value = row?.pcId ?? null
+  pcDetail.value = null
+  if (!selectedPcId.value) return
+  try {
+    const { data } = await api.get(`/api/profit-centers/${selectedPcId.value}/extra-portfolio`, {
+      params: { unit: unit.value, fiscal_year: fiscalYear.value }
+    })
+    pcDetail.value = {
+      pcId: selectedPcId.value,
+      pcName: row?.pcName ?? String(selectedPcId.value),
+      allocated: Number(data?.allocated ?? 0),
+      won: Number(data?.won ?? 0),
+      lost: Number(data?.lost ?? 0),
+      open: Number(data?.open ?? 0)
+    }
+  } catch(e){
+    console.error('PC detail load failed', e)
+    pcDetail.value = { pcId: selectedPcId.value, pcName: row?.pcName ?? String(selectedPcId.value), allocated:0, won:0, lost:0, open:0 }
   }
 }
 </script>

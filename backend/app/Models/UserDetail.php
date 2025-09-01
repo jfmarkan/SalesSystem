@@ -16,6 +16,7 @@ class UserDetail extends Model
         'address',
         'city',
         'state',
+        'gender',
         'postal_code',
         'country',
         'phone',

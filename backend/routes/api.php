@@ -25,6 +25,9 @@ Route::get('/analytics/pc-monthly', [CompanyAnalyticsController::class, 'pcMonth
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    Route::get('/extra/portfolio', [ExtraQuotaController::class, 'portfolio']);
+    Route::get('/profit-centers/{code}/extra-portfolio', [ExtraQuotaController::class, 'pcPortfolio']);
     
     Route::prefix('me')->group(function () {
         Route::get('/clients',        [ForecastController::class, 'getClients']);
@@ -65,8 +68,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('extra-quota')->group(function () {
         Route::get('/assignments/my-profit-centers', [ExtraQuotaController::class, 'myProfitCenters']);
-    Route::get('/assignments/my-volume', [ExtraQuotaController::class, 'myVolume']);
-    Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
+        Route::get('/assignments/my-volume', [ExtraQuotaController::class, 'myVolume']);
+        Route::get('/assignments/my-availability', [ExtraQuotaController::class, 'myAvailability']);
 
     // Opportunities
     Route::get('/opportunities', [ExtraQuotaController::class, 'indexOpportunities']);
