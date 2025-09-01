@@ -1,88 +1,328 @@
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  title: { type: String, default: 'Extra Quotas' },
+  unit: { type: String, default: 'M3' }, // 'M3' | 'EUR' | 'VKEH' | ...
+  target: { type: Number, default: 0 }, // total asignado (opcional)
+  achieved: { type: Number, default: 0 }, // total usado (opcional)
+  // items admite legacy: current=usado, target=asignado
+  items: { type: Array, default: () => [] }, // [{ name, assigned, used }]
+})
+
+function unitLabel(u) {
+  const U = String(u || '').toUpperCase()
+  if (U === 'M3') return 'm³'
+  if (U === 'EUR') return '€'
+  if (U === 'VKEH') return 'VK-EH'
+  if (u === '%') return '%'
+  return u || ''
+}
+function fmt(n) {
+  const v = Number(n) || 0
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return (v / 1_000_000).toFixed(2) + 'M'
+  if (abs >= 1_000) return (v / 1_000).toFixed(1) + 'k'
+  return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+
+const itemsNorm = computed(() => {
+  return (props.items || [])
+    .map((it) => {
+      const assigned = Number(it.assigned ?? it.target ?? 0)
+      const used = Math.max(0, Number(it.used ?? it.current ?? 0))
+      const available = Math.max(0, assigned - used)
+      const pctAvail = assigned > 0 ? Math.min(100, (available / assigned) * 100) : 0
+      return {
+        name: String(it.name ?? ''),
+        assigned,
+        used,
+        available,
+        pctAvail,
+      }
+    })
+    .sort((a, b) => b.available - a.available) // más disponibles arriba
+})
+
+const totals = computed(() => {
+  const sumAssigned = itemsNorm.value.reduce((s, x) => s + x.assigned, 0)
+  const sumUsed = itemsNorm.value.reduce((s, x) => s + x.used, 0)
+  const totalAssigned = props.target > 0 ? props.target : sumAssigned
+  const totalUsed = props.achieved >= 0 ? props.achieved : sumUsed
+  const totalAvail = Math.max(0, totalAssigned - totalUsed)
+  const pctAvail = totalAssigned > 0 ? Math.min(100, (totalAvail / totalAssigned) * 100) : 0
+  return { totalAssigned, totalUsed, totalAvail, pctAvail }
+})
+
+function level(p) {
+  // p = % disponible
+  if (p >= 50) return 'ok'
+  if (p >= 20) return 'mid'
+  return 'low'
+}
+</script>
+
 <template>
-  <div class="eqp-wrap">
-    <div v-if="!items?.length" class="empty">Keine Daten</div>
+  <div class="xq-root">
+    <div class="xq-title">{{ title }}</div>
 
-    <div v-for="row in items" :key="row.pcCode" class="bar-row">
-      <div class="label">
-        <span class="pc">{{ row.pcName }}</span>
-        <span class="code">({{ row.pcCode }})</span>
+    <div class="xq-row">
+      <div class="xq-kpis">
+        <div class="xq-value">
+          {{ fmt(totals.totalAvail) }}
+          <span class="xq-unit" v-if="unitLabel(unit)">{{ unitLabel(unit) }}</span>
+        </div>
+        <div class="xq-sub">
+          Asignado: {{ fmt(totals.totalAssigned) }}
+          <span v-if="unitLabel(unit)">{{ unitLabel(unit) }}</span>
+          · Usado: {{ fmt(totals.totalUsed) }}
+          <span v-if="unitLabel(unit)">{{ unitLabel(unit) }}</span>
+        </div>
       </div>
-
-      <div class="bar">
-        <div
-          class="fill"
-          :style="{ width: fillPct(row) + '%' }"
-          :title="tooltip(row)"
-        ></div>
+      <div class="xq-badge" :class="level(totals.pctAvail)">
+        <span>{{ Math.round(totals.pctAvail) }}%</span>
       </div>
+    </div>
 
-      <div class="vals">
-        <span class="alloc">Allokiert: {{ fmt(row.allocated) }}</span>
-        <span class="sep">/</span>
-        <span class="assign">Zuweisung: {{ fmt(row.assigned) }}</span>
-        <span class="pct" v-if="row.assigned > 0">({{ Math.round(100*row.allocated/row.assigned) }}%)</span>
+    <div class="xq-bar">
+      <div
+        class="xq-bar__fill"
+        :class="level(totals.pctAvail)"
+        :style="{ width: totals.pctAvail + '%' }"
+      ></div>
+    </div>
+
+    <div class="xq-list" v-if="itemsNorm.length">
+      <div class="xq-item" v-for="it in itemsNorm" :key="it.name">
+        <div class="xq-item__head">
+          <div class="xq-item__name">{{ it.name }}</div>
+          <div class="xq-item__val">
+            {{ fmt(it.available) }}
+            <span v-if="unitLabel(unit)">{{ unitLabel(unit) }}</span>
+          </div>
+        </div>
+        <div class="xq-meta">
+          <span>Asig: {{ fmt(it.assigned) }}</span>
+          <span>Usado: {{ fmt(it.used) }}</span>
+        </div>
+        <div class="xq-mini">
+          <div
+            class="xq-mini__fill"
+            :class="level(it.pctAvail)"
+            :style="{ width: it.pctAvail + '%' }"
+          ></div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
-// Code in English; UI in German.
-const props = defineProps({
-  // [{ pcCode, pcName, assigned:Number, allocated:Number }]
-  items: { type: Array, default: () => [] },
-  unit: { type: String, default: 'EUR' }
-})
-
-function fillPct(r){
-  if (!r || !r.assigned) return 0
-  const pct = (r.allocated / r.assigned) * 100
-  return Math.max(0, Math.min(100, pct))
-}
-function tooltip(r){
-  return `${r.pcName} • ${fmt(r.allocated)} / ${fmt(r.assigned)}`
-}
-function fmt(v){
-  const n = Number(v || 0)
-  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(n)
-}
-</script>
-
 <style scoped>
-.eqp-wrap{
-  display:flex; flex-direction:column; gap:10px; height:100%; overflow:auto;
-}
-.empty{
-  padding:12px; border:1px dashed rgba(0,0,0,.2); border-radius:8px; text-align:center; color:#4b5563;
-  background: rgba(255,255,255,.5);
-}
-.bar-row{
-  display:grid; grid-template-columns: 1fr; gap:6px;
-  background: rgba(255,255,255,.45);
-  border: 1px solid rgba(0,0,0,.08);
-  border-radius: 10px;
-  padding: 8px 10px;
-}
-.label{
-  display:flex; gap:6px; align-items:baseline; color:#111827; font-weight:700;
-}
-.label .code{ color:#6b7280; font-weight:600; }
-.bar{
-  height: 14px;
-  width: 100%;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(17,24,39,.06), rgba(17,24,39,.12)); /* grey "total" */
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
-  overflow: hidden;
-}
-.fill{
+.xq-root {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  background: linear-gradient(90deg, rgba(22,163,74,.9), rgba(22,163,74,.75)); /* green "allocated" */
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+  gap: 0.6rem;
+  padding: 10px 12px; /* aire interno propio */
 }
-.vals{
-  display:flex; align-items:center; gap:6px; color:#111827; font-size:.9rem;
+
+/* título sutil */
+.xq-title {
+  font-size: 0.9rem;
+  line-height: 1.2;
+  font-weight: 500;
+  color: #334155;
 }
-.sep{ opacity:.6; }
-.pct{ font-weight:700; }
+@media (prefers-color-scheme: dark) {
+  .xq-title {
+    color: #e5e7eb;
+  }
+}
+:global(.dark) .xq-title {
+  color: #e5e7eb;
+}
+
+/* header valores */
+.xq-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.xq-kpis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.xq-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+@media (prefers-color-scheme: dark) {
+  .xq-value {
+    color: #f8fafc;
+  }
+}
+:global(.dark) .xq-value {
+  color: #f8fafc;
+}
+.xq-unit {
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.xq-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+@media (prefers-color-scheme: dark) {
+  .xq-sub {
+    color: #cbd5e1;
+  }
+}
+:global(.dark) .xq-sub {
+  color: #cbd5e1;
+}
+
+/* badge % disponible */
+.xq-badge {
+  min-width: 3.25rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(to bottom, #94a3b8, #475569);
+}
+.xq-badge.ok {
+  background: linear-gradient(to bottom, #34d399, #059669);
+}
+.xq-badge.mid {
+  background: linear-gradient(to bottom, #fb923c, #ea580c);
+}
+.xq-badge.low {
+  background: linear-gradient(to bottom, #f87171, #dc2626);
+}
+
+/* barra principal (disponible) */
+.xq-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  .xq-bar {
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+:global(.dark) .xq-bar {
+  background: rgba(255, 255, 255, 0.15);
+}
+.xq-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  width: 0%;
+  background: linear-gradient(to right, #94a3b8, #475569);
+  transition: width 0.25s ease;
+}
+.xq-bar__fill.ok {
+  background: linear-gradient(to right, #34d399, #059669);
+}
+.xq-bar__fill.mid {
+  background: linear-gradient(to right, #fb923c, #ea580c);
+}
+.xq-bar__fill.low {
+  background: linear-gradient(to right, #f87171, #dc2626);
+}
+
+/* lista vendedores */
+.xq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+.xq-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.xq-item__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.xq-item__name {
+  flex: 1 1 auto;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+  max-height: calc(1.25em * 2);
+}
+.xq-item__val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.xq-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+@media (prefers-color-scheme: dark) {
+  .xq-meta {
+    color: #cbd5e1;
+  }
+}
+:global(.dark) .xq-meta {
+  color: #cbd5e1;
+}
+
+.xq-mini {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  .xq-mini {
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+:global(.dark) .xq-mini {
+  background: rgba(255, 255, 255, 0.15);
+}
+.xq-mini__fill {
+  height: 100%;
+  border-radius: 999px;
+  width: 0%;
+  background: linear-gradient(to right, #94a3b8, #475569);
+  transition: width 0.25s ease;
+}
+.xq-mini__fill.ok {
+  background: linear-gradient(to right, #34d399, #059669);
+}
+.xq-mini__fill.mid {
+  background: linear-gradient(to right, #fb923c, #ea580c);
+}
+.xq-mini__fill.low {
+  background: linear-gradient(to right, #f87171, #dc2626);
+}
 </style>

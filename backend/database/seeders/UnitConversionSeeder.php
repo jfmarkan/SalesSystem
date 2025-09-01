@@ -119,7 +119,7 @@ class UnitConversionSeeder extends Seeder
             [
                 'profit_center_code' => '174',
                 'from_unit'=>'m2',
-                'factor_to_m3'=>0.28402,
+                'factor_to_m3'=>0.028402,
                 'factor_to_euro'=>77,
                 'created_at' => Now(),
                 'updated_at' => NULL,

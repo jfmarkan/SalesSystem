@@ -5,75 +5,51 @@ import InputText from 'primevue/inputtext'
 
 const props = defineProps({
   months:   { type: Array,  required: true },
-  sales:    { type: Array,  default: () => [] },     // <-- use this in English
+  sales:    { type: Array,  default: () => [] },
   budget:   { type: Array,  default: () => [] },
   forecast: { type: Array,  default: () => [] },
-
-  // TEMP backwards-compat (do not use anymore)
+  // TEMP backwards-compat
   ventas:   { type: Array,  default: null },
 })
 const emit = defineEmits(['edit-forecast'])
 
-/* Formats: "Jän 25", "Mär 26", ... */
 function fmtMonthDE(ym) {
   if (!ym) return '—'
   const [yS, mS] = String(ym).split('-')
   const y = yS?.slice(2) ?? ''
   const m = parseInt(mS || '1', 10)
-  const map = ['Jän', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+  const map = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
   return `${map[m - 1] || '—'} ${y}`
 }
-
-/* Current month index inside provided months (YYYY-MM) */
-function yyyymm(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+function yyyymm(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
 function thirdWednesday(d = new Date()) {
   const first = new Date(d.getFullYear(), d.getMonth(), 1)
-  const firstWeekday = first.getDay() // 0..6 (0=Dom)
-  const deltaToWed = (3 - firstWeekday + 7) % 7
-  const firstWed = new Date(first)
-  firstWed.setDate(1 + deltaToWed)
-  const third = new Date(firstWed)
-  third.setDate(firstWed.getDate() + 14)
+  const deltaToWed = (3 - first.getDay() + 7) % 7
+  const firstWed = new Date(first); firstWed.setDate(1 + deltaToWed)
+  const third = new Date(firstWed); third.setDate(firstWed.getDate() + 14)
   return third
 }
 function isEditableYM(ym) {
   const now = new Date()
   const cur = new Date(now.getFullYear(), now.getMonth(), 1)
   const [yS, mS] = String(ym).split('-')
-  const y = +yS,
-    m = +mS
-  const target = new Date(y, m - 1, 1)
-
-  // bloquea igual o anterior al mes en curso
+  const target = new Date(+yS, +mS - 1, 1)
   if (target <= cur) return false
-
-  // mes siguiente: solo hasta 3er miércoles del mes actual
   const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)
-  if (target.getTime() === next.getTime()) {
-    return now <= thirdWednesday(now)
-  }
-
-  // meses posteriores al siguiente: siempre editables
+  if (+target === +next) return now <= thirdWednesday(now)
   return true
 }
-
 const curIdx = computed(() => {
   const key = yyyymm(new Date())
-  return Array.isArray(props.months) ? props.months.findIndex((m) => m === key) : -1
+  return Array.isArray(props.months) ? props.months.findIndex(m => m === key) : -1
 })
 
-/* Deviation helpers: pct vs budget => deviation from 100% */
-function devPct(num, den) {
-  if (!den) return 0
-  return (num / den - 1) * 100
-} // +/- deviation
+function devPct(num, den) { if (!den) return 0; return (num / den - 1) * 100 }
 function clsSalesDev(v, b) {
   const d = Math.abs(devPct(v, b))
   if (d > 10) return 'dev-red'
-  if (d > 5) return 'dev-orange'
-  if (d > 2) return 'dev-yellow'
+  if (d > 5)  return 'dev-orange'
+  if (d > 2)  return 'dev-yellow'
   return 'dev-green'
 }
 function clsFcstDev(v, b) {
@@ -82,14 +58,11 @@ function clsFcstDev(v, b) {
   if (d > 2) return 'dev-yellow'
   return 'dev-green'
 }
-function pctLabel(num, den) {
-  if (!den) return '0%'
-  return Math.round((num / den) * 100) + '%'
-}
+function pctLabel(num, den) { if (!den) return '0%'; return Math.round((num / den) * 100) + '%' }
 
 const salesData = computed(() => {
   if (Array.isArray(props.sales) && props.sales.length) return props.sales
-  if (Array.isArray(props.ventas)) return props.ventas // fallback (deprecated)
+  if (Array.isArray(props.ventas)) return props.ventas
   return Array(props.months?.length || 12).fill(0)
 })
 </script>
@@ -97,38 +70,30 @@ const salesData = computed(() => {
 <template>
   <div class="table-shell">
     <div class="table-scroll-x">
-      <table class="w-full" style="min-width: 1200px; border-collapse: separate; border-spacing: 0">
+      <table class="w-full" style="min-width:1200px; border-collapse:separate; border-spacing:0">
         <thead>
           <tr>
             <th class="p-2 text-left sticky left-0 z-2 stick-left"></th>
             <th
-              v-for="(m, i) in months"
-              :key="'m' + i"
+              v-for="(m, i) in months" :key="'m'+i"
               class="p-2 text-center stick-head"
-              :class="{
-                'cur-left': i === curIdx,
-                'cur-right': i === curIdx,
-                'cur-top': i === curIdx,
-              }"
+              :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx, 'cur-top': i===curIdx }"
             >
               {{ fmtMonthDE(m) }}
             </th>
           </tr>
         </thead>
+
         <tbody>
           <!-- Ist -->
           <tr>
             <td class="p-2 sticky text-right left-0 z-2 stick-left">Ist</td>
             <td
-              v-for="(m, i) in months"
-              :key="'v' + i"
+              v-for="(m,i) in months" :key="'v'+i"
               class="p-2 text-center cell cell-sales"
-              :class="{
-                'cur-left': i === curIdx,
-                'cur-right': i === curIdx,
-              }"
+              :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx }"
             >
-              {{ ventas[i] ?? 0 }}
+              {{ salesData[i] ?? 0 }}
             </td>
           </tr>
 
@@ -136,13 +101,9 @@ const salesData = computed(() => {
           <tr>
             <td class="p-2 sticky text-right left-0 z-2 stick-left">Budget</td>
             <td
-              v-for="(m, i) in months"
-              :key="'b' + i"
+              v-for="(m,i) in months" :key="'b'+i"
               class="p-2 text-center cell cell-budget"
-              :class="{
-                'cur-left': i === curIdx,
-                'cur-right': i === curIdx,
-              }"
+              :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx }"
             >
               {{ budget[i] ?? 0 }}
             </td>
@@ -152,24 +113,15 @@ const salesData = computed(() => {
           <tr>
             <td class="p-2 sticky text-right left-0 z-2 stick-left">Forecast</td>
             <td
-              v-for="(m, i) in months"
-              :key="'f' + i"
+              v-for="(m,i) in months" :key="'f'+i"
               class="p-1 cell"
-              :class="{
-                'cur-left': i === curIdx,
-                'cur-right': i === curIdx,
-                'cur-bottom': i === curIdx,
-              }"
+              :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx, 'cur-bottom': i===curIdx }"
             >
               <InputText
                 class="w-full p-inputtext-sm text-center inp-forecast"
                 :value="forecast[i]"
                 :disabled="!isEditableYM(m)"
-                @input="
-                  (e) => {
-                    if (isEditableYM(m)) emit('edit-forecast', { index: i, value: e.target.value })
-                  }
-                "
+                @input="e => { if (isEditableYM(m)) emit('edit-forecast', { index:i, value:e.target.value }) }"
               />
             </td>
           </tr>
@@ -178,15 +130,11 @@ const salesData = computed(() => {
           <tr>
             <td class="p-2 sticky text-right left-0 z-2 stick-left">% Ist / Bud.</td>
             <td
-              v-for="(m, i) in months"
-              :key="'ivb' + i"
+              v-for="(m,i) in months" :key="'ivb'+i"
               class="p-2 text-center cell dev-cell"
-              :class="[
-                clsSalesDev(ventas[i] ?? 0, budget[i] ?? 0),
-                { 'cur-left': i === curIdx, 'cur-right': i === curIdx },
-              ]"
+              :class="[ clsSalesDev(salesData[i] ?? 0, budget[i] ?? 0), { 'cur-left': i===curIdx, 'cur-right': i===curIdx } ]"
             >
-              {{ pctLabel(ventas[i] ?? 0, budget[i] ?? 0) }}
+              {{ pctLabel(salesData[i] ?? 0, budget[i] ?? 0) }}
             </td>
           </tr>
 
@@ -194,13 +142,9 @@ const salesData = computed(() => {
           <tr>
             <td class="p-2 sticky text-right left-0 z-2 stick-left">% For. / Bud.</td>
             <td
-              v-for="(m, i) in months"
-              :key="'ifb' + i"
+              v-for="(m,i) in months" :key="'ifb'+i"
               class="p-2 text-center cell dev-cell"
-              :class="[
-                clsFcstDev(forecast[i] ?? 0, budget[i] ?? 0),
-                { 'cur-left': i === curIdx, 'cur-right': i === curIdx },
-              ]"
+              :class="[ clsFcstDev(forecast[i] ?? 0, budget[i] ?? 0), { 'cur-left': i===curIdx, 'cur-right': i===curIdx } ]"
             >
               {{ pctLabel(forecast[i] ?? 0, budget[i] ?? 0) }}
             </td>
@@ -212,7 +156,6 @@ const salesData = computed(() => {
 </template>
 
 <style scoped>
-/* Palette */
 :root {
   --blue: #54849a;
   --green: #05a46f;
@@ -222,82 +165,84 @@ const salesData = computed(() => {
   --red: #b01513;
 }
 
-/* Layout */
-.table-shell {
-  height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.table-scroll-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  height: 100%;
-}
+.table-shell{ height:100%; overflow:hidden; display:flex; flex-direction:column; color:inherit; }
+.table-scroll-x{ overflow-x:auto; overflow-y:hidden; height:100%; }
 
-/* Keep your restyling */
-.stick-head {
-  position: sticky;
-  top: 0;
-}
-.stick-left {
-  width: calc(100% / 13);
-  left: 0;
-}
-.cell {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
+/* Sticky */
+.stick-head{ position:sticky; top:0; }
+.stick-left{ width:calc(100% / 13); left:0; }
+.cell{ border-bottom:1px solid rgba(0,0,0,.06); }
 
-/* Current month red frame */
-.cur-left {
-  border-left: 2px solid var(--red) !important;
+/* Current month frame */
+.cur-left{ border-left:2px solid var(--red) !important; }
+.cur-right{ border-right:2px solid var(--red) !important; }
+.cur-top{ border-top:2px solid var(--red) !important; }
+.cur-bottom{ border-bottom:2px solid var(--red) !important; }
+
+/* Header bg glass */
+thead th{
+  text-align:left; font-weight:600; padding:8px 10px;
+  border-bottom:1px solid rgba(2,6,23,.12);
+  background: rgba(255,255,255,.35);
+  backdrop-filter: blur(6px);
 }
-.cur-right {
-  border-right: 2px solid var(--red) !important;
+@media (prefers-color-scheme: dark){
+  thead th{ border-bottom-color: rgba(255,255,255,.16); background: rgba(0,0,0,.25); color:#f8fafc; }
 }
-.cur-top {
-  border-top: 2px solid var(--red) !important;
-}
-.cur-bottom {
-  border-bottom: 2px solid var(--red) !important;
-}
+:global(.dark) thead th{ border-bottom-color: rgba(255,255,255,.16); background: rgba(0,0,0,.25); color:#f8fafc; }
 
 /* Row tints */
-.cell-sales {
-  background: rgba(31, 86, 115, 0.25);
+.cell-sales{ background: rgba(31,86,115,.12); }
+.cell-budget{ background: rgba(84,132,154,.12); }
+@media (prefers-color-scheme: dark){
+  .cell-sales{ background: rgba(255,255,255,.06); }
+  .cell-budget{ background: rgba(255,255,255,.06); }
 }
-.cell-budget {
-  background: rgba(84, 132, 154, 0.25);
-}
+:global(.dark) .cell-sales{ background: rgba(255,255,255,.06); }
+:global(.dark) .cell-budget{ background: rgba(255,255,255,.06); }
 
-/* Forecast input look */
-.inp-forecast {
-  background: rgba(0, 0, 0, 0.65) !important;
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
+/* Forecast input: theme-aware */
+.inp-forecast{
+  background: rgba(255,255,255,.9) !important;
+  color:#0f172a !important;
+  border:1px solid rgba(2,6,23,.2) !important;
+  border-radius:6px;
 }
+.inp-forecast::placeholder{ color: rgba(15,23,42,.55); }
+@media (prefers-color-scheme: dark){
+  .inp-forecast{
+    background: rgba(255,255,255,.12) !important;
+    color:#f8fafc !important;
+    border-color: rgba(255,255,255,.24) !important;
+  }
+  .inp-forecast::placeholder{ color: rgba(248,250,252,.6); }
+}
+:global(.dark) .inp-forecast{
+  background: rgba(255,255,255,.12) !important;
+  color:#f8fafc !important;
+  border-color: rgba(255,255,255,.24) !important;
+}
+:global(.dark) .inp-forecast::placeholder{ color: rgba(248,250,252,.6); }
 
-/* Deviation colors */
-.dev-cell {
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
+/* Deviation cells: readable in both themes */
+.dev-cell{
+  transition: background-color .2s ease, color .2s ease;
+  font-variant-numeric: tabular-nums;
 }
-.dev-red {
-  background: rgba(176, 21, 19, 0.18);
-  color: #3b0d0d;
+/* Light */
+.dev-red{    background: rgba(176,21,19,.16);    color:#3b0d0d; }
+.dev-orange{ background: rgba(234,99,18,.16);    color:#3b260d; }
+.dev-yellow{ background: rgba(230,183,41,.18);   color:#3a300b; }
+.dev-green{  background: rgba(5,164,111,.16);    color:#093a2c; }
+/* Dark (override) */
+@media (prefers-color-scheme: dark){
+  .dev-red{    background: rgba(239,68,68,.28);  color:#fff; }
+  .dev-orange{ background: rgba(245,158,11,.28); color:#fff; }
+  .dev-yellow{ background: rgba(234,179,8,.28);  color:#111; } /* amarillo permite texto oscuro */
+  .dev-green{  background: rgba(34,197,94,.28);  color:#0b1f16; }
 }
-.dev-orange {
-  background: rgba(234, 99, 18, 0.18);
-  color: #3b260d;
-}
-.dev-yellow {
-  background: rgba(230, 183, 41, 0.2);
-  color: #3a300b;
-}
-.dev-green {
-  background: rgba(5, 164, 111, 0.18);
-  color: #093a2c;
-}
+:global(.dark) .dev-red{    background: rgba(239,68,68,.28);  color:#fff; }
+:global(.dark) .dev-orange{ background: rgba(245,158,11,.28); color:#fff; }
+:global(.dark) .dev-yellow{ background: rgba(234,179,8,.28);  color:#111; }
+:global(.dark) .dev-green{  background: rgba(34,197,94,.28);  color:#0b1f16; }
 </style>
