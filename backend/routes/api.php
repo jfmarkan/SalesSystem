@@ -15,6 +15,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ExtraQuotaController;
 use App\Http\Controllers\ForecastController;
+use App\Http\Controllers\SalesforceController;
 use App\Http\Controllers\UserDetailController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
@@ -54,16 +55,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/sales-ytd',[BudgetCaseSimulatorController::class, 'salesYtd']);
     });
 
+    Route::get('/salesforce/users', [SalesforceController::class, 'index']);
+
     Route::prefix('deviations')->group(function () {
         Route::get('/',            [DeviationController::class, 'index']);
         Route::post('/run',        [DeviationController::class, 'runForMe']);
         Route::put('/{id}/justify',[DeviationController::class, 'justify']);
     });
 
-    Route::prefix('users/{user}/details')->group(function () {
-        Route::get   ('/', [UserDetailController::class, 'show']);
-        Route::post  ('/', [UserDetailController::class, 'storeOrUpdate']);
-        Route::delete('/', [UserDetailController::class, 'destroy']);
+    Route::prefix('users/{user}')->group(function () {
+        Route::get   ('/details', [UserDetailController::class, 'show']);
+        Route::post  ('/details', [UserDetailController::class, 'storeOrUpdate']);
+        Route::delete('/details', [UserDetailController::class, 'destroy']);
+        Route::put('/password',   [UserDetailController::class, 'updatePassword']);
     });
 
     Route::prefix('extra-quota')->group(function () {

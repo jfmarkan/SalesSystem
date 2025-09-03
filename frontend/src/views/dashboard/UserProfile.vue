@@ -1,171 +1,255 @@
+<!-- src/components/profile/UserProfileCard.vue -->
 <template>
-  <div class="profile-page">
-    <!-- Header -->
-    <div class="glass header-card">
-      <div class="header-left">
+  <div class="profile-card">
+    <Toast />
+
+    <!-- ÚNICO GRID: 12 cols => ID (3) + CONTACT (9) + PWD (3 debajo de ID) -->
+    <div class="top-grid">
+      <!-- ID-CARD (3 cols) -->
+      <div class="id-card glass">
         <div class="avatar-wrap" @dragover.prevent @drop.prevent="onDrop">
-          <img :src="avatarPreview || fallbackAvatar" class="avatar" alt="Avatar" />
-          <button class="avatar-btn" type="button" @click="pickImage">
-            <i class="pi pi-camera"></i> Bild ändern
+          <img
+            :src="avatarSrc"
+            :class="['avatar', isFallback ? 'placeholder' : 'real']"
+            alt="Avatar"
+            @error="onImgError"
+          />
+          <button class="avatar-btn" type="button" @click="pickImage" :title="'Bild ändern'">
+            <i class="pi pi-camera"></i>
           </button>
           <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFile" />
         </div>
-        <div class="id-block">
-          <div class="name-line">
-            <span class="last">{{ lastName || '—' }}</span>
-            <span class="first">{{ firstName || '' }}</span>
-          </div>
-          <div class="role-line"><em>{{ displayRole }}</em></div>
-          <div class="email-line">{{ email }}</div>
+
+        <div class="identity">
+          <div class="last-name">{{ lastName || '—' }}</div>
+          <div class="first-name">{{ firstName || '' }}</div>
+          <div class="role"><em>{{ displayRole }}</em></div>
         </div>
       </div>
 
-      <div class="header-right">
-        <Button :label="saving ? 'Speichern…' : 'Änderungen speichern'" icon="pi pi-save"
-                :loading="saving" @click="saveAll" />
-        <Button label="Zurücksetzen" icon="pi pi-refresh" severity="secondary" class="ml-2"
-                :disabled="saving || loading" @click="resetForm" />
-        <Button v-if="hasRecord" label="Details löschen" icon="pi pi-trash" severity="danger" class="ml-2"
-                :disabled="saving || loading" @click="removeAll" />
-      </div>
-    </div>
-
-    <!-- Body -->
-    <div class="grid-2">
-      <GlassCard class="section-card">
-        <h3 class="section-title">Kontakt</h3>
-        <div class="form-grid">
-          <div class="col">
-            <label class="lbl">Telefon</label>
-            <InputText v-model="form.phone" placeholder="+43 660 0000000" />
-          </div>
-          <div class="col">
+      <!-- CONTACT-CARD (9 cols) -->
+      <div class="contact-card glass">
+        <div class="row two">
+          <div>
             <label class="lbl">E-Mail</label>
             <InputText :value="email" disabled />
           </div>
+          <div>
+            <label class="lbl">Telefon</label>
+            <InputText v-model="form.phone" placeholder="+43 660 0000000" />
+          </div>
         </div>
-      </GlassCard>
 
-      <GlassCard class="section-card">
-        <h3 class="section-title">Adresse</h3>
-        <div class="form-grid">
-          <div class="col col-2">
-            <label class="lbl">Anschrift</label>
-            <InputText v-model="form.address" placeholder="Straße, Nr." />
-          </div>
-          <div class="col">
-            <label class="lbl">PLZ</label>
-            <InputText v-model="form.postal_code" placeholder="1234" />
-          </div>
-          <div class="col">
+        <div class="row">
+          <label class="lbl">Adresse</label>
+          <InputText v-model="form.address" placeholder="Straße, Nr." />
+        </div>
+
+        <div class="row two">
+          <div>
             <label class="lbl">Stadt</label>
             <InputText v-model="form.city" placeholder="Stadt" />
           </div>
-          <div class="col">
+          <div>
+            <label class="lbl">PLZ</label>
+            <InputText v-model="form.postal_code" placeholder="1234" />
+          </div>
+        </div>
+
+        <div class="row two">
+          <div>
             <label class="lbl">Bundesland</label>
             <InputText v-model="form.state" placeholder="Bundesland" />
           </div>
-          <div class="col">
+          <div>
             <label class="lbl">Land</label>
-            <Dropdown v-model="form.country" :options="countryOptions" optionLabel="label" optionValue="value"
-                      placeholder="Land wählen" class="w-full" />
+            <Dropdown
+              v-model="form.country"
+              :options="countryOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Land wählen"
+              class="w-full"
+            />
           </div>
         </div>
-      </GlassCard>
+
+        <div class="card-spacer"></div>
+        <div class="actions">
+          <Button :label="saving ? 'Speichern…' : 'Änderungen speichern'" icon="pi pi-save"
+                  :loading="saving" @click="saveDetails" />
+          <Button label="Zurücksetzen" icon="pi pi-refresh" severity="secondary"
+                  :disabled="saving || loading" @click="loadDetails" />
+        </div>
+      </div>
+
+      <!-- PWD-CARD (3 cols) — debajo de ID con mismo ancho -->
+      <div class="pwd-card glass">
+        <h3 class="section-title">Passwort ändern</h3>
+
+        <div class="row">
+          <label class="lbl">Aktuelles Passwort</label>
+          <InputText v-model="pwd.current" type="password" autocomplete="current-password" />
+        </div>
+
+        <div class="row">
+          <label class="lbl">Neues Passwort</label>
+          <InputText
+            v-model="pwd.new"
+            type="password"
+            :class="{ 'is-invalid': pwd.new && !pwdStrongEnough }"
+            autocomplete="new-password"
+            placeholder="Mindestens 8 Zeichen"
+          />
+          <small v-if="pwd.new && !pwdStrongEnough" class="hint error">
+            Muss mindestens 8 Zeichen lang sein.
+          </small>
+        </div>
+
+        <div class="row">
+          <label class="lbl">Neues Passwort (Bestätigung)</label>
+          <InputText
+            v-model="pwd.confirm"
+            type="password"
+            :class="{ 'is-invalid': pwd.confirm && !pwdMatch }"
+            autocomplete="new-password"
+          />
+          <small v-if="pwd.confirm && !pwdMatch" class="hint error">
+            Passwörter stimmen nicht überein.
+          </small>
+          <small v-if="pwdMatch && pwdStrongEnough && pwd.new" class="hint ok">
+            ✔️ Passwörter stimmen überein.
+          </small>
+        </div>
+
+        <div class="pwd-actions">
+          <Button
+            :label="changingPwd ? 'Speichern…' : 'Passwort speichern'"
+            icon="pi pi-lock"
+            :loading="changingPwd"
+            :disabled="!canSavePwd || changingPwd"
+            @click="savePassword"
+          />
+        </div>
+      </div>
     </div>
 
-    <!-- Page loader -->
+    <!-- Loader -->
     <div v-if="loading" class="page-loader">
       <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
-      <div class="caption">Lädt Profil…</div>
+      <div class="caption">Lädt…</div>
     </div>
   </div>
 </template>
 
 <script setup>
-/* Profile editor wired to /api/users/{user}/details routes */
+// code in English; UI German
 import { ref, reactive, computed, onMounted } from 'vue'
+import Toast from 'primevue/toast'
+import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
-import GlassCard from '@/components/ui/GlassCard.vue'
-import { useToast } from 'primevue/usetoast'
+
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import { useAuthStore } from '@/stores/auth'
+
+// placeholders
 import femalePlaceholder from '@/assets/img/placeholders/user-female.svg'
-import malePlaceholder from '@/assets/img/placeholders/user-male.svg'
+import malePlaceholder   from '@/assets/img/placeholders/user-male.svg'
 
 const toast = useToast()
 const auth = useAuthStore()
 const API = '/api'
 
-/* Identity */
-const firstName = computed(() => auth.firstName || auth.user?.first_name || (auth.user?.name?.split(' ')[0] ?? ''))
-const lastName  = computed(() => auth.lastName  || auth.user?.last_name  || (auth.user?.name?.split(' ').slice(1).join(' ') ?? ''))
+// identity
+const firstName = computed(() => auth.user?.first_name || auth.firstName || '')
+const lastName  = computed(() => auth.user?.last_name  || auth.lastName  || '')
 const email     = computed(() => auth.user?.email || '')
+const gender    = computed(() => String(auth.user?.gender || '').toUpperCase())
 const roleMap   = { 1:'Superadmin', 2:'Admin', 3:'Manager', 4:'Sales Rep' }
 const roleId    = computed(() => Number(auth.roleId ?? auth.role_id ?? auth.user?.role_id ?? 0))
 const displayRole = computed(() => roleMap[roleId.value] || (auth.user?.role || '—'))
 const userId    = computed(() => Number(auth.user?.id ?? auth.id ?? auth.userId ?? 0))
 
-/* Form */
+// form
 const form = reactive({
-  address: '', city: '', state: '', postal_code: '',
-  country: '', phone: '', profile_picture: null
+  address: '', city: '', state: '', postal_code: '', country: '', phone: '', profile_picture: null
 })
-const hasRecord = ref(false)
 
-/* Avatar */
+// avatar
 const fileInput = ref(null)
 const avatarPreview = ref('')
+const isFallback = ref(true)
 
-const fallbackAvatar = computed(() => {
-  const gender = auth.user?.gender?.toUpperCase?.()
-  if (gender === 'F') return femalePlaceholder
-  if (gender === 'M') return malePlaceholder
-  return '/default-avatar.svg'
+function absolutizeUrl(url) {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  // server ya devuelve absoluta con el fix del controller, pero por si acaso:
+  const base = import.meta.env.VITE_API_BASE_URL || window.location.origin
+  const clean = url.replace(/^\/+/, '')
+  return `${base}/${clean}`
+}
+function cacheBust(u) {
+  if (!u) return u
+  const sep = u.includes('?') ? '&' : '?'
+  return `${u}${sep}t=${Date.now()}`
+}
+const avatarSrc = computed(() => {
+  if (!isFallback.value && avatarPreview.value) return avatarPreview.value
+  return (gender.value === 'F') ? femalePlaceholder : malePlaceholder
 })
+function onImgError() {
+  isFallback.value = true
+  avatarPreview.value = ''
+}
 
-/* Flags */
 const loading = ref(false)
 const saving = ref(false)
 
-/* Countries */
+// password
+const pwd = reactive({ current:'', new:'', confirm:'' })
+const changingPwd = ref(false)
+const pwdStrongEnough = computed(() => (pwd.new?.length || 0) >= 8)
+const pwdMatch = computed(() => pwd.new === pwd.confirm && pwd.new.length > 0)
+const canSavePwd = computed(() => pwd.current.trim().length > 0 && pwdStrongEnough.value && pwdMatch.value)
+
+// countries
 const countryOptions = [
   { label:'Österreich', value:'AT' }, { label:'Deutschland', value:'DE' },
   { label:'Schweiz', value:'CH' },    { label:'Italien', value:'IT' },
-  { label:'Frankreich', value:'FR' }, { label:'Spanien', value:'ES' },
-  { label:'Portugal', value:'PT' },   { label:'Polen', value:'PL' }
+  { label:'Frankreich', value:'FR' }, { label:'Spanien', value:'ES' }
 ]
 
-/* Load details via GET /api/users/{id}/details */
+// load
 async function loadDetails(){
   if (!userId.value) return
   loading.value = true
-  try{
+  try {
     await ensureCsrf()
     const { data } = await api.get(`${API}/users/${userId.value}/details`)
-    hasRecord.value = !!data
     form.address = data?.address || ''
     form.city = data?.city || ''
     form.state = data?.state || ''
     form.postal_code = data?.postal_code || ''
     form.country = data?.country || ''
     form.phone = data?.phone || ''
-    avatarPreview.value = data?.profile_picture_url || data?.profile_picture || ''
-  } catch {
-    hasRecord.value = false
-  } finally {
-    loading.value = false
-  }
+    const raw = data?.profile_picture_url || data?.profile_picture || ''
+    if (raw) {
+      // usa absoluta del back + cache-buster para ver el cambio al instante
+      avatarPreview.value = cacheBust(absolutizeUrl(raw))
+      isFallback.value = false
+    }
+  } finally { loading.value = false }
 }
 
-/* Save via POST /api/users/{id}/details (multipart) */
-async function saveAll(){
+// save details (mantiene preview y fuerza refresco)
+async function saveDetails(){
   if (!userId.value) return
   saving.value = true
-  try{
+  const currentPreview = avatarPreview.value
+  try {
     await ensureCsrf()
     const fd = new FormData()
     fd.append('address', form.address ?? '')
@@ -179,94 +263,161 @@ async function saveAll(){
     const { data } = await api.post(`${API}/users/${userId.value}/details`, fd, {
       headers: { 'Content-Type':'multipart/form-data' }
     })
-    hasRecord.value = true
-    // server may return updated URL
-    avatarPreview.value = data?.profile_picture_url || avatarPreview.value
-    toast.add({ severity:'success', summary:'Gespeichert', detail:'Profil aktualisiert', life:1800 })
+
+    const persisted = data?.profile_picture_url || data?.profile_picture || ''
+    if (persisted) {
+      avatarPreview.value = cacheBust(absolutizeUrl(persisted))
+      isFallback.value = false
+    } else if (form.profile_picture instanceof File) {
+      avatarPreview.value = cacheBust(currentPreview)
+      isFallback.value = false
+    }
+
+    toast.add({ severity:'success', summary:'Gespeichert', detail:'Profil aktualisiert', life:1600 })
   } catch {
-    toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2500 })
-  } finally {
-    saving.value = false
-  }
+    toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2200 })
+  } finally { saving.value = false }
 }
 
-/* Delete via DELETE /api/users/{id}/details */
-async function removeAll(){
-  if (!userId.value) return
-  if (!confirm('Profil-Details wirklich löschen?')) return
-  saving.value = true
-  try{
+// save password
+async function savePassword(){
+  if (!userId.value || !canSavePwd.value) return
+  changingPwd.value = true
+  try {
     await ensureCsrf()
-    await api.delete(`${API}/users/${userId.value}/details`)
-    hasRecord.value = false
-    resetLocal()
-    toast.add({ severity:'success', summary:'Gelöscht', detail:'Details entfernt', life:1600 })
-  } catch {
-    toast.add({ severity:'error', summary:'Fehler', detail:'Löschen fehlgeschlagen', life:2500 })
-  } finally {
-    saving.value = false
-  }
+    await api.put(`${API}/users/${userId.value}/password`, {
+      current_password: pwd.current,
+      password: pwd.new,
+      password_confirmation: pwd.confirm
+    })
+    pwd.current = ''; pwd.new = ''; pwd.confirm = ''
+    toast.add({ severity:'success', summary:'Gespeichert', detail:'Passwort aktualisiert', life:1600 })
+  } catch (e){
+    const msg = e?.response?.data?.message || 'Passwort konnte nicht geändert werden'
+    toast.add({ severity:'error', summary:'Fehler', detail: msg, life:2200 })
+  } finally { changingPwd.value = false }
 }
 
-/* Helpers */
-function resetLocal(){
-  form.address = ''; form.city = ''; form.state = ''; form.postal_code = ''
-  form.country = ''; form.phone = ''; form.profile_picture = null
-  avatarPreview.value = ''
-}
-function resetForm(){ loadDetails() }
+// avatar handlers
 function pickImage(){ fileInput.value?.click() }
 function onFile(e){
   const f = e.target.files?.[0]; if (!f) return
-  form.profile_picture = f; avatarPreview.value = URL.createObjectURL(f)
+  form.profile_picture = f
+  avatarPreview.value = cacheBust(URL.createObjectURL(f)) // ver al toque
+  isFallback.value = false
 }
 function onDrop(e){
   const f = e.dataTransfer?.files?.[0]; if (!f) return
-  form.profile_picture = f; avatarPreview.value = URL.createObjectURL(f)
+  form.profile_picture = f
+  avatarPreview.value = cacheBust(URL.createObjectURL(f))
+  isFallback.value = false
 }
 
 onMounted(loadDetails)
 </script>
 
 <style scoped>
-.profile-page{ position:relative; width:calc(100vw - 70px); padding:12px; }
-.grid-2{ display:grid; grid-template-columns: repeat(12, 1fr); gap:12px; margin-top:12px; }
-.section-card{ grid-column: span 12; } @media (min-width:1024px){ .section-card{ grid-column: span 6; } }
-
-.glass{
-  background: rgba(255,255,255,0.40);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 2px 6px rgba(0,0,0,0.25); border-radius: 12px;
+.profile-card{
+  position:relative;
+  padding:24px;
+  width:100%;
+  max-width:1200px;
+  margin:0 auto;
 }
 
-.header-card{ display:flex; align-items:center; justify-content:space-between; padding:12px; }
-.header-left{ display:flex; align-items:center; gap:14px; }
-.avatar-wrap{ position:relative; width:84px; height:84px; }
-.avatar{ width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid rgba(0,0,0,0.1); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
-.avatar-btn{ position:absolute; bottom:-6px; right:-6px; font-size:.75rem; border:none; border-radius:999px; padding:6px 10px; cursor:pointer; background:#54849A; color:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.25); }
+/* Glass */
+.glass{
+  background: rgba(255,255,255,0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.12);
+  overflow: hidden;
+}
+
+/* 12-col grid: ID(3), CONTACT(9), PWD(3 debajo de ID) */
+.top-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap:24px;
+}
+
+.id-card{
+  grid-column: span 3;
+  padding:18px;
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+}
+.contact-card{
+  grid-column: span 9;
+  padding:18px;
+  display:flex; flex-direction:column; gap:14px; min-height: 320px;
+}
+.pwd-card{
+  grid-column: span 3; /* MISMO ANCHO QUE ID */
+  padding:20px;
+}
+
+/* Avatar */
+.avatar-wrap{ position:relative; width:160px; height:160px; margin-top: 24px; margin-bottom: 28px; }
+.avatar{
+  width:160px; height:160px; object-fit: cover;
+  background: transparent; /* transparente */
+}
+.avatar.real{ border-radius: 50%; object-fit: cover; }
+.avatar.placeholder{ border-radius: 10px; object-fit: contain; }
+
+/* Botón de cambiar imagen: centrado abajo con leve superposición */
+.avatar-btn{
+  position:absolute;
+  left:50%; transform: translate(-50%, 50%);
+  bottom:0;
+  width:40px; height:40px;
+  border-radius:50%;
+  border:none; background:#54849A; color:#fff; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
 .hidden{ display:none; }
 
-.id-block{ display:flex; flex-direction:column; gap:4px; }
-.name-line{ display:flex; gap:8px; align-items:baseline; }
-.name-line .last{ font-weight:800; font-size:1.2rem; letter-spacing:.2px; }
-.name-line .first{ font-weight:600; font-size:1.05rem; opacity:.95; }
-.role-line{ font-size:.85rem; color:#334155; }
-.email-line{ font-size:.85rem; color:#64748B; }
-.header-right{ display:flex; align-items:center; }
+/* Identidad */
+.identity{ text-align:center; display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.last-name{ font-weight:800; font-size:1.7rem; color:#0f172a; }
+.first-name{ font-weight:400; font-size:1.25rem; color:#111827; }
+.role{ font-weight:300; font-style:italic; color:#334155; }
 
-.section-title{ margin:0 0 10px 0; font-size:1.05rem; font-weight:700; color:#111; }
-.form-grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:10px; }
-.col{ grid-column: span 12; } .col-2{ grid-column: span 12; }
-@media (min-width:768px){ .col{ grid-column: span 6; } .col-2{ grid-column: span 12; } }
-.lbl{ display:block; font-size:.85rem; color:#475569; margin-bottom:6px; }
+/* Contacto */
+.row{ display:flex; flex-direction:column; gap:8px; }
+.row.two{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.lbl{ font-size:.95rem; color:#334155; font-weight:600; }
 
-/* Page loader */
-.page-loader{ position:fixed; inset:70px 0 0 70px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; pointer-events:none; }
+/* Acciones al borde inferior derecho de la tarjeta de contacto */
+.card-spacer{ flex:1 1 auto; }
+.actions{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top: 6px; }
+
+/* Password */
+.section-title{ margin:0 0 16px; font-size:1.08rem; font-weight:800; color:#0f172a; }
+.hint{ font-size:.82rem; margin-top:4px; }
+.hint.error{ color:#b91c1c; }
+.hint.ok{ color:#0f766e; }
+.is-invalid{ border-color:#b91c1c !important; box-shadow:0 0 0 1px rgba(185,28,28,.15) inset; }
+.pwd-actions{ display:flex; justify-content:flex-end; margin-top: 20px; }
+
+/* Loader */
+.page-loader{
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  flex-direction:column; gap:10px; pointer-events:none;
+}
 .dots{ display:flex; gap:10px; align-items:center; justify-content:center; }
-.dot{ width:10px; height:10px; border-radius:50%; opacity:.9; animation:bounce 1s infinite ease-in-out; box-shadow:0 2px 6px rgba(0,0,0,0.25); }
+.dot{ width:10px; height:10px; border-radius:50%; opacity:.9; animation:bounce 1s infinite ease-in-out; box-shadow:0 2px 6px rgba(0,0,0,.25); }
 .dot.g{ background:#05A46F; animation-delay:0s; } .dot.r{ background:#B01513; animation-delay:.15s; } .dot.b{ background:#54849A; animation-delay:.30s; }
 @keyframes bounce{ 0%,80%,100%{ transform:translateY(0) scale(1); opacity:.8 } 40%{ transform:translateY(-8px) scale(1.05); opacity:1 } }
-.caption{ font-size:.95rem; color:#334155; }
 
+/* Prime width fix */
 :deep(.p-inputtext), :deep(.p-dropdown){ width:100%; }
+
+/* MOBILE: TODO APILADO UNO BAJO EL OTRO */
+@media (max-width: 1024px){
+  .top-grid{ grid-template-columns: 1fr; }
+  .id-card, .contact-card, .pwd-card{ grid-column: 1 / -1; }
+}
 </style>

@@ -205,11 +205,11 @@ const claimsItems = [
 const userItems = computed(() => [
   { type: 'header' },
   { separator: true },
-//  {
-//    label: 'Profil bearbeiten',
-//    icon: 'pi pi-pen-to-square',
-//    command: () => router.push('/profile'),
-//  },
+  {
+    label: 'Profil bearbeiten',
+    icon: 'pi pi-pen-to-square',
+    command: () => router.push('/profile'),
+  },
 //  {
 //    label: 'Dashboard bearbeiten',
 //    icon: 'pi pi-th-large',

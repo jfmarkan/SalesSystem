@@ -968,7 +968,7 @@ onMounted(async () => {
 /* Left list */
 .status-filter{ display:flex; gap:6px; }
 .dark-list :deep(.p-listbox-list){ background:transparent; }
-.row-item{ display:flex; flex-direction:column; gap:2px; padding:6px; border-radius:8px; }
+.row-item{ display:flex; flex-direction:column; gap:2px; padding:6px; border-radius:8px; width :100%; cursor:pointer; }
 .row-item:hover{ background: rgba(255,255,255,0.06); }
 .row-item .top{ display:flex; justify-content:space-between; color:#cbd5e1; font-size:12px; }
 .row-item .mid{ color:#e5e7eb; font-weight:600; }

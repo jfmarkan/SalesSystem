@@ -111,6 +111,13 @@ const routes = [
                 }
             },
             { 
+                path: '/sales-force', 
+                component: SalesForce, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
                 path: '/profile', 
                 component: UserProfile, 
                 meta: { 
