@@ -34,13 +34,21 @@ const curIdx = computed(() => {
   return Array.isArray(props.months) ? props.months.findIndex((m) => m === key) : -1
 })
 
-function fmt0(v){ return Math.round(Number(v||0)).toLocaleString('de-DE', { maximumFractionDigits: 0 }) }
+// acepta números y strings "700.000"
+function fmt0(v){
+  const n = Math.round(Number(String(v ?? 0).replace(/\./g,'')))
+  return n.toLocaleString('de-DE', { maximumFractionDigits: 0 })
+}
 
-// --- helpers de desvío (que faltaban)
+// --- helpers de desvío
 function devPct(num, den){ if(!den) return 0; return (num/den - 1) * 100 }
-function clsSalesDev(v,b){ const d=Math.abs(devPct(v,b)); if(d>10) return 'dev-red'; if(d>5) return 'dev-orange'; if(d>2) return 'dev-yellow'; return 'dev-green' }
-function clsFcstDev(v,b){ const d=Math.abs(devPct(v,b)); if(d>5) return 'dev-red'; if(d>2) return 'dev-yellow'; return 'dev-green' }
-function pctLabel(num, den){ if(!den) return '0%'; return Math.round((num/den)*100) + '%' }
+function clsSalesDev(v,b){ const d=Math.abs(devPct(Number(String(v).replace(/\./g,'')), Number(String(b).replace(/\./g,'')))); if(d>10) return 'dev-red'; if(d>5) return 'dev-orange'; if(d>2) return 'dev-yellow'; return 'dev-green' }
+function clsFcstDev(v,b){ const d=Math.abs(devPct(Number(String(v).replace(/\./g,'')), Number(String(b).replace(/\./g,'')))); if(d>5) return 'dev-red'; if(d>2) return 'dev-yellow'; return 'dev-green' }
+function pctLabel(num, den){
+  const n = Number(String(num ?? 0).replace(/\./g,'')), d = Number(String(den ?? 0).replace(/\./g,''))
+  if(!d) return '0%'
+  return Math.round((n/d)*100) + '%'
+}
 
 const salesData = computed(() => {
   if (Array.isArray(props.sales) && props.sales.length) return props.sales
@@ -149,5 +157,14 @@ const salesData = computed(() => {
   .cell-sales{ background: rgba(31,86,115,0.28); }
   .cell-budget{ background: rgba(84,132,154,0.28); }
   .ro-forecast{ background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+
+  /* Números en blanco en las dos filas de desvíos */
+  .dev-cell,
+  .dev-cell.dev-red,
+  .dev-cell.dev-orange,
+  .dev-cell.dev-yellow,
+  .dev-cell.dev-green{
+    color:#fff !important;
+  }
 }
 </style>
