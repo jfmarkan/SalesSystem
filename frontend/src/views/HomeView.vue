@@ -13,7 +13,6 @@
         </p>
         <div class="hero-actions">
           <Button label="Anmelden" class="btn-hero" @click="goToLogin"/>
-          <Button label="Registrieren" outlined class="btn-hero-outline" />
         </div>
       </div>
     </div>
@@ -45,7 +44,7 @@ const goToRegister = () => {
 }
 </script>
 
-<<style scoped>
+<style scoped>
 /* Base: mobile (<1024px) -> background image + dark overlay */
 .hero {
   position: relative;
