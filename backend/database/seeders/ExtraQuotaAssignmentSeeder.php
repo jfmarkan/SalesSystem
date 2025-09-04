@@ -4,104 +4,90 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
 class ExtraQuotaAssignmentSeeder extends Seeder
 {
     public function run(): void
     {
-        $path = database_path('seeders/data/extra_quota_assignments.csv');
-        if (!is_file($path)) {
-            $this->command->error("❌ File not found in: $path");
-            return;
-        }
+        $rows = [
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>5,'volume'=>1266,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>5,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>5,'volume'=>69563,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>5,'volume'=>1146,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>140,'user_id'=>4,'volume'=>2495259,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>142,'user_id'=>4,'volume'=>241773,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>4,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>173,'user_id'=>4,'volume'=>1458,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>4,'volume'=>938,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>173,'user_id'=>6,'volume'=>1458,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>6,'volume'=>938,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>7,'volume'=>327,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>130,'user_id'=>7,'volume'=>41057,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>141,'user_id'=>7,'volume'=>11726,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>7,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>160,'user_id'=>7,'volume'=>167218,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>170,'user_id'=>7,'volume'=>1434,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>7,'volume'=>469,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>130,'user_id'=>8,'volume'=>41057,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>141,'user_id'=>8,'volume'=>7818,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>8,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>8,'volume'=>38646,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>160,'user_id'=>8,'volume'=>58394,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>8,'volume'=>469,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>175,'user_id'=>8,'volume'=>1,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>130,'user_id'=>9,'volume'=>20528,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>141,'user_id'=>9,'volume'=>6515,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>9,'volume'=>895,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>160,'user_id'=>9,'volume'=>39814,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>9,'volume'=>235,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>170,'user_id'=>10,'volume'=>6990,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>10,'volume'=>109,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>11,'volume'=>41,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>11,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>11,'volume'=>69563,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>170,'user_id'=>11,'volume'=>772,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>11,'volume'=>218,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>11,'volume'=>469,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>17,'volume'=>531,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>17,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>13,'volume'=>204,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>13,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>13,'volume'=>69563,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>170,'user_id'=>13,'volume'=>5516,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>13,'volume'=>218,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>13,'volume'=>704,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>14,'volume'=>82,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>14,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>14,'volume'=>69563,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>170,'user_id'=>14,'volume'=>2317,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>14,'volume'=>218,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>12,'volume'=>735,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>12,'volume'=>1789,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>144,'user_id'=>12,'volume'=>69563,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>171,'user_id'=>12,'volume'=>819,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>174,'user_id'=>12,'volume'=>469,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>110,'user_id'=>16,'volume'=>899,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+            ['fiscal_year'=>2025,'profit_center_code'=>143,'user_id'=>16,'volume'=>895,'is_published'=>1,'assignment_date'=>'2025-04-01','created_at'=>'2025-09-03 04:37:24','updated_at'=>'2025-09-03 04:37:24'],
+        ];
 
-        $handle = fopen($path, 'r');
-        if (!$handle) {
-            $this->command->error("❌ File could not be opened.");
-            return;
-        }
+        // si la tabla está vacía, preservo IDs; si no, hago upsert por (fy, pc, user)
+        $empty = DB::table('extra_quota_assignments')->count() === 0;
 
-        // Detectar delimitador (coma o punto y coma) y remover BOM
-        $firstLine = fgets($handle);
-        $firstLine = preg_replace('/^\xEF\xBB\xBF/', '', $firstLine);
-        $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
-        $headers = array_map('trim', str_getcsv($firstLine, $delimiter));
+        // validar users existentes; si falta alguno, se omite esa fila
+        $userSet = array_fill_keys(DB::table('users')->pluck('id')->toArray(), true);
+        $filtered = array_values(array_filter($rows, fn($r) => isset($userSet[$r['user_id']])));
 
-        // Validar columnas esperadas
-        $expected = ['fiscal_year','profit_center_code','user_id','volume','is_published','assignment_date'];
-        $missing = array_diff($expected, $headers);
-        if (!empty($missing)) {
-            fclose($handle);
-            $this->command->error("❌ Missing Columns in CSV file: " . implode(', ', $missing));
-            $this->command->warn("Found Headers: " . implode(', ', $headers));
-            return;
-        }
-
-        $colIndex = array_flip($headers);
-        $rows = 0;
-        $batch = [];
-
-        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
-            if ($this->isEmptyRow($row)) { continue; }
-
-            $get = fn(string $key) => $row[$colIndex[$key]] ?? null;
-
-            $volumeRaw = trim((string) $get('volume'));
-            // Convertir "1.234,56" o "1234,56" a float
-            $volumeNorm = str_replace(['.', ','], ['', '.'], $volumeRaw);
-
-            $payload = [
-                'fiscal_year'        => (int) trim((string) $get('fiscal_year')),
-                'profit_center_code' => trim((string) $get('profit_center_code')),
-                'user_id'            => (int) trim((string) $get('user_id')),
-                'volume'             => (float) $volumeNorm,
-                'is_published'       => $this->toBool($get('is_published')),
-                'assignment_date'    => $this->toDate($get('assignment_date')),
-                'created_at'         => now(),
-                'updated_at'         => now(),
-            ];
-
-            $batch[] = $payload;
-            $rows++;
-
-            if (count($batch) >= 500) {
-                DB::table('extra_quota_assignments')->insert($batch);
-                $batch = [];
-            }
-        }
-
-        fclose($handle);
-
-        if (!empty($batch)) {
-            DB::table('extra_quota_assignments')->insert($batch);
-        }
-
-        $this->command->info("✅ Imported {$rows} rows in extra_quota_assignments from CSV file.");
-    }
-
-    private function isEmptyRow(array $row): bool
-    {
-        foreach ($row as $v) {
-            if (trim((string) $v) !== '') return false;
-        }
-        return true;
-    }
-
-    private function toBool($value): bool
-    {
-        $v = strtolower(trim((string) $value));
-        return in_array($v, ['1','true','t','yes','y','si','sí','on'], true);
-    }
-
-    private function toDate($value): ?string
-    {
-        $v = trim((string) $value);
-        if ($v === '') return null;
-        try {
-            return Carbon::parse($v)->toDateString();
-        } catch (\Throwable $e) {
-            return null;
+        if ($empty) {
+            DB::table('extra_quota_assignments')->insert($filtered);
+            $this->command->info('✅ Imported '.count($filtered).' rows in extra_quota_assignments (preserving IDs).');
+        } else {
+            $rowsNoId = array_map(function($r){ unset($r['id']); return $r; }, $filtered);
+            DB::table('extra_quota_assignments')->upsert(
+                $rowsNoId,
+                ['fiscal_year','profit_center_code','user_id'],
+                ['volume','is_published','assignment_date','updated_at']
+            );
+            $this->command->info('✅ Upserted '.count($rowsNoId).' rows in extra_quota_assignments.');
         }
     }
 }

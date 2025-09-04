@@ -4,122 +4,119 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\QueryException;
 use Carbon\Carbon;
 
 class ClientProfitCenterSeeder extends Seeder
 {
-    /**
-     * Seed client_profit_centers from CSV.
-     * - CSV path: database/seeders/data/tblClientProfitCenterPivot.csv
-     * - Assumes headers exist. We accept both snake_case and Access-style (ClientGroupNumber, ProfitCenterCode).
-     * - id is AUTO; created_at = now(); updated_at/deleted_at = null.
-     * - Ignores duplicate (client_group_number, profit_center_code) pairs.
-     * - Keeps UTF-8 characters intact (ensure your CSV is saved as UTF-8).
-     */
     public function run(): void
     {
         $path = database_path('seeders/data/tblClientProfitCenterPivot.csv');
-        if (!is_file($path)) {
-            $this->command->warn("CSV not found: {$path}");
-            return;
-        }
+        if (!is_file($path)) { $this->command->error("CSV not found: {$path}"); return; }
 
-        $handle = fopen($path, 'r');
-        if ($handle === false) {
-            $this->command->warn("Cannot open CSV: {$path}");
-            return;
-        }
+        [$headers, $rows] = $this->readCsv($path);
+        if (!$headers) { $this->command->error("CSV vacío o sin header"); return; }
 
-        // Detect delimiter from the first line
-        $firstLine = fgets($handle);
-        if ($firstLine === false) {
-            fclose($handle);
-            $this->command->warn("Empty CSV: {$path}");
-            return;
-        }
-        $delimiter = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
-        rewind($handle);
+        // Columna de código en profit_centers
+        $pcCol = Schema::hasColumn('profit_centers','code') ? 'code'
+               : (Schema::hasColumn('profit_centers','profit_center_code') ? 'profit_center_code' : null);
+        if (!$pcCol) { $this->command->error("profit_centers no tiene code/profit_center_code"); return; }
 
-        // Read header
-        $header = fgetcsv($handle, 0, $delimiter);
-        if (!$header || count($header) === 0) {
-            fclose($handle);
-            $this->command->warn("CSV has no header: {$path}");
-            return;
-        }
-
-        // Normalize header keys to snake_case-ish
-        $norm = fn ($s) => strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', (string)$s)));
-        $keys = array_map($norm, $header);
+        $hasCreatedAt = Schema::hasColumn('client_profit_centers','created_at');
+        $hasUpdatedAt = Schema::hasColumn('client_profit_centers','updated_at');
+        $hasDeletedAt = Schema::hasColumn('client_profit_centers','deleted_at');
 
         $now = Carbon::now();
-        $batch = [];
-        $seen  = []; // to skip duplicate pairs from the CSV
-        $rows  = 0;
 
-        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
-            // Skip empty lines
-            if (count($row) === 1 && trim((string)$row[0]) === '') continue;
+        $total=0; $inserted=0; $dupDb=0; $badClient=0; $badPc=0; $errors=0;
 
-            // Pad row if shorter than header
-            if (count($row) < count($keys)) {
-                $row = array_pad($row, count($keys), null);
+        foreach ($rows as $i => $row) {
+            $line = $i + 2; // header = línea 1
+
+            $cgn = $this->ival($row,$headers,['client_group_number','clientgroupnumber','ClientGroupNumber']);
+            $pc  = $this->ival($row,$headers,['profit_center_code','profitcentercode','pc_code','ProfitCenterCode']);
+
+            if (!$cgn || !$pc) { 
+                $this->command->warn("L{$line} SKIP: valores inválidos cgn={$cgn} pc={$pc}");
+                continue;
             }
 
-            $assoc = array_combine($keys, $row) ?: [];
+            // FK manuales
+            $cExists = DB::table('clients')->where('client_group_number',$cgn)->exists();
+            if (!$cExists) { $badClient++; $this->command->warn("L{$line} SKIP: cliente no existe CGN={$cgn}"); continue; }
 
-            // Accept both snake_case and Access-style headers
-            $clientGroup =
-                $assoc['client_group_number'] ??
-                $assoc['clientgroupnumber'] ??
-                $assoc['client_groupno'] ??
-                $assoc['clientno'] ??
-                null;
+            $pExists = DB::table('profit_centers')->where($pcCol,$pc)->exists();
+            if (!$pExists) { $badPc++; $this->command->warn("L{$line} SKIP: profit center no existe PC={$pc}"); continue; }
 
-            $pcCode =
-                $assoc['profit_center_code'] ??
-                $assoc['profitcentercode'] ??
-                $assoc['pc_code'] ??
-                null;
+            // Duplicado en DB
+            $pairExists = DB::table('client_profit_centers')
+                ->where('client_group_number',$cgn)
+                ->where('profit_center_code',$pc)
+                ->exists();
+            if ($pairExists) { $dupDb++; $this->command->warn("L{$line} DUP en DB: CGN={$cgn}, PC={$pc}"); continue; }
 
-            if ($clientGroup === null || $pcCode === null) {
-                continue; // missing required data
-            }
-
-            $clientGroup = (int) $clientGroup;
-            $pcCode      = (int) $pcCode;
-
-            if ($clientGroup === 0 || $pcCode === 0) {
-                continue; // invalid values
-            }
-
-            $pairKey = $clientGroup . '-' . $pcCode;
-            if (isset($seen[$pairKey])) {
-                continue; // skip duplicates within CSV
-            }
-            $seen[$pairKey] = true;
-
-            $batch[] = [
-                'client_group_number' => $clientGroup,
-                'profit_center_code'  => $pcCode,
-                'created_at'          => $now,
-                'updated_at'          => null,
-                'deleted_at'          => null,
+            // Insert estricto
+            $payload = [
+                'client_group_number' => $cgn,
+                'profit_center_code'  => $pc,
             ];
-            $rows++;
+            if ($hasCreatedAt) $payload['created_at'] = $now;
+            if ($hasUpdatedAt) $payload['updated_at'] = null;
+            if ($hasDeletedAt) $payload['deleted_at'] = null;
 
-            // Flush in chunks
-            if (count($batch) >= 1000) {
-                DB::table('client_profit_centers')->insertOrIgnore($batch);
-                $batch = [];
+            try {
+                DB::table('client_profit_centers')->insert($payload);
+                $inserted++;
+            } catch (QueryException $e) {
+                $errors++;
+                $this->command->error("L{$line} ERROR: ".$e->getMessage());
+                $this->command->line('Row='.json_encode($payload));
             }
-        }
-        fclose($handle);
 
-        if (!empty($batch)) {
-            DB::table('client_profit_centers')->insertOrIgnore($batch);
+            $total++;
         }
 
-        $this->command->info("Client / ProfitCenter relations imported: {$rows}");
+        $count = DB::table('client_profit_centers')->count();
+        $minId = DB::table('client_profit_centers')->min('id');
+        $maxId = DB::table('client_profit_centers')->max('id');
+
+        $this->command->info("CPC: total={$total}, inserted={$inserted}, dup_db={$dupDb}, bad_client={$badClient}, bad_pc={$badPc}, errors={$errors}, table_count={$count}, id_range={$minId}..{$maxId}");
+    }
+
+    // --- helpers ---
+    private function readCsv(string $path): array
+    {
+        $fh=fopen($path,'rb'); if(!$fh) return [[],[]];
+        $first=fgets($fh); if($first===false){ fclose($fh); return [[],[]]; }
+        $first=preg_replace('/^\xEF\xBB\xBF/','',$first);
+        $semi=substr_count($first,';'); $coma=substr_count($first,',');
+        $delim=($semi>$coma)?';':',';
+        rewind($fh);
+
+        $header=fgetcsv($fh,0,$delim);
+        if(!$header){ fclose($fh); return [[],[]]; }
+        $headers=array_map(fn($h)=>$this->norm((string)$h), $header);
+
+        $rows=[];
+        while(($line=fgetcsv($fh,0,$delim))!==false){
+            if(count($line)===1 && trim((string)$line[0])==='') continue;
+            if(count($line)<count($headers)) $line=array_pad($line,count($headers),null);
+            $rows[]=$line;
+        }
+        fclose($fh);
+        return [$headers,$rows];
+    }
+    private function norm(string $s): string { return strtolower(str_replace([' ','-'],'_',trim($s))); }
+    private function sval(array $row,array $headers,array $cands): ?string {
+        foreach($cands as $c){ $k=$this->norm($c); $i=array_search($k,$headers,true);
+            if($i!==false && isset($row[$i]) && $row[$i]!=='') return trim((string)$row[$i]); }
+        return null;
+    }
+    private function ival(array $row,array $headers,array $cands): int {
+        $v=$this->sval($row,$headers,$cands);
+        if ($v===null) return 0;
+        if (!preg_match('/-?\d+/', $v, $m)) return 0; // ojo: convierte '070'->70
+        return (int)$m[0];
     }
 }
