@@ -46,6 +46,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);
         Route::get('/totals', [CompanyAnalyticsController::class, 'totals']);
         Route::get('/series', [CompanyAnalyticsController::class, 'series']);
+        Route::get('/pc/overview', [CompanyAnalyticsController::class, 'pcOverview']);
+        Route::get('/pc/list',     [CompanyAnalyticsController::class, 'pcList']);
     });
     
     Route::prefix('budget-cases')->group(function () {
