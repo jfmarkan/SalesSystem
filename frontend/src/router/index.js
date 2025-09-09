@@ -15,7 +15,7 @@ import ExtraQuotaPanel from '@/views/dashboard/ExtraQuotaPanel.vue';
 import BudgetCasePanel from '@/views/dashboard/BudgetCasePanel.vue';
 import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
 import SalesForce from '@/views/dashboard/manager/SalesForce.vue';
-import ReportGenerator from '@/views/dashboard/manager/ReportGenerator.vue';
+import ReportGenerator from '@/views/dashboard/manager/ProfitCenterAnalytics.vue';
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
 
