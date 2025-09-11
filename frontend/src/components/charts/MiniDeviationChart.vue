@@ -2,56 +2,112 @@
 // Code in English; UI labels in German.
 import { computed } from 'vue'
 import { Bar, Line } from 'vue-chartjs'
-import { Chart, BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js'
+import {
+  Chart, BarElement, LineElement, PointElement,
+  CategoryScale, LinearScale, Tooltip, Legend
+} from 'chart.js'
 Chart.register(BarElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const props = defineProps({
-  months: { type: [Array, null], default: null },
-  sales: { type: [Array, Number], required: true },
-  budget: { type: [Array, Number], required: true },
-  forecast: { type: [Array, Number], required: true },
-  height: { type: Number, default: 500 }
+  months:   { type: [Array, null], default: null },
+  sales:    { type: [Array, Number, String], required: true },   // IST (Blue)
+  budget:   { type: [Array, Number, String], required: true },   // Budget (Green)
+  forecast: { type: [Array, Number, String], required: true },   // Forecast (Yellow)
+  height:   { type: Number, default: 500 }
 })
+
+/* ==== NORMALIZERS + FORMAT ==== */
+// enteros y miles con punto, sin decimales
+const toInt = (v) => {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v)
+  const s = String(v ?? '').replace(/\./g, '').split(',')[0].replace(/[^\d-]/g, '')
+  if (s === '' || s === '-') return 0
+  const n = parseInt(s, 10)
+  return Number.isFinite(n) ? n : 0
+}
+const toIntArr = (v, len = 0) => {
+  if (Array.isArray(v)) return v.map(toInt)
+  const n = toInt(v)
+  return len > 0 ? Array.from({ length: len }, () => n) : [n]
+}
+const fmt = (x) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(toInt(x))
+
+// palette fija: azul=Ist, verde=Budget, amarillo=Forecast
+const C = {
+  salesLine:   '#60a5fa',                 // blue
+  salesFill:   'rgba(96,165,250,.20)',
+  budgetLine:  '#22c55e',                 // green
+  budgetFill:  'rgba(34,197,94,.20)',
+  fcLine:      '#FFC20E',                 // yellow
+  fcFill:      'rgba(255,194,14,.20)',
+}
 
 const isSeries = computed(() => Array.isArray(props.months) && props.months.length > 1)
 
+/* ---- DATASETS ---- */
 const chartData = computed(() => {
   if (isSeries.value) {
+    // Forecast deviation view: line chart with 3 lines (Ist, Budget, Forecast)
+    const len = props.months.length
     return {
       labels: props.months,
       datasets: [
-        { label:'Ist',      data: Array.isArray(props.sales) ? props.sales : [],      borderColor:'#456287', backgroundColor:'rgba(69,98,135,.25)', tension:.2, fill:false },
-        { label:'Budget',   data: Array.isArray(props.budget) ? props.budget : [],    borderColor:'#9DBB61', backgroundColor:'rgba(157,187,97,.25)', tension:.2, fill:false },
-        { label:'Forecast', data: Array.isArray(props.forecast) ? props.forecast : [], borderColor:'#FFC20E', backgroundColor:'rgba(255,194,15,.25)', tension:.2, fill:false }
+        { label:'Ist',      data: toIntArr(props.sales, len),    borderColor: C.salesLine,  backgroundColor: C.salesFill,  tension:.25, fill:false, pointRadius:0 },
+        { label:'Budget',   data: toIntArr(props.budget, len),   borderColor: C.budgetLine, backgroundColor: C.budgetFill, tension:.25, fill:false, pointRadius:0 },
+        { label:'Forecast', data: toIntArr(props.forecast, len), borderColor: C.fcLine,     backgroundColor: C.fcFill,     tension:.25, fill:false, pointRadius:0 }
       ]
     }
   }
+
+  // Sales deviation view: TWO separate bars (Ist blue, Budget green), no Forecast
+  const s = toInt(Array.isArray(props.sales) ? props.sales.at(-1) : props.sales)
+  const b = toInt(Array.isArray(props.budget) ? props.budget.at(-1) : props.budget)
+
   return {
-    labels: ['Ist','Budget','Forecast'],
+    labels: ['Ist', 'Budget'],
     datasets: [{
       label: '',
-      data: [
-        Number(Array.isArray(props.sales) ? props.sales.at(-1) ?? 0 : props.sales ?? 0),
-        Number(Array.isArray(props.budget) ? props.budget.at(-1) ?? 0 : props.budget ?? 0),
-        Number(Array.isArray(props.forecast) ? props.forecast.at(-1) ?? 0 : props.forecast ?? 0)
-      ],
-      backgroundColor: ['#05a46f','#54849A','#E88D1E']
+      data: [s, b],
+      backgroundColor: [C.salesLine, C.budgetLine]
     }]
   }
 })
 
-const options = {
+/* ---- OPTIONS ---- */
+const options = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: isSeries.value, position: 'bottom' },
-    tooltip: { mode: 'index', intersect: false }
+    legend: { display: isSeries.value, position: 'bottom', labels: { color: '#e5e7eb' } },
+    tooltip: {
+      mode: 'index',
+      intersect: false,
+      callbacks: {
+        label: (ctx) => {
+          const name = (isSeries.value ? (ctx.dataset?.label || '') : (ctx.label || ''))
+          return `${name}: ${fmt(ctx.parsed?.y ?? 0)}`
+        }
+      }
+    }
+  },
+  elements: {
+    line: { borderWidth: 2 },
+    point: { radius: 0, hoverRadius: 3 }
   },
   scales: {
-    x: { ticks: { color: '#e5e7eb' }, grid: { color: 'rgba(255,255,255,.08)' } },
-    y: { beginAtZero: true, ticks: { color: '#e5e7eb' }, grid: { color: 'rgba(255,255,255,.08)' } }
+    x: {
+      stacked: false,
+      ticks: { color: '#e5e7eb' },
+      grid: { color: 'rgba(255,255,255,.08)' }
+    },
+    y: {
+      stacked: false,
+      beginAtZero: true,
+      ticks: { color: '#e5e7eb', callback: (v) => fmt(v) },
+      grid: { color: 'rgba(255,255,255,.08)' }
+    }
   }
-}
+}))
 </script>
 
 <template>

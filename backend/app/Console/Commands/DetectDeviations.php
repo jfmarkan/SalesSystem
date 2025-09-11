@@ -10,13 +10,17 @@ use App\Models\Assignment;
 class DetectDeviations extends Command
 {
     protected $signature = 'deviations:detect {--user_id=}';
-    protected $description = 'Detect deviations per user & profit center (Forecast vs Budget next 6 months, Sales vs Budget previous month)';
+    protected $description = 'Detect deviations per user & profit center (Forecast vs Budget next 6 months (FY Apr–Mar), Sales vs Budget previous month)';
+
+    /** caches */
+    private array $seasonalityCache = [];   // key: hash(cpcIds,fystart) => [1..12] = weight
+    private array $assignmentEffCache = []; // key: pc|user|fyStart => float
 
     public function handle(): int
     {
         $now = Carbon::now();
 
-        // Keep your original early-month skip
+        // Skip very early month to avoid partial closings
         if ($now->day < 4) {
             $this->info('Skipping: day < 4.');
             return self::SUCCESS;
@@ -52,8 +56,14 @@ class DetectDeviations extends Command
 
                 if (!$cpcIds) continue;
 
-                // A) FORECAST vs BUDGET (current month + next 5) => aggregated window
-                $forecastWindow = $this->buildForecastWindowSeries($cpcIds, $now, 6);
+                // A) FORECAST vs BUDGET (next 6 months EXCLUDING current month)
+                $forecastWindow = $this->buildForecastWindowSeries(
+                    cpcIds: $cpcIds,
+                    pcCode: (string)$pcCode,
+                    userId: (int)$userId,
+                    start:  $now->copy()->startOfMonth(), // base
+                    monthsCount: 6
+                );
 
                 if ($forecastWindow['total_budget'] > 0.0) {
                     $ratioF = $forecastWindow['total_forecast'] / $forecastWindow['total_budget'];
@@ -76,7 +86,7 @@ class DetectDeviations extends Command
                     }
                 }
 
-                // B) SALES vs BUDGET (previous month) => single period
+                // B) SALES vs BUDGET (previous month) — must include 0 sales
                 $prev = $now->copy()->subMonth();
                 $pm = (int)$prev->month;
                 $py = (int)$prev->year;
@@ -86,13 +96,23 @@ class DetectDeviations extends Command
                     ->where('fiscal_year', $py)->where('month', $pm)
                     ->sum('volume');
 
-                $sumBudget = (float) DB::table('budgets')
+                $sumBudgetBase = (float) DB::table('budgets')
                     ->whereIn('client_profit_center_id', $cpcIds)
                     ->where('fiscal_year', $py)->where('month', $pm)
                     ->sum('volume');
 
-                if ($sumBudget > 0.0 && $sumSales > 0.0) {
-                    $ratioS = $sumSales / $sumBudget;
+                // Add ExtraQuotaAssignment share for this month (FY Apr–Mar)
+                $assignmentMonthly = $this->assignmentMonthlyShareFY(
+                    pcCode: (string)$pcCode,
+                    userId: (int)$userId,
+                    cpcIds: $cpcIds,
+                    Y:      $py,
+                    m:      $pm
+                );
+                $sumBudget = $sumBudgetBase + $assignmentMonthly;
+
+                if ($sumBudget > 0.0) {
+                    $ratioS = ($sumSales >= 0.0) ? ($sumSales / $sumBudget) : 0.0;
                     if ($ratioS < 0.90 || $ratioS > 1.10) {
                         $this->upsertDeviation(
                             profitCenterCode: (int)$pcCode,
@@ -118,7 +138,12 @@ class DetectDeviations extends Command
         return self::SUCCESS;
     }
 
-    private function buildForecastWindowSeries(array $cpcIds, Carbon $start, int $monthsCount = 6): array
+    /**
+     * Build window starting NEXT month (exclude current), length N.
+     * Budget = base budgets + EQA Assignment (distributed by FY seasonality like analytics)
+     * Forecast = base forecasts (latest per user) + EQA Forecast (open opps, prob-weighted, latest per opportunity_group_id)
+     */
+    private function buildForecastWindowSeries(array $cpcIds, string $pcCode, int $userId, Carbon $start, int $monthsCount = 6): array
     {
         $months = [];
         $budgetSeries = [];
@@ -127,44 +152,67 @@ class DetectDeviations extends Command
         $totalBudget = 0.0;
         $totalForecast = 0.0;
 
-        $monthNow = (int)$start->month;
-        $yearNow  = (int)$start->year;
+        // start from NEXT month
+        $cursor = $start->copy()->addMonth();
 
         for ($i = 0; $i < $monthsCount; $i++) {
-            $m = $monthNow + $i;
-            $y = $yearNow;
-            if ($m > 12) { $m -= 12; $y += 1; }
-
+            $y = (int)$cursor->year;
+            $m = (int)$cursor->month;
             $key = sprintf('%04d-%02d', $y, $m);
             $months[] = $key;
 
-            $b = (float) DB::table('budgets')
+            // Base budget
+            $bBase = (float) DB::table('budgets')
                 ->whereIn('client_profit_center_id', $cpcIds)
                 ->where('fiscal_year', $y)->where('month', $m)
                 ->sum('volume');
 
-            $fSum = 0.0;
-            foreach ($cpcIds as $cpcId) {
-                $ver = DB::table('forecasts')
-                    ->where('client_profit_center_id', $cpcId)
-                    ->where('fiscal_year', $y)->where('month', $m)
-                    ->max('version');
+            // Add EQA Assignment share for this FY month
+            $bEqa = $this->assignmentMonthlyShareFY(
+                pcCode: $pcCode,
+                userId: $userId,
+                cpcIds: $cpcIds,
+                Y:      $y,
+                m:      $m
+            );
+            $b = $bBase + $bEqa;
 
-                if ($ver) {
-                    $fv = (float) DB::table('forecasts')
-                        ->where('client_profit_center_id', $cpcId)
-                        ->where('fiscal_year', $y)->where('month', $m)
-                        ->where('version', $ver)
-                        ->value('volume');
-                    $fSum += $fv;
-                }
-            }
+            // Base forecast (latest per user)
+            $fBase = 0.0;
+            $lv = DB::table('forecasts')
+                ->whereIn('client_profit_center_id', $cpcIds)
+                ->where('fiscal_year', $y)->where('month', $m)
+                ->where('user_id', $userId)
+                ->select('client_profit_center_id','fiscal_year','month','user_id', DB::raw('MAX(version) as max_version'))
+                ->groupBy('client_profit_center_id','fiscal_year','month','user_id');
+
+            $fBase = (float) DB::table('forecasts')
+                ->joinSub($lv, 'lv', function($j){
+                    $j->on('forecasts.client_profit_center_id','=','lv.client_profit_center_id')
+                      ->on('forecasts.fiscal_year','=','lv.fiscal_year')
+                      ->on('forecasts.month','=','lv.month')
+                      ->on('forecasts.user_id','=','lv.user_id')
+                      ->on('forecasts.version','=','lv.max_version');
+                })
+                ->sum('forecasts.volume');
+
+            // EQA Forecast (open opps, prob-weighted)
+            $fEqa = $this->extraQuotaForecastOpenForMonth(
+                pcCode: $pcCode,
+                userId: $userId,
+                Y:      $y,
+                m:      $m
+            );
+
+            $f = $fBase + $fEqa;
 
             $budgetSeries[] = $b;
-            $forecastSeries[] = $fSum;
+            $forecastSeries[] = $f;
 
             $totalBudget  += $b;
-            $totalForecast += $fSum;
+            $totalForecast += $f;
+
+            $cursor->addMonth();
         }
 
         return [
@@ -176,6 +224,138 @@ class DetectDeviations extends Command
         ];
     }
 
+    /* =========================
+       Extra Quota Assignment (Budget side)
+       ========================= */
+
+    private function fyStartFor(int $Y, int $m): int
+    {
+        return ($m >= 4) ? $Y : ($Y - 1);
+    }
+
+    private function seasonalityWeightsFY(array $cpcIds, int $fyStart): array
+    {
+        $key = md5(json_encode([$cpcIds, $fyStart]));
+        if (isset($this->seasonalityCache[$key])) return $this->seasonalityCache[$key];
+
+        $rows = DB::table('budgets')
+            ->select('fiscal_year', 'month', DB::raw('SUM(volume) as s'))
+            ->whereIn('client_profit_center_id', $cpcIds)
+            ->where(function ($w) use ($fyStart) {
+                $w->where(function ($a) use ($fyStart) {
+                    $a->where('fiscal_year', $fyStart)->whereBetween('month', [4, 12]);
+                })->orWhere(function ($b) use ($fyStart) {
+                    $b->where('fiscal_year', $fyStart + 1)->whereBetween('month', [1, 3]);
+                });
+            })
+            ->groupBy('fiscal_year', 'month')
+            ->get();
+
+        $sumByMonth = array_fill(1, 12, 0.0);
+        $total = 0.0;
+        foreach ($rows as $r) {
+            $sumByMonth[(int)$r->month] = (float)$r->s;
+            $total += (float)$r->s;
+        }
+
+        if ($total <= 0.0) {
+            for ($m = 1; $m <= 12; $m++) $sumByMonth[$m] = 1.0 / 12.0;
+        } else {
+            for ($m = 1; $m <= 12; $m++) $sumByMonth[$m] = $sumByMonth[$m] / $total;
+        }
+
+        return $this->seasonalityCache[$key] = $sumByMonth;
+    }
+
+    private function assignmentEffectiveTotalFY(string $pcCode, int $userId, int $fyStart): float
+    {
+        $key = $pcCode . '|' . $userId . '|' . $fyStart;
+        if (isset($this->assignmentEffCache[$key])) return $this->assignmentEffCache[$key];
+
+        $assigned = (float) DB::table('extra_quota_assignments')
+            ->where('profit_center_code', $pcCode)
+            ->where('user_id', $userId)
+            ->where('is_published', 1)
+            ->where('fiscal_year', $fyStart)
+            ->sum('volume');
+
+        // Oportunidades GANADAS dentro del FY: descuentan de la EQA
+        $won = (float) DB::table('sales_opportunities')
+            ->where('profit_center_code', $pcCode)
+            ->where('user_id', $userId)
+            ->where('fiscal_year', $fyStart)
+            ->where(function($q){
+                $q->where('is_won', 1)->orWhere('status', 'won');
+            })
+            ->sum('volume');
+
+        $effective = max(0.0, $assigned - $won);
+        return $this->assignmentEffCache[$key] = $effective;
+    }
+
+    private function assignmentMonthlyShareFY(string $pcCode, int $userId, array $cpcIds, int $Y, int $m): float
+    {
+        $fy = $this->fyStartFor($Y, $m);
+        $weights = $this->seasonalityWeightsFY($cpcIds, $fy);
+        $w = $weights[$m] ?? (1.0 / 12.0);
+        $total = $this->assignmentEffectiveTotalFY($pcCode, $userId, $fy);
+        return $total * $w;
+    }
+
+    /* =========================
+       Extra Quota Forecast (Forecast side) — OPEN opps, prob-weighted
+       ========================= */
+    private function extraQuotaForecastOpenForMonth(string $pcCode, int $userId, int $Y, int $m): float
+    {
+        // latest opportunity row per group (for status/prob)
+        $opBase = DB::table('sales_opportunities')
+            ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
+            ->groupBy('opportunity_group_id');
+
+        // latest EQF per (group, fy, month)
+        $eqfBase = DB::table('extra_quota_forecasts')
+            ->where('fiscal_year', $Y)
+            ->where('month', $m)
+            ->select('opportunity_group_id', 'fiscal_year', 'month', DB::raw('MAX(version) as max_version'))
+            ->groupBy('opportunity_group_id', 'fiscal_year', 'month');
+
+        $rows = DB::table('extra_quota_forecasts as eqf')
+            ->joinSub($eqfBase, 'lv', function($j){
+                $j->on('eqf.opportunity_group_id','=','lv.opportunity_group_id')
+                  ->on('eqf.fiscal_year','=','lv.fiscal_year')
+                  ->on('eqf.month','=','lv.month')
+                  ->on('eqf.version','=','lv.max_version');
+            })
+            ->joinSub($opBase, 'oplv', function($j){
+                $j->on('oplv.opportunity_group_id','=','eqf.opportunity_group_id');
+            })
+            ->join('sales_opportunities as op', function($j){
+                $j->on('op.opportunity_group_id','=','oplv.opportunity_group_id')
+                  ->on('op.version','=','oplv.max_version');
+            })
+            ->where('op.profit_center_code', $pcCode)
+            ->where('op.user_id', $userId)
+            ->where('op.fiscal_year', $this->fyStartFor($Y, $m)) // la oportunidad pertenece al FY de Apr–Mar
+            ->where(function($q){
+                $q->whereNull('op.is_won')->orWhere('op.is_won', 0);
+            })
+            ->where(function($q){
+                $q->whereNull('op.is_lost')->orWhere('op.is_lost', 0);
+            })
+            ->whereNotIn('op.status', ['won','lost'])
+            ->get(['eqf.volume as vol', 'op.probability_pct as prob']);
+
+        $sum = 0.0;
+        foreach ($rows as $r) {
+            $prob = max(0.0, min(100.0, (float)($r->prob ?? 0.0))) / 100.0;
+            $sum += ((float)$r->vol) * $prob;
+        }
+        return $sum;
+    }
+
+    /* =========================
+       Upsert deviations
+       ========================= */
     private function upsertDeviation(
         int $profitCenterCode,
         int $userId,

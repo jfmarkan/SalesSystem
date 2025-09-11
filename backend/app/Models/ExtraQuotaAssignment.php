@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExtraQuotaAssignment extends Model
 {
-    protected $table = 'extra_quota_assignment';
+    protected $table = 'extra_quota_assignments';
 
     protected $fillable = [
         'fiscal_year','profit_center_code','user_id','volume','is_published','assignment_date',

@@ -15,7 +15,9 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ExtraQuotaController;
 use App\Http\Controllers\ForecastController;
+use App\Http\Controllers\SalesForce\UserAdministrationController as SalesForceUserAdministrationController;
 use App\Http\Controllers\SalesforceController;
+use App\Http\Controllers\UserAdministrationController;
 use App\Http\Controllers\UserDetailController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
@@ -41,6 +43,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/series',  [ForecastController::class, 'saveSeries']);
         Route::get('/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
     });
+
+    Route::prefix('sales-force')->group(function () {
+        Route::get('/users',        [UserAdministrationController::class, 'index']);
+        Route::get('/roles',        [UserAdministrationController::class, 'roles']);
+        Route::get('/teams',        [UserAdministrationController::class, 'teams']);
+        Route::get('/clients',      [UserAdministrationController::class, 'clients']); // ?userId=
+
+        Route::patch('/users/{id}/block',  [UserAdministrationController::class, 'block']);
+        Route::patch('/users/{id}/roles',  [UserAdministrationController::class, 'updateRole']);
+        Route::patch('/users/{id}/teams',  [UserAdministrationController::class, 'updateTeams']);
+
+        Route::post('/users/{id}/transfer', [UserAdministrationController::class, 'transfer']);
+        Route::get('/users/{id}/logs',       [UserAdministrationController::class, 'logs']); // opcional
+});
 
     Route::prefix('analytics')->group(function () {
         Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);

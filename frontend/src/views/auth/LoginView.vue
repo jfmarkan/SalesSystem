@@ -19,7 +19,6 @@
 </template>
 
 <script setup>
-/* Component: Login View (German UI, English code/comments) */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -29,30 +28,27 @@ import AuthLayout from '@/components/layout/AuthLayout.vue'
 const router = useRouter()
 const auth = useAuthStore()
 const modal = useModal()
-
 const email = ref('')
 const password = ref('')
 
-// Handles login submit; keeps your OTP verify flow intact
 const login = async () => {
   try {
-    const response = await auth.login({
-      email: email.value,
-      password: password.value,
-    })
-
+    const response = await auth.login({ email: email.value, password: password.value })
     if (response?.verify) {
-      // Unverified account: show modal and route to OTP with email
       modal.show('Konto nicht verifiziert', 'Gib den Code ein, den wir dir per E-Mail geschickt haben.')
       router.push({ path: '/verify-otp', query: { email: response.email } })
     } else {
-      // Normal login: go to dashboard
       router.push('/dashboard')
     }
   } catch (err) {
-    if (import.meta.env.DEV) console.error('❌ Login-Fehler:', err)
-    // Generic German UI message; adjust to your backend messages if needed
-    modal.show('Zugriffsfehler', 'Ungültige Anmeldedaten oder nicht vorhandenes Konto.')
+    if (err.blocked) {
+      modal.show(
+        'Konto gesperrt',
+        'Ihr Benutzer wurde gesperrt. Wenn Sie glauben, dass dies ein Fehler ist, wenden Sie sich bitte an den Systemadministrator.'
+      )
+      return
+    }
+    modal.show('Zugriffsfehler', err.message || 'Ungültige Anmeldedaten oder nicht vorhandenes Konto.')
   }
 }
 </script>

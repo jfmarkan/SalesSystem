@@ -21,7 +21,7 @@ class ClientProfitCenter extends Model
      */
     public function client()
     {
-        return $this->belongsTo(Client::class, 'client_group_number');
+        return $this->belongsTo(Client::class, 'client_group_number', 'client_group_number');
     }
 
     /**

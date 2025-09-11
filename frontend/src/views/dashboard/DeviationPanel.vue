@@ -60,7 +60,6 @@
 </template>
 
 <script setup>
-// Code in English; UI German.
 import { ref, computed, onMounted } from 'vue'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
@@ -78,6 +77,20 @@ const tab = ref('open')
 const openList = computed(() => deviations.value.filter((d) => !d.justified))
 const closedList = computed(() => deviations.value.filter((d) => d.justified))
 
+/** Quita máscara “miles con punto / coma decimal” y devuelve ENTERO */
+function parseMaskedInt(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v)
+  if (typeof v !== 'string') return 0
+  // ejemplo: "1.275.271,99" -> "1275271" -> 1275271
+  const noDots = v.replace(/\./g, '')
+  const beforeComma = noDots.split(',')[0]
+  const onlyDigits = beforeComma.replace(/[^\d-]/g, '')
+  if (onlyDigits === '' || onlyDigits === '-' ) return 0
+  return Math.round(parseInt(onlyDigits, 10))
+}
+
+const toNumArray = (arr) => Array.isArray(arr) ? arr.map(parseMaskedInt) : null
+
 function normalizeDev(d) {
   return {
     id: d.id,
@@ -85,21 +98,27 @@ function normalizeDev(d) {
     clientName: d.clientName || '',
     pcCode: d.pcCode || '',
     pcName: d.pcName || '',
-    year: Number(d.year || 0),
-    month: Number(d.month || 0),
-    sales: Number(d.sales ?? 0),
-    budget: Number(d.budget ?? 0),
-    forecast: Number(d.forecast ?? 0),
-    deltaAbs: Number(d.deltaAbs ?? 0),
-    deltaPct: Number(d.deltaPct ?? 0),
+    year: parseMaskedInt(d.year ?? 0),
+    month: parseMaskedInt(d.month ?? 0),
+
+    // ← AQUÍ el fix: NUNCA Number() sobre "1.200"
+    sales: parseMaskedInt(d.sales ?? 0),
+    budget: parseMaskedInt(d.budget ?? 0),
+    forecast: parseMaskedInt(d.forecast ?? 0),
+    deltaAbs: parseMaskedInt(d.deltaAbs ?? 0),
+    deltaPct: parseMaskedInt(d.deltaPct ?? 0), // si viene 0–100, lo dejamos entero
+
     comment: d.comment || '',
     plan: d.plan || null,
     actions: Array.isArray(d.actions) ? d.actions : [],
     justified: !!d.justified,
-    months: d.months || null,
-    salesSeries: d.salesSeries || null,
-    budgetSeries: d.budgetSeries || null,
-    forecastSeries: d.forecastSeries || null,
+
+    months: Array.isArray(d.months) ? d.months : null,
+
+    // Normalizamos series para charts (evita 1.2):
+    salesSeries: toNumArray(d.salesSeries),
+    budgetSeries: toNumArray(d.budgetSeries),
+    forecastSeries: toNumArray(d.forecastSeries),
   }
 }
 
@@ -138,19 +157,9 @@ async function onSave(payload) {
         actions: Array.isArray(actions) ? actions : deviations.value[idx].actions,
       }
     }
-    toast.add({
-      severity: 'success',
-      summary: 'Gespeichert',
-      detail: 'Begründung gespeichert',
-      life: 1600,
-    })
+    toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Begründung gespeichert', life: 1600 })
   } catch {
-    toast.add({
-      severity: 'error',
-      summary: 'Fehler',
-      detail: 'Begründung konnte nicht gespeichert werden',
-      life: 2500,
-    })
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Begründung konnte nicht gespeichert werden', life: 2500 })
   } finally {
     savingId.value = null
   }

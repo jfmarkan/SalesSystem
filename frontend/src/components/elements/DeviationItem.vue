@@ -46,11 +46,24 @@ function formatMonthDE(key) {
     mm = Math.max(1, Math.min(12, parseInt(m[2], 10)))
   return `${DE_ABBR[mm - 1]} ${y.slice(2)}`
 }
+
+/* ===== MASK: miles con punto, sin decimales ===== */
+function toInt(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v)
+  const s = String(v ?? '')
+    .replace(/\./g, '')    // quita miles
+    .split(',')[0]         // corta decimales
+    .replace(/[^\d-]/g, '') // deja solo dígitos/signo
+  if (s === '' || s === '-') return 0
+  const n = parseInt(s, 10)
+  return Number.isFinite(n) ? n : 0
+}
 function fmtNumber(x) {
-  return (Number(x) || 0).toLocaleString('de-DE')
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(toInt(x))
 }
 function fmtPct(p) {
-  return p == null || isNaN(p) ? '—' : `${Math.round(Number(p))}%`
+  const n = toInt(p)
+  return Number.isFinite(n) ? `${n}%` : '—'
 }
 
 // Header labels: Forecast / Ist
@@ -63,7 +76,7 @@ const isForecast = computed(() => String(props.dev.type).toLowerCase() === 'fore
 
 // Delta severity → color on Delta card
 const deltaSeverityClass = computed(() => {
-  const d = Number(props.dev?.deltaPct) || 0
+  const d = toInt(props.dev?.deltaPct)
   const ad = Math.abs(d)
   if (ad > 10) return 'sev-red'
   if (ad > 5) return 'sev-orange'
@@ -77,8 +90,8 @@ const statusPillLabel = computed(() => (props.dev.justified ? 'Begründet' : 'Of
 
 // Forecast notes logic
 const forecastRatio = computed(() => {
-  const b = Number(props.dev.budget || 0)
-  const f = Number(props.dev.forecast || 0)
+  const b = toInt(props.dev.budget || 0)
+  const f = toInt(props.dev.forecast || 0)
   return b > 0 ? f / b : null
 })
 const belowBudget = computed(() => forecastRatio.value != null && forecastRatio.value < 1)
@@ -162,6 +175,7 @@ function doSave() {
                 :budget="dev.budgetSeries ?? dev.budget"
                 :forecast="dev.forecastSeries ?? dev.forecast"
                 :height="500"
+                :value-formatter="fmtNumber"
               />
             </div>
           </div>
@@ -302,6 +316,7 @@ function doSave() {
                 :budget="dev.budgetSeries ?? dev.budget"
                 :forecast="dev.forecastSeries ?? dev.forecast"
                 :height="500"
+                :value-formatter="fmtNumber"
               />
             </div>
           </div>

@@ -14,10 +14,10 @@ import DashboardEditor from '@/views/dashboard/DashboardEditor.vue';
 import ExtraQuotaPanel from '@/views/dashboard/ExtraQuotaPanel.vue';
 import BudgetCasePanel from '@/views/dashboard/BudgetCasePanel.vue';
 import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
-import SalesForce from '@/views/dashboard/manager/SalesForce.vue';
 import ReportGenerator from '@/views/dashboard/manager/ProfitCenterAnalytics.vue';
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
+import Users from '@/views/dashboard/admin/settings/Users.vue';
 
 const routes = [
     {
@@ -90,8 +90,8 @@ const routes = [
                 }
             },
             { 
-                path: '/sales-force', 
-                component: SalesForce, 
+                path: '/settings/users', 
+                component: Users, 
                 meta: { 
                     requiresAuth: true 
                 }
@@ -106,13 +106,6 @@ const routes = [
             { 
                 path: '/company-analytics', 
                 component: CompanyAnalytics, 
-                meta: { 
-                    requiresAuth: true 
-                }
-            },
-            { 
-                path: '/sales-force', 
-                component: SalesForce, 
                 meta: { 
                     requiresAuth: true 
                 }
