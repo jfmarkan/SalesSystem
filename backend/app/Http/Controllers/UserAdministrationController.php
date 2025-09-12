@@ -160,7 +160,7 @@ class UserAdministrationController extends Controller
         /** @var User $user */
         $user = User::findOrFail($id);
 
-        // 👇 EXACT value required by your DB: "SALES-REP" (uppercase + hyphen)
+        // 👇 EXACT value required by your DB: "SALES_REP" (uppercase + hyphen)
         $ROLE_VALUE = 'SALES_REP';
 
         DB::transaction(function () use ($user, $teamIds, $firstTeam, $ROLE_VALUE) {
