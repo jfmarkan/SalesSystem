@@ -2,7 +2,6 @@
     <div class="p-4">
         <div class="flex align-items-center justify-content-between mb-3">
             <h2 class="m-0">Benutzerverwaltung</h2>
-            <small class="text-500">Nur für Superadmin</small>
         </div>
 
         <div v-if="loading" class="flex justify-content-center py-6">
@@ -119,7 +118,6 @@
                     display="chip"
                     class="w-full"
                 />
-                <label for="teams">Teams</label>
             </div>
             <Message severity="warn" class="mt-3" :closable="false"
                 >Das gesamte Set wird ersetzt.</Message
@@ -156,7 +154,6 @@
             </div>
             <div class="p-float-label">
                 <Dropdown id="role" v-model="roleLocal" :options="roles" class="w-full" />
-                <label for="role">Rolle</label>
             </div>
             <template #footer>
                 <Button
@@ -205,7 +202,6 @@
                             placeholder="Zielbenutzer"
                             class="w-full"
                         />
-                        <label for="target">Zielbenutzer</label>
                     </div>
                     <Message v-if="transfer.mode === 'all'" severity="info" :closable="false"
                         >Alle Kunden (alle Profitcenter) werden vollständig übertragen.</Message
