@@ -1,8 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 
-
-html, body {
+html,
+body {
     font-family: 'Inter', sans-serif;
     font-weight: normal;
     margin: 0;
@@ -11,6 +11,59 @@ html, body {
     height: 100%;
     width: 100%;
     overflow-x: hidden;
+}
+
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.4);
+    --text-color: #1f1f1f;
+    --icon-color: #0f172a;
+    --icon-opacity: 1;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --glass-bg: rgba(0, 0, 0, 0.4);
+        --text-color: #ffffff;
+        --icon-color: #e6e6e6;
+        --icon-opacity: 0.92;
+    }
+}
+
+.glass {
+    background-color: var(--glass-bg);
+    color: var(--text-color);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
+[class^='pi'],
+[class*=' pi-'] {
+    color: currentColor !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-smooth: always;
+}
+
+.nav-icon-button {
+    color: var(--icon-color) !important;
+}
+
+.nav-icon-button .p-button-icon,
+.p-button .p-button-icon {
+    color: currentColor !important;
+    opacity: var(--icon-opacity);
+    text-shadow: none !important;
+    filter: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .nav-icon-button .p-button-icon,
+    .glass .pi {
+        transform: translateZ(0);
+    }
 }
 
 .p-menu {
@@ -28,8 +81,8 @@ html, body {
     color: #fff;
 }
 
-.p-component{
-    font-size: .75rem;
+.p-component {
+    font-size: 0.75rem;
     font-weight: 200;
 }
 
@@ -38,6 +91,54 @@ html, body {
     background: rgba(255, 255, 255, 0.85);
     border-radius: 12px;
     font-family: inherit;
+}
+
+.user-menu-item.logout-item {
+    color: var(--text-color) !important;
+}
+
+.user-menu-item.logout-item .danger-icon,
+.user-menu-item.logout-item .pi-sign-out {
+    opacity: 1 !important;
+}
+
+.p-menu .user-menu-item.logout-item:hover {
+    color: var(--text-color) !important;
+}
+
+.p-menu .user-menu-item.logout-item:hover .danger-icon,
+.p-menu .user-menu-item.logout-item:hover .pi-sign-out {
+    color: #b01513 !important;
+}
+
+:root{
+    --logout-icon: #b01513;
+    --logout-icon-hover: #e11d1d;
+    --logout-icon-active: #9f1311;
+}
+
+/* Mantener texto/fondo del item según tema */
+.p-menu .user-menu-item.logout-item {
+    color: var(--text-color) !important;
+}
+
+/* Icono rojo (ignora theming global de currentColor) */
+.p-menu .user-menu-item.logout-item .danger-icon,
+.p-menu .user-menu-item.logout-item .pi-sign-out {
+    color: var(--logout-icon) !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+    filter: none !important;
+}
+
+/* Hover/active: solo cambia el ícono */
+.p-menu .user-menu-item.logout-item:hover .danger-icon,
+.p-menu .user-menu-item.logout-item:hover .pi-sign-out {
+    color: var(--logout-icon-hover) !important;
+}
+.p-menu .user-menu-item.logout-item:active .danger-icon,
+.p-menu .user-menu-item.logout-item:active .pi-sign-out {
+    color: var(--logout-icon-active) !important;
 }
 
 #app {

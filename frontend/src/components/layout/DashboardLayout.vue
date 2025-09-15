@@ -2,7 +2,7 @@
 <template>
     <div class="dashboard-bg">
         <div class="dashboard-layout">
-            <header class="dashboard-header glass-nav">
+            <header class="dashboard-header glass">
                 <div class="logo-container">
                     <img src="@/assets/img/logos/stb.png" alt="Logo" class="logo" />
                 </div>
@@ -151,10 +151,6 @@
 </template>
 
 <script setup>
-// SOLO FRONT. Agrega isSuperAdmin y usa condicional en el engranaje.
-// Tooltips: Dashboard / Vertrieb / Berichte / Benutzermenü.
-// Logistik y Störungen deshabilitados con "Kommt bald". Sin tocar backend.
-
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Menu from 'primevue/menu'
@@ -293,11 +289,55 @@ function onLogout() {
 </script>
 
 <style scoped>
+:global(:root) {
+    --glass-bg: rgba(255, 255, 255, 0.4);
+    --glass-fg: #1f1f1f;
+    --icon-color: #1f1f1f;
+    --shadow-color: rgba(0, 0, 0, 0.25);
+    --hover-overlay: rgba(0, 0, 0, 0.06);
+    --header-strip: rgba(0, 0, 0, 0.04);
+    --separator-color: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+    :global(:root) {
+        --glass-bg: rgba(0, 0, 0, 0.4);
+        --glass-fg: #ffffff;
+        --icon-color: #ffffff;
+        --shadow-color: rgba(0, 0, 0, 0.6);
+        --hover-overlay: rgba(255, 255, 255, 0.1);
+        --header-strip: rgba(255, 255, 255, 0.08);
+        --separator-color: rgba(255, 255, 255, 0.12);
+    }
+}
+
+:global(html.dark),
+:global(body.dark) {
+    --glass-bg: rgba(0, 0, 0, 0.4);
+    --glass-fg: #ffffff;
+    --icon-color: #ffffff;
+    --shadow-color: rgba(0, 0, 0, 0.6);
+    --hover-overlay: rgba(255, 255, 255, 0.1);
+    --header-strip: rgba(255, 255, 255, 0.08);
+    --separator-color: rgba(255, 255, 255, 0.12);
+}
+
+:global(.glass) {
+    background-color: var(--glass-bg) !important;
+    color: var(--glass-fg) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition:
+        background-color 0.25s ease,
+        color 0.25s ease;
+}
+
 .dashboard-layout {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
 }
+
 .dashboard-bg {
     background-image: url('@/assets/img/backgrounds/linen.png');
     background-repeat: repeat;
@@ -316,10 +356,9 @@ function onLogout() {
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem 2rem;
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px var(--shadow-color);
 }
+
 .logo {
     height: 30px;
 }
@@ -356,21 +395,24 @@ function onLogout() {
     box-shadow: none !important;
     padding: 0.4rem;
     border-radius: 8px;
+    color: var(--icon-color) !important;
     transition:
         border-color 0.25s ease,
-        transform 0.1s ease;
+        transform 0.1s ease,
+        color 0.25s ease;
 }
 .nav-icon-button:hover {
     border-color: rgba(0, 0, 0, 0.2) !important;
     transform: translateY(-1px);
 }
 
-/* Glow verde solo cuando activo (Dashboard) */
-.is-active {
-    box-shadow:
-        inset 0 0 0 1px #22c55e,
-        inset 0 0 8px 2px rgba(34, 197, 94, 0.65);
-    background: rgba(34, 197, 94, 0.08) !important;
+:deep(.nav-icon-button .p-button-icon) {
+    color: currentColor !important;
+}
+
+:global([class^='pi']),
+:global([class*=' pi-']) {
+    color: currentColor;
 }
 
 .disabled-wrap {
@@ -385,12 +427,12 @@ function onLogout() {
     z-index: 2;
 }
 
-/* USER MENU (igual) */
 :deep(.p-menu.p-component) {
-    background: rgba(0, 0, 0, 0.75) !important;
+    background: var(--glass-bg) !important;
+    color: var(--glass-fg) !important;
     backdrop-filter: blur(10px) !important;
     -webkit-backdrop-filter: blur(10px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid transparent;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
     border-radius: 12px;
     overflow: hidden;
@@ -398,9 +440,9 @@ function onLogout() {
 }
 .user-menu-header {
     padding: 12px 14px;
-    background: rgba(255, 255, 255, 0.08);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    color: #fff;
+    background: var(--header-strip);
+    border-bottom: 1px solid var(--separator-color);
+    color: var(--glass-fg);
 }
 .name-line {
     display: flex;
@@ -427,32 +469,32 @@ function onLogout() {
     margin-top: 4px;
     opacity: 0.85;
 }
+
 .user-menu-item {
     display: flex;
     align-items: center;
     padding: 10px 12px;
-    color: #fff;
+    color: var(--glass-fg);
     text-decoration: none;
-}
-.glass-mid {
-    background: rgba(255, 255, 255, 0.04);
+    transition: background 0.2s ease;
 }
 .user-menu-item:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--hover-overlay);
 }
-.glass-dark {
-    background: rgba(0, 0, 0, 0.5);
-}
+
 .logout-item:hover {
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.2);
 }
+
 .danger-icon {
     color: #b01513;
 }
+
 :deep(.p-menu .p-menu-separator) {
     margin: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--separator-color);
 }
+
 .p-component {
     font-size: 1rem;
     font-weight: 300;

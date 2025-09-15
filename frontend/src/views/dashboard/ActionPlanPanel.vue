@@ -1,76 +1,89 @@
 <template>
-  <div class="deviations-wrapper">
-    <Toast />
+    <div class="deviations-wrapper">
+        <Toast />
 
-    <!-- Title / Tabs -->
-    <div class="title-glass">
-      <div class="title-bar">
-        <h2 class="m-0">Aktionspläne</h2>
-        <div class="right">
-          <div class="tabs">
-            <button class="tab" :class="{ active: tab === 'open' }" @click="tab = 'open'">
-              Offen <span class="badge">{{ openPlans.length }}</span>
-            </button>
-            <button class="tab" :class="{ active: tab === 'completed' }" @click="tab = 'completed'">
-              Erledigt <span class="badge">{{ completedPlans.length }}</span>
-            </button>
-            <button class="tab" :class="{ active: tab === 'cancelled' }" @click="tab = 'cancelled'">
-              Abgebrochen <span class="badge">{{ cancelledPlans.length }}</span>
-            </button>
-          </div>
+        <!-- Title / Tabs -->
+        <div class="title-glass">
+            <div class="title-bar">
+                <h2 class="m-0">Aktionspläne</h2>
+                <div class="right">
+                    <div class="tabs">
+                        <button
+                            class="tab"
+                            :class="{ active: tab === 'open' }"
+                            @click="tab = 'open'"
+                        >
+                            Offen <span class="badge">{{ openPlans.length }}</span>
+                        </button>
+                        <button
+                            class="tab"
+                            :class="{ active: tab === 'completed' }"
+                            @click="tab = 'completed'"
+                        >
+                            Erledigt <span class="badge">{{ completedPlans.length }}</span>
+                        </button>
+                        <button
+                            class="tab"
+                            :class="{ active: tab === 'cancelled' }"
+                            @click="tab = 'cancelled'"
+                        >
+                            Abgebrochen <span class="badge">{{ cancelledPlans.length }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- List -->
-    <div class="list-wrap">
-      <div v-if="loading" class="local-loader">
-        <div class="dots">
-          <span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
+        <!-- List -->
+        <div class="list-wrap">
+            <div v-if="loading" class="local-loader">
+                <div class="dots">
+                    <span class="dot g"></span><span class="dot r"></span
+                    ><span class="dot b"></span>
+                </div>
+                <div class="caption">Wird geladen…</div>
+            </div>
+
+            <template v-else>
+                <template v-if="tab === 'open'">
+                    <template v-if="openPlans.length">
+                        <ActionPlanItem
+                            v-for="p in openPlans"
+                            :key="p.id"
+                            :plan="p"
+                            :readonly="false"
+                            @item-updated="onItemUpdated"
+                        />
+                    </template>
+                    <div v-else class="empty">Keine offenen Pläne.</div>
+                </template>
+
+                <template v-else-if="tab === 'completed'">
+                    <template v-if="completedPlans.length">
+                        <ActionPlanItem
+                            v-for="p in completedPlans"
+                            :key="'c-' + p.id"
+                            :plan="p"
+                            :readonly="true"
+                        />
+                    </template>
+                    <div v-else class="empty">Keine erledigten Pläne.</div>
+                </template>
+
+                <template v-else>
+                    <template v-if="cancelledPlans.length">
+                        <ActionPlanItem
+                            v-for="p in cancelledPlans"
+                            :key="'x-' + p.id"
+                            :plan="p"
+                            :readonly="true"
+                        />
+                    </template>
+                    <div v-else class="empty">Keine abgebrochenen Pläne.</div>
+                </template>
+            </template>
         </div>
-        <div class="caption">Wird geladen…</div>
-      </div>
-
-      <template v-else>
-        <template v-if="tab === 'open'">
-          <template v-if="openPlans.length">
-            <ActionPlanItem
-              v-for="p in openPlans"
-              :key="p.id"
-              :plan="p"
-              :readonly="false"
-              @item-updated="onItemUpdated"
-            />
-          </template>
-          <div v-else class="empty">Keine offenen Pläne.</div>
-        </template>
-
-        <template v-else-if="tab === 'completed'">
-          <template v-if="completedPlans.length">
-            <ActionPlanItem
-              v-for="p in completedPlans"
-              :key="'c-' + p.id"
-              :plan="p"
-              :readonly="true"
-            />
-          </template>
-          <div v-else class="empty">Keine erledigten Pläne.</div>
-        </template>
-
-        <template v-else>
-          <template v-if="cancelledPlans.length">
-            <ActionPlanItem
-              v-for="p in cancelledPlans"
-              :key="'x-' + p.id"
-              :plan="p"
-              :readonly="true"
-            />
-          </template>
-          <div v-else class="empty">Keine abgebrochenen Pläne.</div>
-        </template>
-      </template>
     </div>
-  </div>
 </template>
 
 <script setup>
@@ -88,75 +101,75 @@ const tab = ref('open')
 const actionPlans = ref([])
 
 function normalizeItem(i) {
-  return {
-    id: i.id,
-    action_plan_id: i.action_plan_id,
-    title: i.title || '',
-    description: i.description || '',
-    due_date: i.due_date || null, // 'YYYY-MM-DD'
-    status: i.status || 'in_progress',
-    created_at: i.created_at || null,
-    updated_at: i.updated_at || null,
-  }
+    return {
+        id: i.id,
+        action_plan_id: i.action_plan_id,
+        title: i.title || '',
+        description: i.description || '',
+        due_date: i.due_date || null, // 'YYYY-MM-DD'
+        status: i.status || 'in_progress',
+        created_at: i.created_at || null,
+        updated_at: i.updated_at || null,
+    }
 }
 
 function inferPlanStatus(items) {
-  if (!items.length) return 'in_progress'
-  const allCompleted = items.every(i => i.status === 'completed')
-  const allCancelled = items.every(i => i.status === 'cancelled')
-  if (allCompleted) return 'completed'
-  if (allCancelled) return 'cancelled'
-  return 'in_progress'
+    if (!items.length) return 'in_progress'
+    const allCompleted = items.every((i) => i.status === 'completed')
+    const allCancelled = items.every((i) => i.status === 'cancelled')
+    if (allCompleted) return 'completed'
+    if (allCancelled) return 'cancelled'
+    return 'in_progress'
 }
 
 function normalizePlan(p) {
-  const items = Array.isArray(p.action_items) ? p.action_items.map(normalizeItem) : []
-  return {
-    id: p.id,
-    deviation_id: p.deviation_id,
-    user_id: p.user_id,
-    objective: p.objective || '',
-    created_at: p.created_at || null,
-    updated_at: p.updated_at || null,
-    action_items: items,
-    status: p.status || inferPlanStatus(items), // backend may not send status
-  }
+    const items = Array.isArray(p.action_items) ? p.action_items.map(normalizeItem) : []
+    return {
+        id: p.id,
+        deviation_id: p.deviation_id,
+        user_id: p.user_id,
+        objective: p.objective || '',
+        created_at: p.created_at || null,
+        updated_at: p.updated_at || null,
+        action_items: items,
+        status: p.status || inferPlanStatus(items), // backend may not send status
+    }
 }
 
-const openPlans = computed(() => actionPlans.value.filter(p => p.status === 'in_progress'))
-const completedPlans = computed(() => actionPlans.value.filter(p => p.status === 'completed'))
-const cancelledPlans = computed(() => actionPlans.value.filter(p => p.status === 'cancelled'))
+const openPlans = computed(() => actionPlans.value.filter((p) => p.status === 'in_progress'))
+const completedPlans = computed(() => actionPlans.value.filter((p) => p.status === 'completed'))
+const cancelledPlans = computed(() => actionPlans.value.filter((p) => p.status === 'cancelled'))
 
 async function loadPlans() {
-  loading.value = true
-  try {
-    await ensureCsrf()
-    const { data } = await api.get('/api/action-plans/my-plans')
-    actionPlans.value = Array.isArray(data) ? data.map(normalizePlan) : []
-  } catch (e) {
-    actionPlans.value = []
-    toast.add({
-      severity: 'error',
-      summary: 'Fehler',
-      detail: 'Aktionspläne konnten nicht geladen werden',
-      life: 2500,
-    })
-  } finally {
-    loading.value = false
-  }
+    loading.value = true
+    try {
+        await ensureCsrf()
+        const { data } = await api.get('/api/action-plans/my-plans')
+        actionPlans.value = Array.isArray(data) ? data.map(normalizePlan) : []
+    } catch (e) {
+        actionPlans.value = []
+        toast.add({
+            severity: 'error',
+            summary: 'Fehler',
+            detail: 'Aktionspläne konnten nicht geladen werden',
+            life: 2500,
+        })
+    } finally {
+        loading.value = false
+    }
 }
 
 // Update the local plan + recompute status (no full reload -> avoids UI lock)
 function onItemUpdated(updated) {
-  const planIdx = actionPlans.value.findIndex(p => p.id === updated.action_plan_id)
-  if (planIdx < 0) return
-  const itemIdx = actionPlans.value[planIdx].action_items.findIndex(i => i.id === updated.id)
-  if (itemIdx >= 0) {
-    actionPlans.value[planIdx].action_items[itemIdx] = normalizeItem(updated)
-  } else {
-    actionPlans.value[planIdx].action_items.unshift(normalizeItem(updated))
-  }
-  actionPlans.value[planIdx].status = inferPlanStatus(actionPlans.value[planIdx].action_items)
+    const planIdx = actionPlans.value.findIndex((p) => p.id === updated.action_plan_id)
+    if (planIdx < 0) return
+    const itemIdx = actionPlans.value[planIdx].action_items.findIndex((i) => i.id === updated.id)
+    if (itemIdx >= 0) {
+        actionPlans.value[planIdx].action_items[itemIdx] = normalizeItem(updated)
+    } else {
+        actionPlans.value[planIdx].action_items.unshift(normalizeItem(updated))
+    }
+    actionPlans.value[planIdx].status = inferPlanStatus(actionPlans.value[planIdx].action_items)
 }
 
 onMounted(loadPlans)
@@ -164,43 +177,115 @@ onMounted(loadPlans)
 
 <style scoped>
 /* reuse your exact look from the deviations view */
-.deviations-wrapper { width: 100%; }
+.deviations-wrapper {
+    width: 100%;
+}
 .title-glass {
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-  border-radius: 12px;
-  margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+    border-radius: 12px;
+    margin-bottom: 12px;
 }
-.title-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
-.right { display: flex; align-items: center; gap: 12px; }
-.tabs { display: flex; gap: 8px; }
+.title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+}
+.right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tabs {
+    display: flex;
+    gap: 8px;
+}
 .tab {
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff; border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px; padding: 6px 10px; font-weight: 600;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-weight: 600;
 }
-.tab.active { background: rgba(84, 132, 154, 1); }
+.tab.active {
+    background: rgba(84, 132, 154, 1);
+}
 .badge {
-  margin-left: 6px; background: rgba(0, 0, 0, 0.5);
-  border-radius: 999px; padding: 2px 6px; font-size: 0.85em; color: #fff;
+    margin-left: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 999px;
+    padding: 2px 6px;
+    font-size: 0.85em;
+    color: #fff;
 }
-.list-wrap { position: relative; overflow: visible; display: flex; flex-direction: column; gap: 12px; }
+.list-wrap {
+    position: relative;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 .local-loader {
-  position: fixed; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 10px;
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
-.dots { display: flex; gap: 10px; align-items: center; justify-content: center; }
-.dot { width: 10px; height: 10px; border-radius: 50%; opacity: 0.9; animation: bounce 1s infinite ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
-.dot.g { background: #22c55e; animation-delay: 0s; }
-.dot.r { background: #ef4444; animation-delay: 0.15s; }
-.dot.b { background: #3b82f6; animation-delay: 0.3s; }
+.dots {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.9;
+    animation: bounce 1s infinite ease-in-out;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.dot.g {
+    background: #22c55e;
+    animation-delay: 0s;
+}
+.dot.r {
+    background: #ef4444;
+    animation-delay: 0.15s;
+}
+.dot.b {
+    background: #3b82f6;
+    animation-delay: 0.3s;
+}
 @keyframes bounce {
-  0%, 80%, 100% { transform: translateY(0) scale(1); opacity: 0.8; }
-  40% { transform: translateY(-8px) scale(1.05); opacity: 1; }
+    0%,
+    80%,
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 0.8;
+    }
+    40% {
+        transform: translateY(-8px) scale(1.05);
+        opacity: 1;
+    }
 }
-.caption { font-size: 0.9rem; color: #e5e7eb; opacity: 0.9; }
-.empty { padding: 18px; text-align: center; color: #e5e7eb; opacity: 0.9; }
+.caption {
+    font-size: 0.9rem;
+    color: #e5e7eb;
+    opacity: 0.9;
+}
+.empty {
+    padding: 18px;
+    text-align: center;
+    color: #e5e7eb;
+    opacity: 0.9;
+}
 </style>
