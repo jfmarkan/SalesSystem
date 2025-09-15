@@ -15,15 +15,13 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviationController;
 use App\Http\Controllers\ExtraQuotaController;
 use App\Http\Controllers\ForecastController;
-use App\Http\Controllers\SalesForce\UserAdministrationController as SalesForceUserAdministrationController;
-use App\Http\Controllers\SalesforceController;
 use App\Http\Controllers\UserAdministrationController;
 use App\Http\Controllers\UserDetailController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
-Route::get('/analytics/pc-monthly', [CompanyAnalyticsController::class, 'pcMonthly']);
+
 
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -72,8 +70,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/simulate', [BudgetCaseSimulatorController::class, 'simulate']);
         Route::post('/sales-ytd',[BudgetCaseSimulatorController::class, 'salesYtd']);
     });
-
-    Route::get('/salesforce/users', [SalesforceController::class, 'index']);
 
     Route::prefix('deviations')->group(function () {
         Route::get('/',            [DeviationController::class, 'index']);
