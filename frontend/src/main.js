@@ -1,5 +1,4 @@
 import './assets/css/main.css';
-import './assets/css/theme-roles.css';
 
 import '@primevue/themes/lara'; // 🎨 Tema Lara (por defecto)
 import 'primeicons/primeicons.css'; // Iconos

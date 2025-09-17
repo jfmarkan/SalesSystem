@@ -45,13 +45,34 @@ function formatNumber(n) {
   const num = Number(n) || 0
   const abs = Math.abs(num)
   const sign = num < 0 ? '-' : ''
-  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(2) + 'M'
-  if (abs >= 1_000) return sign + (abs / 1_000).toFixed(1) + 'k'
-  return sign + Math.round(abs).toLocaleString()
+
+  if (abs >= 1_000_000) {
+    return sign + new Intl.NumberFormat('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(abs / 1_000_000) + ' M'
+  }
+
+  if (abs >= 1_000) {
+    return sign + new Intl.NumberFormat('de-DE', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }).format(abs / 1_000) + ' k'
+  }
+
+  return sign + new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(abs)
 }
+
 function formatPercent(p) {
   const v = Number(p) || 0
-  return `${v.toFixed(1)}%`
+  return new Intl.NumberFormat('de-DE', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  }).format(v / 100)
 }
 
 const defaultIconByKpi = {

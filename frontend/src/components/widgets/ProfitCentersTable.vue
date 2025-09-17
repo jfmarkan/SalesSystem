@@ -8,10 +8,14 @@ const props = defineProps({
   sortLocale: { type: String, default: '' }     // opcional: ej. 'de', 'es'
 })
 
-function fmt(n){
+function fmt(n) {
   const v = Number(n) || 0
-  return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(v)
 }
+
 const showTotals = computed(() => {
   const U = String(props.unit || '').toUpperCase()
   return U === 'M3' || U === 'EUR'

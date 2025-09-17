@@ -130,7 +130,18 @@
                     <div class="mt-1">
                       <label class="lbl">Volume</label>
                       <div class="vol-inline">
-                        <InputNumber v-model="opForm.volume" :min="0" :step="1" :useGrouping="false" :maxFractionDigits="0" inputClass="w-full" :disabled="isLocked" />
+                        <InputNumber
+  v-model="opForm.volume"
+  :min="0"
+  :step="1"
+  :useGrouping="true"
+  locale="de-DE"
+  :minFractionDigits="0"
+  :maxFractionDigits="0"
+  inputClass="w-full"
+  :disabled="isLocked"
+/>
+
                         <span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
                       </div>
                     </div>

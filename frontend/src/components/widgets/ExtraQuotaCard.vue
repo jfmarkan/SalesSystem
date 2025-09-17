@@ -24,8 +24,32 @@ const router = useRouter()
 const PALETTE = ['#10b981','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f97316','#06b6d4','#22c55e','#eab308']
 const pick = i => PALETTE[i % PALETTE.length]
 const unitLabel = ()=>'m³'
-function fmt(n){ const v=Number(n)||0; if(Math.abs(v)>=1e6) return (v/1e6).toFixed(2)+'M'; if(Math.abs(v)>=1e3) return (v/1e3).toFixed(1)+'k'; return v.toLocaleString('de-DE',{maximumFractionDigits:0}) }
-function fmtUnit(n, u){ const v=Number(n)||0; return `${v.toLocaleString('de-DE')} ${u||''}`.trim() }
+function fmt(n) {
+  const v = Number(n) || 0
+  if (Math.abs(v) >= 1e6) {
+    return new Intl.NumberFormat('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(v / 1e6) + ' M'
+  }
+  if (Math.abs(v) >= 1e3) {
+    return new Intl.NumberFormat('de-DE', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }).format(v / 1e3) + ' k'
+  }
+  return new Intl.NumberFormat('de-DE', {
+    maximumFractionDigits: 0
+  }).format(v)
+}
+
+function fmtUnit(n, u) {
+  const v = Number(n) || 0
+  return `${new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(v)} ${u || ''}`.trim()
+}
 
 /* Normaliza segmentos para barra (m³) y listado (unidad original si viene) */
 function normalizeMix(m){
@@ -57,6 +81,14 @@ const listSegs = computed(()=>{
   const T = totals.value.totalAssigned || 0
   return baseSegs.value.map(s => ({ ...s, pctOfTarget: T>0 ? (s.amountM3 * 100 / T) : 0 }))
 })
+
+function formatPercentComma(value) {
+  const num = Number(value) || 0
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2
+  }).format(num) + ' %'
+}
 
 /* Detalle por PC (opcional) */
 const pc = computed(()=>{
@@ -144,7 +176,7 @@ function goAnalysis(e){
               : fmtUnit(s.amountM3, 'm³')
           }}</span>
         </div>
-        <div class="seg-pct">{{ s.pctOfTarget.toFixed(1) }}%</div>
+        <div class="seg-pct">{{ formatPercentComma(s.pctOfTarget) }}</div>
       </li>
     </ul>
 

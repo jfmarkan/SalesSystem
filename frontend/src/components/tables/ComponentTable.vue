@@ -1,5 +1,5 @@
 <script setup>
-/* Table with editable forecast cells + reactive deviation colors. */
+/* Table with editable forecast cells + reactive deviation colors (EU number format). */
 import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 
@@ -21,7 +21,9 @@ function fmtMonthDE(ym) {
   const map = ['Jän','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
   return `${map[m - 1] || '—'} ${y}`
 }
+
 function yyyymm(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+
 function thirdWednesday(d = new Date()) {
   const first = new Date(d.getFullYear(), d.getMonth(), 1)
   const deltaToWed = (3 - first.getDay() + 7) % 7
@@ -29,6 +31,7 @@ function thirdWednesday(d = new Date()) {
   const third = new Date(firstWed); third.setDate(firstWed.getDate() + 14)
   return third
 }
+
 function isEditableYM(ym) {
   const now = new Date()
   const cur = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -39,12 +42,17 @@ function isEditableYM(ym) {
   if (+target === +next) return now <= thirdWednesday(now)
   return true
 }
+
 const curIdx = computed(() => {
   const key = yyyymm(new Date())
   return Array.isArray(props.months) ? props.months.findIndex(m => m === key) : -1
 })
 
-function devPct(num, den) { if (!den) return 0; return (num / den - 1) * 100 }
+function devPct(num, den) {
+  if (!den) return 0
+  return (num / den - 1) * 100
+}
+
 function clsSalesDev(v, b) {
   const d = Math.abs(devPct(v, b))
   if (d > 10) return 'dev-red'
@@ -52,13 +60,34 @@ function clsSalesDev(v, b) {
   if (d > 2)  return 'dev-yellow'
   return 'dev-green'
 }
+
 function clsFcstDev(v, b) {
   const d = Math.abs(devPct(v, b))
   if (d > 5) return 'dev-red'
   if (d > 2) return 'dev-yellow'
   return 'dev-green'
 }
-function pctLabel(num, den) { if (!den) return '0%'; return Math.round((num / den) * 100) + '%' }
+
+// ✅ NUEVA función para formatear números con . y ,
+function formatNumber(value) {
+  const number = parseFloat(value)
+  if (isNaN(number)) return '—'
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(number)
+}
+
+// ✅ NUEVA función para formatear porcentaje al estilo europeo
+function pctLabel(num, den) {
+  if (!den) return '0%'
+  const pct = (num / den) * 100
+  return new Intl.NumberFormat('de-DE', {
+    style: 'percent',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(pct / 100)
+}
 
 const salesData = computed(() => {
   if (Array.isArray(props.sales) && props.sales.length) return props.sales
@@ -93,7 +122,7 @@ const salesData = computed(() => {
               class="p-2 text-center cell cell-sales"
               :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx }"
             >
-              {{ salesData[i] ?? 0 }}
+              {{ formatNumber(salesData[i] ?? 0) }}
             </td>
           </tr>
 
@@ -105,7 +134,7 @@ const salesData = computed(() => {
               class="p-2 text-center cell cell-budget"
               :class="{ 'cur-left': i===curIdx, 'cur-right': i===curIdx }"
             >
-              {{ budget[i] ?? 0 }}
+              {{ formatNumber(budget[i] ?? 0) }}
             </td>
           </tr>
 
@@ -154,6 +183,7 @@ const salesData = computed(() => {
     </div>
   </div>
 </template>
+
 
 <style scoped>
 :root {

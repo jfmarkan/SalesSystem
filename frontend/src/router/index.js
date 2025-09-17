@@ -10,7 +10,6 @@ import HomeView from '@/views/HomeView.vue';
 import ForecastPanel from '@/views/dashboard/ForecastPanel.vue';
 import DeviationPanel from '@/views/dashboard/DeviationPanel.vue';
 import UserProfile from '@/views/dashboard/UserProfile.vue';
-import DashboardEditor from '@/views/dashboard/DashboardEditor.vue';
 import ExtraQuotaPanel from '@/views/dashboard/ExtraQuotaPanel.vue';
 import BudgetCasePanel from '@/views/dashboard/BudgetCasePanel.vue';
 import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
@@ -113,13 +112,6 @@ const routes = [
             { 
                 path: '/profile', 
                 component: UserProfile, 
-                meta: { 
-                    requiresAuth: true 
-                }
-            },
-            { 
-                path: '/edit', 
-                component: DashboardEditor, 
                 meta: { 
                     requiresAuth: true 
                 }
