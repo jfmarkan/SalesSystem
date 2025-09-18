@@ -54,43 +54,43 @@ class ExtraQuotaController extends Controller
     }
 
     public function showOpportunityGroup(Request $request, int $groupId)
-{
-    $uid = $request->user()->id;
+    {
+        $uid = $request->user()->id;
 
-    $latest = DB::table('sales_opportunities')
-        ->where('opportunity_group_id', $groupId)
-        ->where('user_id', $uid)
-        ->orderByDesc('version')
-        ->first();
-    if (!$latest) abort(404, 'Opportunity not found');
+        $latest = DB::table('sales_opportunities')
+            ->where('opportunity_group_id', $groupId)
+            ->where('user_id', $uid)
+            ->orderByDesc('version')
+            ->first();
+        if (!$latest) abort(404, 'Opportunity not found');
 
-    // ⬇️ ahora también status + updated_at
-    $versions = DB::table('sales_opportunities')
-        ->where('opportunity_group_id', $groupId)
-        ->where('user_id', $uid)
-        ->orderBy('version')
-        ->get(['version','status','updated_at']);
+        // ⬇️ ahora también status + updated_at
+        $versions = DB::table('sales_opportunities')
+            ->where('opportunity_group_id', $groupId)
+            ->where('user_id', $uid)
+            ->orderBy('version')
+            ->get(['version','status','updated_at']);
 
-    return response()->json([
-        'latest' => [
-            'id'                   => (int)$latest->id,
-            'user_id'              => (int)$latest->user_id,
-            'fiscal_year'          => (int)$latest->fiscal_year,
-            'profit_center_code'   => (int)$latest->profit_center_code,
-            'volume'               => (int)$latest->volume,
-            'probability_pct'      => (int)$latest->probability_pct,
-            'estimated_start_date' => $latest->estimated_start_date,
-            'comments'             => $latest->comments,
-            'status'               => $latest->status,
-            'potential_client_name'=> $latest->potential_client_name,
-            'client_group_number'  => $latest->client_group_number,
-            'updated_at'           => $latest->updated_at,
-            'version'              => (int)$latest->version,
-            'opportunity_group_id' => (int)$groupId,
-        ],
-        'versions' => $versions,
-    ]);
-}
+        return response()->json([
+            'latest' => [
+                'id'                   => (int)$latest->id,
+                'user_id'              => (int)$latest->user_id,
+                'fiscal_year'          => (int)$latest->fiscal_year,
+                'profit_center_code'   => (int)$latest->profit_center_code,
+                'volume'               => (int)$latest->volume,
+                'probability_pct'      => (int)$latest->probability_pct,
+                'estimated_start_date' => $latest->estimated_start_date,
+                'comments'             => $latest->comments,
+                'status'               => $latest->status,
+                'potential_client_name'=> $latest->potential_client_name,
+                'client_group_number'  => $latest->client_group_number,
+                'updated_at'           => $latest->updated_at,
+                'version'              => (int)$latest->version,
+                'opportunity_group_id' => (int)$groupId,
+            ],
+            'versions' => $versions,
+        ]);
+    }
 
     public function myProfitCenters(Request $request)
     {
@@ -257,54 +257,54 @@ class ExtraQuotaController extends Controller
     }
 
     public function createVersion(Request $request, int $groupId)
-{
-    $uid = $request->user()->id;
+    {
+        $uid = $request->user()->id;
 
-    $data = $request->validate([
-        'fiscal_year'          => 'required|integer',
-        'profit_center_code'   => 'required|integer|min:0|max:65535',
-        'volume'               => 'required|integer|min:0',
-        'probability_pct'      => 'required|integer|min:0|max:100',
-        'estimated_start_date' => 'nullable|date',
-        'comments'             => 'nullable|string',
-        'potential_client_name'=> 'nullable|string|max:255',
-        'client_group_number'  => 'nullable|string|max:100',
-        'status'               => 'nullable|in:draft,open,won,lost',
-    ]);
-
-    return DB::transaction(function() use ($groupId, $uid, $data) {
-        $maxVerUser = SalesOpportunity::where('opportunity_group_id', $groupId)
-            ->where('user_id', $uid)->max('version');
-
-        if (!$maxVerUser) abort(403, 'Not allowed or group not found');
-
-        $newVer = $maxVerUser + 1;
-
-        // 🟡 Todas las versiones anteriores a draft
-        DB::table('sales_opportunities')
-            ->where('opportunity_group_id', $groupId)
-            ->where('user_id', $uid)
-            ->where('version', '<=', $maxVerUser)
-            ->update(['status' => 'draft', 'updated_at'=> now()]);
-
-        $rec = SalesOpportunity::create([
-            'user_id'              => $uid,
-            'opportunity_group_id' => $groupId,
-            'version'              => $newVer,
-            'fiscal_year'          => $data['fiscal_year'],
-            'profit_center_code'   => $data['profit_center_code'],
-            'volume'               => $data['volume'],
-            'probability_pct'      => $data['probability_pct'],
-            'estimated_start_date' => $data['estimated_start_date'] ?? null,
-            'comments'             => $data['comments'] ?? null,
-            'status'               => $data['status'] ?? 'open', // solo open/draft en UI
-            'potential_client_name'=> $data['potential_client_name'] ?? null,
-            'client_group_number'  => $data['client_group_number'] ?? null,
+        $data = $request->validate([
+            'fiscal_year'          => 'required|integer',
+            'profit_center_code'   => 'required|integer|min:0|max:65535',
+            'volume'               => 'required|integer|min:0',
+            'probability_pct'      => 'required|integer|min:0|max:100',
+            'estimated_start_date' => 'nullable|date',
+            'comments'             => 'nullable|string',
+            'potential_client_name'=> 'nullable|string|max:255',
+            'client_group_number'  => 'nullable|string|max:100',
+            'status'               => 'nullable|in:draft,open,won,lost',
         ]);
 
-        return response()->json(['version' => $newVer, 'id' => $rec->id]);
-    });
-}
+        return DB::transaction(function() use ($groupId, $uid, $data) {
+            $maxVerUser = SalesOpportunity::where('opportunity_group_id', $groupId)
+                ->where('user_id', $uid)->max('version');
+
+            if (!$maxVerUser) abort(403, 'Not allowed or group not found');
+
+            $newVer = $maxVerUser + 1;
+
+            // 🟡 Todas las versiones anteriores a draft
+            DB::table('sales_opportunities')
+                ->where('opportunity_group_id', $groupId)
+                ->where('user_id', $uid)
+                ->where('version', '<=', $maxVerUser)
+                ->update(['status' => 'draft', 'updated_at'=> now()]);
+
+            $rec = SalesOpportunity::create([
+                'user_id'              => $uid,
+                'opportunity_group_id' => $groupId,
+                'version'              => $newVer,
+                'fiscal_year'          => $data['fiscal_year'],
+                'profit_center_code'   => $data['profit_center_code'],
+                'volume'               => $data['volume'],
+                'probability_pct'      => $data['probability_pct'],
+                'estimated_start_date' => $data['estimated_start_date'] ?? null,
+                'comments'             => $data['comments'] ?? null,
+                'status'               => $data['status'] ?? 'open', // solo open/draft en UI
+                'potential_client_name'=> $data['potential_client_name'] ?? null,
+                'client_group_number'  => $data['client_group_number'] ?? null,
+            ]);
+
+            return response()->json(['version' => $newVer, 'id' => $rec->id]);
+        });
+    }
 
     public function getBudget(Request $request, int $groupId, int $version)
     {
@@ -509,23 +509,27 @@ class ExtraQuotaController extends Controller
     });
 }
 
-    private function fiscalYear(Request $req): int {
+    private function fiscalYear(Request $req): int 
+    {
         $raw = $req->query('fiscal_year', $req->query('fy', $req->query('year', date('Y'))));
         return (int)preg_replace('/\D+/', '', (string)$raw);
     }
 
-    private function hasConv(): bool {
+    private function hasConv(): bool 
+    {
         return Schema::hasTable('unit_conversions');
     }
 
-    private function convFactorExpr(string $alias = 'uc'): string {
+    private function convFactorExpr(string $alias = 'uc'): string 
+    {
         foreach (['factor_to_m3','factos_to_m3','to_m3_factor','factor_m3'] as $c) {
             if (Schema::hasColumn('unit_conversions', $c)) return "COALESCE($alias.$c,1)";
         }
         return '1';
     }
 
-    private function sumAssignmentsM3(int $userId, int $fy, ?string $pcCode = null): float {
+    private function sumAssignmentsM3(int $userId, int $fy, ?string $pcCode = null): float 
+    {
         $q = DB::table('extra_quota_assignments as a')
             ->where('a.user_id', $userId)
             ->where('a.is_published', true)
@@ -543,7 +547,8 @@ class ExtraQuotaController extends Controller
         return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
     }
 
-    private function sumOpportunitiesM3(int $userId, int $fy, array $statuses, ?string $pcCode = null): float {
+    private function sumOpportunitiesM3(int $userId, int $fy, array $statuses, ?string $pcCode = null): float 
+    {
         $lv = DB::table('sales_opportunities')
             ->select('opportunity_group_id', DB::raw('MAX(version) AS max_version'))
             ->where('user_id', $userId)
@@ -569,7 +574,8 @@ class ExtraQuotaController extends Controller
         return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
     }
 
-    private function buildPcMixM3(int $userId, int $fy): array {
+    private function buildPcMixM3(int $userId, int $fy): array 
+    {
         $q = DB::table('extra_quota_assignments as a')
             ->where('a.user_id', $userId)
             ->where('a.is_published', true)
@@ -796,6 +802,108 @@ class ExtraQuotaController extends Controller
                 'available_m3'   => $totAvail,
                 'count_total'    => $totCount,
             ]
+        ]);
+    }
+
+    public function listByUser(Request $request, int $userId)
+    {
+        $fy     = $request->integer('fiscal_year') ?: null;
+        $pcCode = $request->query('profit_center_code');
+
+        $q = DB::table('extra_quota_assignments as a')->where('a.user_id', $userId);
+        if ($fy) $q->where('a.fiscal_year', $fy);
+        if ($pcCode !== null && $pcCode !== '') $q->where('a.profit_center_code', $pcCode);
+
+        if (Schema::hasTable('profit_centers')) {
+            $q->leftJoin('profit_centers as pc', 'pc.profit_center_code', '=', 'a.profit_center_code')
+            ->addSelect(
+                'a.id','a.user_id','a.fiscal_year','a.profit_center_code','a.volume','a.updated_at',
+                DB::raw("COALESCE(pc.profit_center_name, a.profit_center_code) AS profit_center_name")
+            );
+        } else {
+            $q->select('a.id','a.user_id','a.fiscal_year','a.profit_center_code','a.volume','a.updated_at',
+                    DB::raw("a.profit_center_code AS profit_center_name"));
+        }
+
+        return response()->json($q->orderBy('a.fiscal_year')->orderBy('a.profit_center_code')->get());
+    }
+
+    public function listAllByUserFY(Request $request, int $userId)
+    {
+        $fy = (int) ($request->query('fiscal_year') ?? date('Y'));
+
+        if (!Schema::hasTable('profit_centers')) {
+            // fallback
+            return $this->listByUser($request, $userId);
+        }
+
+        $rows = DB::table('profit_centers as pc')
+            ->leftJoin('extra_quota_assignments as a', function($j) use ($userId, $fy){
+                $j->on('a.profit_center_code','=','pc.profit_center_code')
+                ->where('a.user_id','=',$userId)
+                ->where('a.fiscal_year','=',$fy);
+            })
+            ->select([
+                'a.id',
+                DB::raw("$userId as user_id"),
+                DB::raw("$fy as fiscal_year"),
+                'pc.profit_center_code',
+                'pc.profit_center_name',
+                DB::raw('COALESCE(a.volume, 0) as volume'),
+                'a.updated_at',
+            ])
+            ->orderBy('pc.profit_center_code')
+            ->get();
+
+        return response()->json($rows);
+    }
+
+    public function updateAssignmentVolume(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'volume' => 'required|integer|min:0',
+        ]);
+
+        $exists = DB::table('extra_quota_assignments')->where('id', $id)->exists();
+        if (!$exists) abort(404, 'Assignment not found');
+
+        DB::table('extra_quota_assignments')->where('id', $id)->update([
+            'volume'     => (int)$data['volume'],
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['id' => $id, 'volume' => (int)$data['volume']]);
+    }
+
+    public function upsertAssignment(Request $request)
+    {
+        $data = $request->validate([
+            'user_id'            => 'required|integer|min:1',
+            'fiscal_year'        => 'required|integer',
+            'profit_center_code' => 'required',
+            'volume'             => 'required|integer|min:0',
+            'is_published'       => 'nullable|boolean',
+        ]);
+
+        $rec = ExtraQuotaAssignment::updateOrCreate(
+            [
+                'user_id'            => (int)$data['user_id'],
+                'fiscal_year'        => (int)$data['fiscal_year'],
+                'profit_center_code' => (string)$data['profit_center_code'],
+            ],
+            [
+                'volume'       => (int)$data['volume'],
+                'is_published' => array_key_exists('is_published',$data) ? (bool)$data['is_published'] : true,
+                'updated_at'   => now(),
+            ]
+        );
+
+        return response()->json([
+            'id'                 => $rec->id,
+            'user_id'            => (int)$rec->user_id,
+            'fiscal_year'        => (int)$rec->fiscal_year,
+            'profit_center_code' => (string)$rec->profit_center_code,
+            'volume'             => (int)$rec->volume,
         ]);
     }
 }
