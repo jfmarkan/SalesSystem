@@ -1,6 +1,6 @@
 <template>
     <div class="pc-overview grid">
-        <!-- 🔶 SOLO EN IMPRESIÓN: cabecera con detalles -->
+        <!-- 🔶 NUR IM DRUCK: Kopfbereich mit Details -->
         <div class="col-12 print-only">
             <div class="report-print-header">
                 <h2>Vertriebsprognose nach Profit Center</h2>
@@ -20,7 +20,7 @@
             </div>
         </div>
 
-        <!-- 6 KPI Cards (sparks + Tendenz inline) -->
+        <!-- KPI Karten -->
         <div class="col-12 md:col-2" v-for="card in kpiCards" :key="card.key">
             <Card class="kpi-card">
                 <template #content>
@@ -66,10 +66,9 @@
             </Card>
         </div>
 
-        <!-- Línea (alto unificado) -->
+        <!-- Linienchart -->
         <div class="col-12 md:col-9">
             <Card class="viz-card">
-                <!-- Título visible solo en PDF (controlado por CSS global abajo) -->
                 <template #title>Monatliche Entwicklung</template>
                 <template #content>
                     <div class="viz-body">
@@ -84,10 +83,9 @@
             </Card>
         </div>
 
-        <!-- Donut (mismo alto) -->
+        <!-- Donutchart -->
         <div class="col-12 md:col-3">
             <Card class="viz-card">
-                <!-- Título visible solo en PDF -->
                 <template #title>Zusammensetzung</template>
                 <template #content>
                     <div class="viz-body donut-layout">
@@ -99,6 +97,8 @@
                                 class="viz-donut"
                             />
                         </div>
+
+                        <!-- Legende (de) -->
                         <div class="legend mt-2">
                             <div class="legend-row">
                                 <span class="lg-dot" :style="{ background: '#16a34a' }"></span>
@@ -107,7 +107,7 @@
                                 Extra-Quota (Außenring)
                             </div>
                             <div class="legend-row">
-                                <span class="lg-dot" :style="{ background: '#22c55e' }"></span>
+                                <span class="lg-dot" :style="{ background: '#f59e0b' }"></span>
                                 Budget prognostiziert
                                 <span class="lg-dot ml-3" :style="{ background: '#86efac' }"></span>
                                 Budget offen
@@ -119,9 +119,9 @@
                                 Quota offen
                             </div>
                             <div class="legend-row">
-                                <span class="lg-dot" :style="{ background: '#2563eb' }"></span> Ist
+                                <span class="lg-dot" :style="{ background: '#7ba3ea' }"></span> Ist
                                 (YTD)
-                                <span class="lg-dot ml-3" :style="{ background: '#f59e0b' }"></span>
+                                <span class="lg-dot ml-3" :style="{ background: '#f1d97d' }"></span>
                                 Forecast (Rest)
                                 <span class="lg-dot ml-3" :style="{ background: '#94a3b8' }"></span>
                                 Differenz zu Ziel
@@ -132,7 +132,7 @@
             </Card>
         </div>
 
-        <!-- Tabla mensual -->
+        <!-- Monatstabelle -->
         <div class="col-12">
             <Card>
                 <template #title>Monatliche Werte (FY)</template>
@@ -150,6 +150,11 @@
 </template>
 
 <script setup>
+/**
+ * PcOverview.vue
+ * - Shows monthly cumulative charts and a 3-ring donut for Budget vs Extra-Quota vs Execution.
+ * - All method/variable names and comments are in English. UI strings are in German.
+ */
 import { ref, computed, onMounted, watch } from 'vue'
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
@@ -163,14 +168,15 @@ const props = defineProps({
     unit: { type: String, default: 'm3' }, // 'm3' | 'euro' | 'units'
 })
 
-/* PRINT meta */
+/* PRINT meta (de) */
 const unitLabel = computed(() =>
     props.unit === 'euro' ? 'EUR' : props.unit === 'units' ? 'VK-EH' : 'm³',
 )
 const createdAtDE = new Date().toLocaleDateString('de-DE')
 
+/* Fetch overview data */
 const data = ref(null)
-const fetchData = async () => {
+async function fetchOverview() {
     if (!props.profitCenterCode) {
         data.value = null
         return
@@ -181,8 +187,8 @@ const fetchData = async () => {
     const { data: resp } = await api.get('/api/analytics/pc/overview', { params })
     data.value = resp
 }
-onMounted(fetchData)
-watch(() => [props.profitCenterCode, props.fiscalYearStart, props.asOf, props.unit], fetchData)
+onMounted(fetchOverview)
+watch(() => [props.profitCenterCode, props.fiscalYearStart, props.asOf, props.unit], fetchOverview)
 
 /* Helpers */
 const toNum = (v) =>
@@ -194,24 +200,6 @@ const fmt = (v) =>
 const months = computed(() => data.value?.months || [])
 const lastIdx = computed(() => Number(data.value?.last_complete_index ?? 0))
 const nextIdx = computed(() => Math.min(11, lastIdx.value + 1))
-const labelToAbbr = (ym) => {
-    const m = Number(ym?.slice(5, 7))
-    const map = {
-        4: 'A',
-        5: 'M',
-        6: 'J',
-        7: 'J',
-        8: 'A',
-        9: 'S',
-        10: 'O',
-        11: 'N',
-        12: 'D',
-        1: 'J',
-        2: 'F',
-        3: 'M',
-    }
-    return map[m] || '?'
-}
 const labelDE = (ym) => {
     const m = Number(ym?.slice(5, 7))
     const map = {
@@ -231,13 +219,13 @@ const labelDE = (ym) => {
     return map[m] || ym
 }
 
-/* Series por unidad */
+/* Series per unit */
 const unitKey = computed(() => (['m3', 'euro', 'units'].includes(props.unit) ? props.unit : 'm3'))
 const sArr = computed(() => data.value?.raw?.monthly?.sales?.[unitKey.value] || [])
 const bArr = computed(() => data.value?.raw?.monthly?.budgets?.[unitKey.value] || [])
 const fArr = computed(() => data.value?.raw?.monthly?.forecast?.[unitKey.value] || [])
 
-/* math helpers */
+/* Math helpers */
 const sum = (a) => a.reduce((acc, v) => acc + toNum(v), 0)
 const cumSeries = (arr, upTo = 11) => {
     const out = []
@@ -249,26 +237,10 @@ const cumSeries = (arr, upTo = 11) => {
     return out
 }
 
-/* Evoluciones YTD */
-const ytdLabels = computed(() => months.value.slice(0, lastIdx.value + 1).map(labelToAbbr))
-const ratioSeriesPct = (numArr, denArr) => {
-    const L = lastIdx.value
-    const numCum = cumSeries(numArr, L)
-    const denCum = cumSeries(denArr, L)
-    return numCum.map((n, i) => (toNum(denCum[i]) > 0 ? (n / denCum[i]) * 100 : 0))
-}
-const bandColor = (pct) => {
-    const p = Number(pct) || 0
-    if (p >= 96) return { line: '#16a34a', fill: '#16a34a22' }
-    if (p >= 90) return { line: '#eab308', fill: '#eab30822' }
-    if (p >= 80) return { line: '#f59e0b', fill: '#f59e0b22' }
-    return { line: '#ef4444', fill: '#ef444422' }
-}
-
+/* YTD + trend calcs */
 const ytdSales = computed(() => sum(sArr.value.slice(0, lastIdx.value + 1)))
 const ytdBudget = computed(() => sum(bArr.value.slice(0, lastIdx.value + 1)))
 const ytdForecast = computed(() => sum(fArr.value.slice(0, lastIdx.value + 1)))
-
 const attBudgetPct = computed(() =>
     ytdBudget.value > 0 ? (ytdSales.value / ytdBudget.value) * 100 : 0,
 )
@@ -276,9 +248,24 @@ const attForecastPct = computed(() =>
     ytdForecast.value > 0 ? (ytdSales.value / ytdForecast.value) * 100 : 0,
 )
 
+const ytdLabels = computed(() =>
+    months.value.slice(0, lastIdx.value + 1).map((ym) => labelDE(ym).slice(0, 1)),
+)
+const ratioSeriesPct = (numArr, denArr) => {
+    const L = lastIdx.value
+    const numCum = cumSeries(numArr, L),
+        denCum = cumSeries(denArr, L)
+    return numCum.map((n, i) => (toNum(denCum[i]) > 0 ? (n / denCum[i]) * 100 : 0))
+}
+const bandColor = (p) => {
+    const v = Number(p) || 0
+    if (v >= 96) return { line: '#16a34a', fill: '#16a34a22' }
+    if (v >= 90) return { line: '#eab308', fill: '#eab30822' }
+    if (v >= 80) return { line: '#f59e0b', fill: '#f59e0b22' }
+    return { line: '#ef4444', fill: '#ef444422' }
+}
 const seriesBudArr = computed(() => ratioSeriesPct(sArr.value, bArr.value))
 const seriesFcArr = computed(() => ratioSeriesPct(sArr.value, fArr.value))
-
 const trendBud = computed(() => {
     const s = seriesBudArr.value
     const { line, fill } = bandColor(s.at(-1) ?? 0)
@@ -304,7 +291,7 @@ const trendFc = computed(() => {
         : null
 })
 
-/* Ausblick 6M */
+/* 6M outlook */
 const idx6 = computed(() => {
     const a = []
     for (let i = nextIdx.value; i < Math.min(12, nextIdx.value + 6); i++) a.push(i)
@@ -319,36 +306,8 @@ const future6Forecast = computed(() =>
 const future6Pct = computed(() =>
     future6Budget.value > 0 ? (future6Forecast.value / future6Budget.value) * 100 : 0,
 )
-const outlookTrendSeries = computed(() => {
-    const L = lastIdx.value
-    const series = []
-    for (let i = 0; i <= L; i++) {
-        const from = Math.min(11, i + 1),
-            to = Math.min(11, i + 6)
-        let f = 0,
-            b = 0
-        for (let k = from; k <= to; k++) {
-            f += toNum(fArr.value[k] || 0)
-            b += toNum(bArr.value[k] || 0)
-        }
-        series.push(b > 0 ? (f / b) * 100 : 0)
-    }
-    return series
-})
-const trendSixm = computed(() => {
-    const s = outlookTrendSeries.value
-    const { line, fill } = bandColor(s.at(-1) ?? 0)
-    return s.length
-        ? {
-              labels: ytdLabels.value,
-              datasets: [
-                  { data: s, borderColor: line, backgroundColor: fill, fill: true, tension: 0.3 },
-              ],
-          }
-        : null
-})
 
-/* Tarjetas */
+/* KPI cards */
 const ytdPeriod = computed(() =>
     months.value.length
         ? `${labelDE(months.value[0])}–${labelDE(months.value[lastIdx.value])}`
@@ -359,7 +318,6 @@ const pctClass = (p) => {
     const n = Number(p) || 0
     return n >= 100 ? 'pct-good' : n >= 90 ? 'pct-warn' : n >= 80 ? 'pct-mid' : 'pct-bad'
 }
-
 const kpiCards = computed(() => [
     {
         key: 'ytd_s',
@@ -395,41 +353,12 @@ const kpiCards = computed(() => [
         title: 'Prognose',
         kind: 'spark',
         pct: future6Pct.value,
-        chart: trendSixm.value,
+        chart: trendBud.value,
         sub: `Budget: ${fmt(future6Budget.value)} · Forecast: ${fmt(future6Forecast.value)}`,
     },
 ])
 
-/* Tendencias (flechas) */
-const deltaFromSeries = (arr) =>
-    Array.isArray(arr) && arr.length >= 2
-        ? (arr[arr.length - 1] ?? 0) - (arr[arr.length - 2] ?? 0)
-        : 0
-function arrowForDelta(delta) {
-    const d = Number(delta) || 0
-    if (Math.abs(d) <= 2.5)
-        return { angle: 0, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d > 2.5 && d <= 5)
-        return { angle: -25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d < -2.5 && d >= -5)
-        return { angle: 25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d > 5 && d <= 10)
-        return { angle: -60, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d < -5 && d >= -10)
-        return { angle: 60, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d > 10)
-        return { angle: -90, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    if (d < -10)
-        return { angle: 90, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-    return { angle: 0, colorClass: 'tr-yellow', show: false, deltaLabel: '0.0 pp' }
-}
-const trendsMap = computed(() => ({
-    att_b: arrowForDelta(deltaFromSeries(seriesBudArr.value)),
-    att_f: arrowForDelta(deltaFromSeries(seriesFcArr.value)),
-    sixm: arrowForDelta(deltaFromSeries(outlookTrendSeries.value)),
-}))
-
-/* Opciones spark */
+/* Spark options */
 const sparkOptions = {
     maintainAspectRatio: false,
     plugins: { legend: { display: false }, tooltip: { enabled: true } },
@@ -440,8 +369,8 @@ const sparkOptions = {
     },
 }
 
-/* Línea acumulada FY */
-const budgetFY = computed(() => sum(bArr.value))
+/* Cumulative line chart */
+const budgetFY = computed(() => sum(bArr.value)) // includes extra quota from backend
 const lineData = computed(() => ({
     labels: months.value,
     datasets: [
@@ -492,42 +421,85 @@ const lineOptions = {
     },
 }
 
-const extraAllocated = computed(() =>
+/* ==================== DONUT 3 RINGS ==================== */
+/**
+ * Ring 1 (outer): Base Budget vs Extra Quota (target composition)
+ * Ring 2 (middle): From each origin: forecasted/used vs remaining
+ * Ring 3 (inner): Execution: Sales YTD + Future Forecast (capped) + Gap to Target
+ */
+
+/* Extra quota totals from backend (allocated = extra budget, used = extra forecast) */
+const extraQuotaTotal = computed(() =>
     toNum(data.value?.extra_quota?.allocated?.[unitKey.value] ?? 0),
 )
-const baseBudget = computed(() => Math.max(0, budgetFY.value - extraAllocated.value))
-const forecastFuture = computed(() => sum(fArr.value.slice(nextIdx.value)))
-const expectedFY = computed(() => ytdSales.value + forecastFuture.value)
-const baseCovered = computed(() => Math.min(expectedFY.value, baseBudget.value))
-const extraCovered = computed(() =>
-    Math.min(Math.max(expectedFY.value - baseCovered.value, 0), extraAllocated.value),
-)
-const basePending = computed(() => Math.max(baseBudget.value - baseCovered.value, 0))
-const extraPending = computed(() => Math.max(extraAllocated.value - extraCovered.value, 0))
-const targetTotal = computed(() => baseBudget.value + extraAllocated.value)
-const forecastTotal = computed(() => expectedFY.value)
-const gapToTarget = computed(() => Math.max(0, targetTotal.value - forecastTotal.value))
+const extraQuotaUsed = computed(() => toNum(data.value?.extra_quota?.used?.[unitKey.value] ?? 0))
+const extraRemaining = computed(() => Math.max(0, extraQuotaTotal.value - extraQuotaUsed.value))
 
+/* Target and base budget (base = target - extra) */
+const targetTotal = computed(() => budgetFY.value)
+const baseBudget = computed(() => Math.max(0, targetTotal.value - extraQuotaTotal.value))
+
+/* Global forecast totals */
+const forecastTotal = computed(() => sum(fArr.value))
+
+/* Middle ring: split forecast between base and extra using the backend "used" for extra */
+const forecastToExtra = computed(() => Math.min(extraQuotaTotal.value, extraQuotaUsed.value))
+const forecastToBase = computed(() =>
+    Math.max(0, Math.min(baseBudget.value, forecastTotal.value - forecastToExtra.value)),
+)
+const baseRemaining = computed(() => Math.max(0, baseBudget.value - forecastToBase.value))
+
+/* Inner ring: execution decomposition (cap forecast to remaining target) */
+const ytdCapped = computed(() => Math.min(ytdSales.value, targetTotal.value))
+const remainingAfterYTD = computed(() => Math.max(0, targetTotal.value - ytdCapped.value))
+const forecastFuture = computed(() => sum(fArr.value.slice(nextIdx.value)))
+const forecastFutureShown = computed(() =>
+    Math.min(remainingAfterYTD.value, Math.max(0, forecastFuture.value)),
+)
+const gapToTarget = computed(() =>
+    Math.max(0, targetTotal.value - ytdCapped.value - forecastFutureShown.value),
+)
+
+/* Chart.js expects dataset[0] as OUTER ring for doughnut */
 const multiPieData = computed(() => ({
     labels: [],
     datasets: [
+        // OUTER – origin of target
         {
-            data: [baseBudget.value, extraAllocated.value],
+            label: 'Total Target',
+            data: [baseBudget.value, extraQuotaTotal.value],
             backgroundColor: ['#16a34a', '#7c3aed'],
             borderWidth: 2,
         },
+        // MIDDLE – usage by origin
         {
-            data: [baseCovered.value, basePending.value, extraCovered.value, extraPending.value],
+            label: 'Quota Usage',
+            data: [
+                forecastToBase.value,
+                baseRemaining.value,
+                forecastToExtra.value,
+                extraRemaining.value,
+            ],
             backgroundColor: ['#f59e0b', '#86efac', '#a78bfa', '#ddd0ff'],
             borderWidth: 2,
         },
+        // INNER – execution vs target
         {
-            data: [ytdSales.value, forecastFuture.value, gapToTarget.value],
-            backgroundColor: ['#2563eb', '#f59e0b', '#94a3b8'],
+            label: 'Execution',
+            data: [ytdCapped.value, forecastFutureShown.value, gapToTarget.value],
+            backgroundColor: ['#7BA3EA', '#F1D97D', '#94a3b8'],
             borderWidth: 2,
         },
     ],
 }))
+
+/* Tooltip labels per ring (de) */
+const ringLabels = [
+    ['Budget', 'Extra-Quota'], // outer
+    ['Budget prognostiziert', 'Budget offen', 'Quota prognostiziert', 'Quota offen'], // middle
+    ['Ist (YTD)', 'Forecast (Rest)', 'Differenz zu Ziel'], // inner
+]
+
 const multiPieOptions = {
     maintainAspectRatio: false,
     radius: '98%',
@@ -535,9 +507,46 @@ const multiPieOptions = {
     layout: { padding: 0 },
     plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.raw != null ? fmt(ctx.raw) : 0}` } },
+        tooltip: {
+            callbacks: {
+                label: (ctx) => {
+                    const ds = ctx.datasetIndex ?? 0
+                    const di = ctx.dataIndex ?? 0
+                    const seg = ringLabels[ds]?.[di] ?? ctx.dataset?.label ?? ''
+                    const val = ctx.raw != null ? fmt(ctx.raw) : '0'
+                    return `${seg}: ${val}`
+                },
+            },
+        },
     },
 }
+
+/* Trend arrows (same logic) */
+const deltaFromSeries = (arr) =>
+    Array.isArray(arr) && arr.length >= 2 ? (arr.at(-1) ?? 0) - (arr.at(-2) ?? 0) : 0
+function arrowForDelta(delta) {
+    const d = Number(delta) || 0
+    if (Math.abs(d) <= 2.5)
+        return { angle: 0, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d > 2.5 && d <= 5)
+        return { angle: -25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d < -2.5 && d >= -5)
+        return { angle: 25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d > 5 && d <= 10)
+        return { angle: -60, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d < -5 && d >= -10)
+        return { angle: 60, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d > 10)
+        return { angle: -90, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    if (d < -10)
+        return { angle: 90, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+    return { angle: 0, colorClass: 'tr-yellow', show: false, deltaLabel: '0.0 pp' }
+}
+const trendsMap = computed(() => ({
+    att_b: arrowForDelta(deltaFromSeries(seriesBudArr.value)),
+    att_f: arrowForDelta(deltaFromSeries(seriesFcArr.value)),
+    sixm: arrowForDelta(deltaFromSeries(seriesBudArr.value)),
+}))
 </script>
 
 <style>
@@ -553,14 +562,12 @@ const multiPieOptions = {
         size: A4 landscape;
         margin: 20mm 16mm 16mm 16mm;
     }
-
     .print-only {
         display: block !important;
     }
     .viz-card .p-card-header {
         display: block !important;
     }
-
     .viz-card {
         margin-top: 8mm;
     }
@@ -620,15 +627,12 @@ const multiPieOptions = {
     align-items: center;
     gap: 6px;
 }
-
 .trend-inline .trend-icon.pi {
     font-size: 1rem;
     display: inline-block;
     transition: transform 0.2s ease;
     color: var(--trend-color, currentColor) !important;
     opacity: 1 !important;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 .trend-label {
     font-size: 0.8rem;
@@ -645,25 +649,24 @@ const multiPieOptions = {
     --trend-color: #ef4444;
 }
 
-.pct-good {
-    color: #16a34a;
+.pct-good,
+.pct-warn,
+.pct-mid,
+.pct-bad {
     font-weight: 700;
     font-size: 2.5rem;
+}
+.pct-good {
+    color: #16a34a;
 }
 .pct-warn {
     color: #eab308;
-    font-weight: 700;
-    font-size: 2.5rem;
 }
 .pct-mid {
     color: #f59e0b;
-    font-weight: 700;
-    font-size: 2.5rem;
 }
 .pct-bad {
     color: #ef4444;
-    font-weight: 700;
-    font-size: 2.5rem;
 }
 
 .viz-card :deep(.p-card-content) {
@@ -672,14 +675,12 @@ const multiPieOptions = {
     height: var(--viz-body-h);
     padding: 0.5rem 0.75rem !important;
 }
-
 .viz-body {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
 }
-
 .viz-line {
     flex: 1 1 auto;
     height: 100% !important;

@@ -130,7 +130,7 @@ const unit = ref('m3')
 const unitOptions = [
     { label: 'm³', value: 'm3' },
     { label: '€', value: 'euro' },
-    { label: 'VK-EH', value: 'units' },
+    { label: 'VK-EH', value: 'VK-EH' },
 ]
 const unitLabel = computed(() => unitOptions.find((o) => o.value === unit.value)?.label || '')
 
