@@ -83,6 +83,14 @@
                                 @click="openTeams(u)"
                                 v-tooltip.top="'Teams ändern'"
                             />
+                            <!-- Extra Quotas -->
+                            <Button
+                                icon="pi pi-percentage"
+                                rounded
+                                severity="success"
+                                @click="goToExtraQuotas(u)"
+                                v-tooltip.top="'Extra Quotas bearbeiten'"
+                            />
                             <!-- Rolle -->
                             <Button
                                 icon="pi pi-sliders-h"
@@ -298,6 +306,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/plugins/axios'
 import Card from 'primevue/card'
 import Tag from 'primevue/tag'
@@ -316,6 +325,7 @@ import Column from 'primevue/column'
 
 // ✅ local directive
 const vTooltip = Tooltip
+const router = useRouter()
 
 const users = ref([])
 const teams = ref([])
@@ -401,6 +411,13 @@ async function confirmRole() {
     const i = users.value.findIndex((x) => x.id === ctxUser.value.id)
     if (i !== -1) users.value[i] = { ...users.value[i], roles: [roleLocal.value] }
     dlgRole.value = false
+}
+
+function goToExtraQuotas(u) {
+    router.push({
+        path: `extra-quotas/user/${u.id}`,
+/*        query: { fy: new Date().getFullYear() } // opcional */
+    })
 }
 
 /* Transfer – list by CLIENT */

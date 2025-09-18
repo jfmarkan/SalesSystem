@@ -17,6 +17,7 @@ import ReportGenerator from '@/views/dashboard/manager/ProfitCenterAnalytics.vue
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
 import Users from '@/views/dashboard/admin/settings/Users.vue';
+import QuotaByUser from '@/views/dashboard/admin/settings/QuotaByUser.vue';
 
 const routes = [
     {
@@ -91,6 +92,13 @@ const routes = [
             { 
                 path: '/settings/users', 
                 component: Users, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/settings/extra-quotas/user/:userId', 
+                component: QuotaByUser, 
                 meta: { 
                     requiresAuth: true 
                 }
