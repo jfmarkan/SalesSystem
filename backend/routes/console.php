@@ -13,3 +13,8 @@ Schedule::command('deviations:detect')
     ->monthlyOn(4, '05:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+Schedule::command('erp:auto-import-sales')
+    ->twiceDaily(14, 00)   // 14:00 y 00:00
+    ->withoutOverlapping()
+    ->timezone(config('app.timezone'));

@@ -17,14 +17,20 @@ use App\Http\Controllers\ExtraQuotaController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\UserAdministrationController;
 use App\Http\Controllers\UserDetailController;
+use App\Http\Controllers\ErpImportController;
+use App\Http\Controllers\DeviationDetectController;
+
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
-
+Route::get('/deviations/detect', [DeviationDetectController::class, 'detect']);
+Route::get('/erp/auto-sales-update', [ErpImportController::class, 'auto']);
 
 Route::middleware('auth:sanctum')->group(function () {
     
+    Route::post('/erp/manual-sales-import', [ErpImportController::class, 'manual']);
+
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/extra/portfolio', [ExtraQuotaController::class, 'portfolio']);
     Route::get('/profit-centers/{code}/extra-portfolio', [ExtraQuotaController::class, 'pcPortfolio']);

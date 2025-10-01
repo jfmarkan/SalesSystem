@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
             ProfitCenterSeeder::class,
             ClientProfitCenterSeeder::class,
             BudgetSeeder::class,
-            SaleSeeder::class,
+            //SaleSeeder::class,
             ForecastSeeder::class,
             AssignmentSeeder::class,
             UnitConversionSeeder::class,

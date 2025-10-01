@@ -46,10 +46,15 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule) {
-        // Corre el día 4 de cada mes a las 05:00
         $schedule->command('deviations:detect')
             ->monthlyOn(4, '05:00')
             ->withoutOverlapping()
+            ->runInBackground();
+
+        $schedule->command('erp:auto-import-sales')
+            ->twiceDaily(12, 20)
+            ->withoutOverlapping()
+            ->onOneServer()
             ->runInBackground();
     })
     ->create();

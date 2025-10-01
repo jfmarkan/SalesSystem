@@ -94,25 +94,44 @@ class ExtraQuotaController extends Controller
 
     public function myProfitCenters(Request $request)
     {
-        $userId = $request->user()->id;
+        $userId = (int)$request->user()->id;
 
         $fyRaw = $request->query('fiscal_year', $request->query('fy', $request->query('year', $request->query('fiscal-ir'))));
         $fy = $fyRaw ? (int)preg_replace('/\D+/', '', (string)$fyRaw) : null;
 
         $q = DB::table('extra_quota_assignments as a')
             ->where('a.user_id', $userId)
-            ->where('a.is_published', true)
-            ->select('a.profit_center_code', DB::raw('SUM(a.volume) as assigned_volume'));
+            ->where('a.is_published', true);
 
         if ($fy) $q->where('a.fiscal_year', $fy);
 
-        $rows = $q->groupBy('a.profit_center_code')
-            ->orderBy('a.profit_center_code')
-            ->get()
-            ->map(function ($r) {
-                $r->profit_center_code = preg_replace('/\D+/', '', (string)$r->profit_center_code);
-                return $r;
-            });
+        $hasPc = Schema::hasTable('profit_centers') && Schema::hasColumn('profit_centers','profit_center_code');
+
+        if ($hasPc) {
+            $q->leftJoin('profit_centers as pc', 'pc.profit_center_code', '=', 'a.profit_center_code')
+            ->select([
+                'a.profit_center_code',
+                DB::raw('COALESCE(pc.profit_center_name, a.profit_center_code) AS profit_center_name'),
+                DB::raw('SUM(a.volume) AS assigned_volume'),
+            ])
+            ->groupBy('a.profit_center_code', 'pc.profit_center_name')
+            ->orderBy('a.profit_center_code');
+        } else {
+            $q->select([
+                'a.profit_center_code',
+                DB::raw('a.profit_center_code AS profit_center_name'),
+                DB::raw('SUM(a.volume) AS assigned_volume'),
+            ])
+            ->groupBy('a.profit_center_code')
+            ->orderBy('a.profit_center_code');
+        }
+
+        $rows = $q->get()->map(function ($r) {
+            $r->profit_center_code = preg_replace('/\D+/', '', (string)$r->profit_center_code);
+            $r->assigned_volume = (int) $r->assigned_volume;
+            $r->profit_center_name = (string)($r->profit_center_name ?? $r->profit_center_code);
+            return $r;
+        });
 
         return response()->json($rows);
     }
@@ -459,55 +478,55 @@ class ExtraQuotaController extends Controller
     }
 
     public function finalizeOpportunity(Request $req, int $group, int $version)
-{
-    $uid    = $req->user()->id;
-    $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
-    $cgn    = trim((string) $req->input('client_group_number', ''));
+    {
+        $uid    = $req->user()->id;
+        $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
+        $cgn    = trim((string) $req->input('client_group_number', ''));
 
-    if (!in_array($status, ['won','lost'])) abort(422, 'invalid status');
+        if (!in_array($status, ['won','lost'])) abort(422, 'invalid status');
 
-    return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
-        $op = DB::table('sales_opportunities')
-            ->where('opportunity_group_id', $group)
-            ->where('version', $version)
-            ->where('user_id', $uid)
-            ->lockForUpdate()->first();
-        if (!$op) abort(404, 'Opportunity version not found');
+        return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
+            $op = DB::table('sales_opportunities')
+                ->where('opportunity_group_id', $group)
+                ->where('version', $version)
+                ->where('user_id', $uid)
+                ->lockForUpdate()->first();
+            if (!$op) abort(404, 'Opportunity version not found');
 
-        if ($status === 'lost') {
-            // 🔴 Perdida: no cuenta para nada
+            if ($status === 'lost') {
+                // 🔴 Perdida: no cuenta para nada
+                DB::table('sales_opportunities')
+                ->where('opportunity_group_id',$group)
+                ->where('version',$version)
+                ->update(['status'=>'lost','updated_at'=>now()]);
+                return response()->noContent();
+            }
+
+            // 🟢 WON: mover a Budgets/Forecasts (como ya tenías)
+            if ($cgn === '') abort(422, 'client_group_number required');
+            $clientName = (string) $req->input('client_name', $op->potential_client_name ?? '—');
+            // ... (mismo bloque de cliente + assignment + mover budgets/forecasts) ...
+
+            // marcar la versión actual como WON
             DB::table('sales_opportunities')
-              ->where('opportunity_group_id',$group)
-              ->where('version',$version)
-              ->update(['status'=>'lost','updated_at'=>now()]);
+            ->where('opportunity_group_id',$group)
+            ->where('version',$version)
+            ->update([
+                'status' => 'won',
+                'client_group_number' => $cgn,
+                'updated_at' => now(),
+            ]);
+
+            // 🟡 todas las demás versiones del grupo a draft
+            DB::table('sales_opportunities')
+            ->where('opportunity_group_id',$group)
+            ->where('version','<>',$version)
+            ->update(['status'=>'draft','updated_at'=>now()]);
+
+            // ⚠️ NO borramos extra_quota_*; la resta se hace en Analytics para evitar duplicación
             return response()->noContent();
-        }
-
-        // 🟢 WON: mover a Budgets/Forecasts (como ya tenías)
-        if ($cgn === '') abort(422, 'client_group_number required');
-        $clientName = (string) $req->input('client_name', $op->potential_client_name ?? '—');
-        // ... (mismo bloque de cliente + assignment + mover budgets/forecasts) ...
-
-        // marcar la versión actual como WON
-        DB::table('sales_opportunities')
-          ->where('opportunity_group_id',$group)
-          ->where('version',$version)
-          ->update([
-              'status' => 'won',
-              'client_group_number' => $cgn,
-              'updated_at' => now(),
-          ]);
-
-        // 🟡 todas las demás versiones del grupo a draft
-        DB::table('sales_opportunities')
-          ->where('opportunity_group_id',$group)
-          ->where('version','<>',$version)
-          ->update(['status'=>'draft','updated_at'=>now()]);
-
-        // ⚠️ NO borramos extra_quota_*; la resta se hace en Analytics para evitar duplicación
-        return response()->noContent();
-    });
-}
+        });
+    }
 
     private function fiscalYear(Request $req): int 
     {
