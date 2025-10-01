@@ -220,7 +220,11 @@ const labelDE = (ym) => {
 }
 
 /* Series per unit */
-const unitKey = computed(() => (['m3', 'euro', 'units'].includes(props.unit) ? props.unit : 'm3'))
+const unitKey = computed(() => {
+  const v = props.unit
+  if (v === 'VK-EH') return 'units'   // <- alias robusto
+  return ['m3','euro','units'].includes(v) ? v : 'm3'
+})
 const sArr = computed(() => data.value?.raw?.monthly?.sales?.[unitKey.value] || [])
 const bArr = computed(() => data.value?.raw?.monthly?.budgets?.[unitKey.value] || [])
 const fArr = computed(() => data.value?.raw?.monthly?.forecast?.[unitKey.value] || [])

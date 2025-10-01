@@ -1,4 +1,3 @@
-<!-- src/pages/extra-quota/ExtraQuotasBoard.vue -->
 <template>
     <div class="forecast-wrapper">
         <Toast />
@@ -429,6 +428,7 @@ function normStatus(s) {
     if (x.includes('lost')) return 'lost'
     return x
 }
+
 function applyListFilter() {
     const want = statusFilter.value
     const rows = Array.isArray(allRows.value) ? allRows.value : []
@@ -453,6 +453,7 @@ function applyListFilter() {
             }
         })
 }
+
 function setStatusFilter(s) {
     statusFilter.value = s
     selectedGroupId.value = null
@@ -461,6 +462,7 @@ function setStatusFilter(s) {
     showBudgetTable.value = false
     loadList()
 }
+
 watch(statusFilter, () => {
     loadList()
 })
@@ -487,6 +489,7 @@ function onSelectGroup(gid) {
     }
     applyChange('group', gid)
 }
+
 function onSelectVersion(v) {
     if (dirtyAny()) {
         confirmVisible.value = true
@@ -508,6 +511,7 @@ function startCreateMode() {
     }
     enterCreateMode()
 }
+
 async function enterCreateMode() {
     createMode.value = true
     selectedGroupId.value = null
@@ -540,20 +544,36 @@ async function enterCreateMode() {
 const assignedPcOptions = ref([])
 const availableForSelected = ref(0)
 async function loadAssignedPcs() {
-    await ensureCsrf()
-    const fy = opForm.value?.fiscal_year || new Date().getFullYear()
-    const { data } = await api.get('/api/extra-quota/assignments/my-profit-centers', {
-        params: { fiscal_year: fy },
+  await ensureCsrf()
+  const fy = opForm.value?.fiscal_year || new Date().getFullYear()
+
+  const { data } = await api.get('/api/extra-quota/assignments/my-profit-centers', {
+    params: { fiscal_year: fy },
+  })
+
+  const rows = Array.isArray(data) ? data : []
+  const out = []
+
+  for (const r of rows) {
+    const code = Number(r.profit_center_code ?? 0)
+    if (!code) continue
+    const name =
+      r.profit_center_name ??
+      r.pc_name ??
+      r.name ??
+      r.label ??
+      null
+
+    out.push({
+      label: name ? String(name) : `PC ${code}`,
+      value: code,
     })
-    const rows = Array.isArray(data) ? data : []
-    const out = []
-    for (const r of rows) {
-        const code = Number(r.profit_center_code ?? 0)
-        if (!code) continue
-        out.push({ label: String(code), value: code })
-    }
-    assignedPcOptions.value = out
+  }
+
+  assignedPcOptions.value = out
 }
+
+
 async function updateAvailabilityForPc() {
     const code = Number(opForm.value.profit_center_code)
     const fy = opForm.value.fiscal_year
@@ -675,6 +695,7 @@ watch(
         }
     },
 )
+
 function cancelWonFlow() {
     wonDialogVisible.value = false
     opForm.value.status = 'open'
