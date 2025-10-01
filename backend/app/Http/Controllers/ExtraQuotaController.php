@@ -482,10 +482,18 @@ class ExtraQuotaController extends Controller
         $uid    = $req->user()->id;
         $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
         $cgn    = trim((string) $req->input('client_group_number', ''));
+        $classI = $req->has('classification_id') ? (int)$req->input('classification_id') : null;
 
         if (!in_array($status, ['won','lost'])) abort(422, 'invalid status');
 
-        return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req) {
+        // Validación de rango de número de cliente si viene
+        if ($status === 'won') {
+            if (!preg_match('/^\d+$/', $cgn)) abort(422, 'client_group_number must be numeric');
+            $n = (int)$cgn;
+            if ($n < 10000 || $n > 19999) abort(422, 'client_group_number must be 10000..19999');
+        }
+
+        return DB::transaction(function() use ($status, $cgn, $group, $version, $uid, $req, $classI) {
             $op = DB::table('sales_opportunities')
                 ->where('opportunity_group_id', $group)
                 ->where('version', $version)
@@ -494,7 +502,6 @@ class ExtraQuotaController extends Controller
             if (!$op) abort(404, 'Opportunity version not found');
 
             if ($status === 'lost') {
-                // 🔴 Perdida: no cuenta para nada
                 DB::table('sales_opportunities')
                 ->where('opportunity_group_id',$group)
                 ->where('version',$version)
@@ -502,10 +509,87 @@ class ExtraQuotaController extends Controller
                 return response()->noContent();
             }
 
-            // 🟢 WON: mover a Budgets/Forecasts (como ya tenías)
+            // 🟢 WON
             if ($cgn === '') abort(422, 'client_group_number required');
-            $clientName = (string) $req->input('client_name', $op->potential_client_name ?? '—');
-            // ... (mismo bloque de cliente + assignment + mover budgets/forecasts) ...
+            $clientNameReq = (string) $req->input('client_name', $op->potential_client_name ?? '—');
+
+            // Buscar cliente por client_group_number (preferente); fallback a id por compatibilidad
+            $client = Client::withTrashed()->where('client_group_number', (int)$cgn)->first();
+            if (!$client) {
+                $client = Client::withTrashed()->find((int)$cgn);
+            }
+
+            if (!$client) {
+                $client = Client::create([
+                    'client_group_number' => (int)$cgn,
+                    'client_name'         => $clientNameReq,
+                    'classification_id'   => ($classI && in_array($classI,[6,7])) ? $classI : null,
+                ]);
+            } else {
+                // Actualizar nombre si está vacío y clasificación si viene
+                if (!$client->client_name) $client->client_name = $clientNameReq;
+                if ($classI && in_array($classI,[6,7])) {
+                    $client->classification_id = $classI;
+                }
+                $client->save();
+            }
+
+            // Vinculación cliente–PC
+            $cpc = ClientProfitCenter::withTrashed()->firstOrCreate([
+                'client_group_number' => (int)$cgn,
+                'profit_center_code'  => (int)$op->profit_center_code,
+            ]);
+            if (method_exists($cpc, 'restore') && $cpc->trashed()) {
+                $cpc->restore();
+            }
+
+            // TeamId por user
+            $teamId = TeamMember::query()
+                ->where('user_id', $op->user_id)
+                ->orderByDesc('updated_at')
+                ->value('team_id');
+            if (!$teamId) abort(422, 'team not found for user');
+
+            // Assignment
+            DB::table('assignments')->insert([
+                'client_profit_center_id' => $cpc->id,
+                'team_id'                 => $teamId,
+                'user_id'                 => $op->user_id,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+
+            // Mover presupuesto/forecast extra → permanentes
+            $bud = DB::table('extra_quota_budgets')
+                ->where('opportunity_group_id',$group)
+                ->where('version',$version)
+                ->get();
+            foreach ($bud as $r) {
+                DB::table('budgets')->insert([
+                    'client_profit_center_id' => $cpc->id,
+                    'fiscal_year'             => $r->fiscal_year,
+                    'month'                   => $r->month,
+                    'volume'                  => $r->volume,
+                    'created_at'              => now(),
+                    'updated_at'              => now(),
+                ]);
+            }
+
+            $fc = DB::table('extra_quota_forecasts')
+                ->where('opportunity_group_id',$group)
+                ->where('version',$version)
+                ->get();
+            foreach ($fc as $r) {
+                DB::table('forecasts')->insert([
+                    'client_profit_center_id' => $cpc->id,
+                    'fiscal_year'             => $r->fiscal_year,
+                    'month'                   => $r->month,
+                    'volume'                  => $r->volume,
+                    'user_id'                 => $op->user_id,
+                    'created_at'              => now(),
+                    'updated_at'              => now(),
+                ]);
+            }
 
             // marcar la versión actual como WON
             DB::table('sales_opportunities')
@@ -517,13 +601,12 @@ class ExtraQuotaController extends Controller
                 'updated_at' => now(),
             ]);
 
-            // 🟡 todas las demás versiones del grupo a draft
+            // otras versiones a draft
             DB::table('sales_opportunities')
             ->where('opportunity_group_id',$group)
             ->where('version','<>',$version)
             ->update(['status'=>'draft','updated_at'=>now()]);
 
-            // ⚠️ NO borramos extra_quota_*; la resta se hace en Analytics para evitar duplicación
             return response()->noContent();
         });
     }
@@ -649,8 +732,8 @@ class ExtraQuotaController extends Controller
             'achieved' => $used,
             'mix'      => $mixPc,
             'mix_pc'   => $mixPc,
-            'items'    => [[ 'name'=>$name, 'userId'=>$userId, 'assigned'=>$assigned, 'used'=>$used ]]
-        ]);
+            'items'    => [[ 'name'=>$name, 'userId'=>$userId, 'assigned'=>$assigned, 'used'=>$used ]]]
+        );
     }
 
     public function pcPortfolio(Request $req, string $code)
@@ -924,5 +1007,156 @@ class ExtraQuotaController extends Controller
             'profit_center_code' => (string)$rec->profit_center_code,
             'volume'             => (int)$rec->volume,
         ]);
+    }
+
+
+    /* ===================== NUEVO: CLIENTES + VALIDACIONES + MERGE ===================== */
+
+    /** GET /api/clients */
+    public function listClients(Request $req)
+    {
+        $rows = DB::table('clients')
+            ->select(['client_group_number','client_name','classification_id'])
+            ->orderBy('client_group_number')
+            ->limit(10000)
+            ->get();
+
+        return response()->json($rows);
+    }
+
+    /** GET /api/clients/by-number/{num} */
+    public function getClientByNumber(Request $req, int $num)
+    {
+        if ($num < 10000 || $num > 19999) {
+            abort(422, 'client_group_number must be 10000..19999');
+        }
+        $row = DB::table('clients')
+            ->where('client_group_number', $num)
+            ->first();
+
+        if (!$row) {
+            return response()->json(null);
+        }
+        return response()->json([
+            'client_group_number' => (int)$row->client_group_number,
+            'client_name'         => (string)$row->client_name,
+            'classification_id'   => $row->classification_id !== null ? (int)$row->classification_id : null,
+        ]);
+    }
+
+    /** GET /api/clients/{num}/profit-centers */
+    public function clientProfitCenters(Request $req, int $num)
+    {
+        if ($num < 10000 || $num > 19999) {
+            abort(422, 'client_group_number must be 10000..19999');
+        }
+        $pcs = DB::table('client_profit_centers')
+            ->where('client_group_number', $num)
+            ->pluck('profit_center_code')
+            ->map(fn($c)=> (int)$c)
+            ->values();
+
+        return response()->json(['profit_centers' => $pcs]);
+    }
+
+    /**
+     * GET /api/extra-quota/clients/exists-in-pc?client_group_number=&profit_center_code=
+     * Devuelve { exists: bool }
+     */
+    public function clientExistsInPc(Request $req)
+    {
+        $num = (int)$req->query('client_group_number', 0);
+        $pc  = (string)$req->query('profit_center_code','');
+
+        if ($num < 10000 || $num > 19999) abort(422, 'client_group_number must be 10000..19999');
+        if ($pc === '') abort(422, 'profit_center_code required');
+
+        $exists = DB::table('client_profit_centers')
+            ->where('client_group_number',$num)
+            ->where('profit_center_code',$pc)
+            ->exists();
+
+        return response()->json(['exists'=>$exists]);
+    }
+
+    /**
+     * POST /api/extra-quota/forecast/merge
+     * payload: { client_group_number, profit_center_code, fiscal_year, items: [{month, fiscal_year, volume}] }
+     * Suma los volúmenes a la tabla forecasts del CPC. Crea el CPC si no existe.
+     */
+    public function mergeForecast(Request $req)
+    {
+        $uid = (int)$req->user()->id;
+        $data = $req->validate([
+            'client_group_number' => 'required|integer|min:10000|max:19999',
+            'profit_center_code'  => 'required',
+            'fiscal_year'         => 'required|integer',
+            'items'               => 'required|array|min:1',
+            'items.*.month'       => 'required|integer|min:1|max:12',
+            'items.*.fiscal_year' => 'required|integer',
+            'items.*.volume'      => 'required|integer|min:0',
+            'classification_id'   => 'nullable|integer|in:6,7',
+        ]);
+
+        $num = (int)$data['client_group_number'];
+        $pc  = (string)$data['profit_center_code'];
+
+        return DB::transaction(function() use ($data, $uid, $num, $pc) {
+            // Asegurar cliente existe (si no, lo creamos con classification opcional)
+            $client = Client::where('client_group_number',$num)->lockForUpdate()->first();
+            if (!$client) {
+                $client = Client::create([
+                    'client_group_number' => $num,
+                    'client_name'         => '—',
+                    'classification_id'   => $data['classification_id'] ?? null,
+                ]);
+            } elseif (!empty($data['classification_id'])) {
+                $client->classification_id = (int)$data['classification_id'];
+                $client->save();
+            }
+
+            // Asegurar CPC
+            $cpc = ClientProfitCenter::firstOrCreate([
+                'client_group_number' => $num,
+                'profit_center_code'  => $pc,
+            ]);
+
+            // Merge items → forecasts
+            $now = now();
+            foreach ($data['items'] as $it) {
+                $fy  = (int)$it['fiscal_year'];
+                $mon = (int)$it['month'];
+                $vol = (int)$it['volume'];
+
+                $existing = DB::table('forecasts')
+                    ->where('client_profit_center_id', $cpc->id)
+                    ->where('fiscal_year', $fy)
+                    ->where('month', $mon)
+                    ->where('user_id', $uid)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    DB::table('forecasts')
+                        ->where('id', $existing->id)
+                        ->update([
+                            'volume'     => (int)$existing->volume + $vol,
+                            'updated_at' => $now,
+                        ]);
+                } else {
+                    DB::table('forecasts')->insert([
+                        'client_profit_center_id' => $cpc->id,
+                        'fiscal_year'             => $fy,
+                        'month'                   => $mon,
+                        'volume'                  => $vol,
+                        'user_id'                 => $uid,
+                        'created_at'              => $now,
+                        'updated_at'              => $now,
+                    ]);
+                }
+            }
+
+            return response()->json(['status'=>'ok','merged'=>count($data['items'])]);
+        });
     }
 }

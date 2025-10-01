@@ -183,6 +183,7 @@ const unitOptions = computed(() =>
       ],
 )
 
+// helpers numéricos
 const toNum = (v) => {
   if (v == null) return 0
   if (typeof v === 'number') return v
@@ -195,16 +196,62 @@ const fmtThousand = (n) =>
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
-const months = computed(() => series.value?.months || [])
+// Distribuye un total `extra` sobre el array `base` proporcionalmente a sus valores;
+// si todo `base` es 0, reparte uniforme.
+function distributeProportional(base, extra) {
+  const out = base.slice()
+  const total = base.reduce((a, b) => a + (b || 0), 0)
+  if (extra === 0) return out
+  if (total <= 0) {
+    const per = extra / 12
+    return out.map(() => per)
+  }
+  return out.map(v => v + (v / total) * extra)
+}
+
+const months   = computed(() => series.value?.months || [])
 const salesArr = computed(() => (series.value ? series.value.sales[unitMode.value] || [] : []))
+
+// Budget final: para company/team/user/pc el backend ya incluye EQ restante → usar tal cual.
+// Para client: base + (assigned - won) distribuido proporcionalmente; fallback a remaining total.
 const budgetArr = computed(() => {
   const s = series.value
   if (!s) return []
-  const t = s.context?.type
-  const raw = s.budgets?.[unitMode.value] || []
-  return (t === 'client') ? toNums12(raw) : toNums12(raw)
+
+  const k   = unitMode.value
+  const ctx = s.context?.type
+  const base = toNums12(s.budgets?.[k] || [])
+
+  if (['company','team','user','pc'].includes(ctx)) {
+    return base
+  }
+
+  const assignedTotal = toNum(s?.extra_breakdown?.assigned?.[k]) || 0  // opcional
+  const wonTotal      = toNum(s?.extra_breakdown?.won?.[k])      || 0  // opcional
+  let delta = 0
+
+  if (assignedTotal > 0 || wonTotal > 0) {
+    delta = assignedTotal - wonTotal
+  } else {
+    delta = toNum(s?.extra_quotas?.[k] ?? 0) // remaining total
+  }
+
+  return distributeProportional(base, delta)
 })
-const fcstArr = computed(() => (series.value ? series.value.forecasts[unitMode.value] || [] : []))
+
+// Forecast final = forecast base + EQF (máx versión por oportunidad y mes).
+// Si el backend ya lo incluyó (meta.forecasts_includes_eqf === true), no sumamos.
+const fcstArr = computed(() => {
+  if (!series.value) return []
+  const s = series.value
+  const k = unitMode.value
+  const base = toNums12(s.forecasts?.[k] || [])
+  if (s?.meta?.forecasts_includes_eqf === true) {
+    return base
+  }
+  const eqf = toNums12(s.extra_quota_forecasts?.[k] || [])
+  return base.map((v, i) => v + (eqf[i] || 0))
+})
 
 async function loadRoot() {
   const { data } = await api.get('/api/analytics/tree', { params: { node_id: 'root' } })
@@ -277,7 +324,7 @@ async function fetchSeries() {
   if (!data?.unit_mode_allowed && unitMode.value === 'units') unitMode.value = 'm3'
 }
 
-// Line chart
+// Line chart (usa Forecast combinado con EQF)
 const cum = (arr) =>
   arr.reduce((acc, v, i) => {
     acc.push((acc[i - 1] || 0) + v)
@@ -285,15 +332,15 @@ const cum = (arr) =>
   }, [])
 const chartData = computed(() => {
   if (!series.value) return { labels: [], datasets: [] }
-  const s = series.value,
-    k = unitMode.value
-  const sales = toNums12(s.sales[k])
+  const s = series.value
+  const k = unitMode.value
+  const sales  = toNums12(s.sales[k])
   const budget = toNums12(s.budgets[k])
-  const fcst = toNums12(s.forecasts[k])
-  const salesCum = cum(sales)
+  const fcst   = fcstArr.value // ya combinado (base + EQF si hace falta)
+  const salesCum  = cum(sales)
   const budgetCum = cum(budget)
-  const fcstCum = cum(fcst)
-  const budgetFY = budget.reduce((a, b) => a + b, 0)
+  const fcstCum   = cum(fcst)
+  const budgetFY  = budget.reduce((a, b) => a + b, 0)
   const fyLine = Array(12).fill(budgetFY)
   return {
     labels: s.months,

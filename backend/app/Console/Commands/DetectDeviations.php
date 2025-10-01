@@ -20,10 +20,10 @@ class DetectDeviations extends Command
     {
         $now = Carbon::now();
 
-        if ($now->day < 4) {
-            $this->info('Skipping: day < 4.');
-            return self::SUCCESS;
-        }
+    //    if ($now->day < 4) {
+    //        $this->info('Skipping: day < 4.');
+    //        return self::SUCCESS;
+    //    }
 
         $onlyUserId = $this->option('user_id') ? (int)$this->option('user_id') : null;
 
@@ -134,12 +134,6 @@ class DetectDeviations extends Command
         return self::SUCCESS;
     }
 
-    /**
-     * Window desde el MES SIGUIENTE (excluye actual), largo N.
-     * Budget = budgets + ExtraQuotaAssignment distribuida por estacionalidad FY.
-     * Forecast = forecasts (última versión por user) + ExtraQuotaForecast (opps abiertas * prob).
-     * Sales = ventas reales de cada mes de la ventana.
-     */
     private function buildForecastWindowSeries(array $cpcIds, string $pcCode, int $userId, Carbon $start, int $monthsCount = 6): array
     {
         $months = [];
@@ -153,18 +147,18 @@ class DetectDeviations extends Command
         $cursor = $start->copy()->addMonth(); // siguiente mes
 
         for ($i = 0; $i < $monthsCount; $i++) {
-            $y = (int)$cursor->year;
-            $m = (int)$cursor->month;
-            $key = sprintf('%04d-%02d', $y, $m);
-            $months[] = $key;
+            $y = (int)$cursor->year;   // año calendario del mes
+            $m = (int)$cursor->month;  // 1..12
+            $fyStart = $this->fyStartFor($y, $m);
 
-            // Budget base
+            $months[] = sprintf('%04d-%02d', $y, $m);
+
+            // Budget base (calendario) + cuota extra mensual
             $bBase = (float) DB::table('budgets')
                 ->whereIn('client_profit_center_id', $cpcIds)
                 ->where('fiscal_year', $y)->where('month', $m)
                 ->sum('volume');
 
-            // Extra quota assignment mensual (FY seasonality)
             $bEqa = $this->assignmentMonthlyShareFY(
                 pcCode: $pcCode,
                 userId: $userId,
@@ -174,7 +168,7 @@ class DetectDeviations extends Command
             );
             $b = $bBase + $bEqa;
 
-            // Forecast base (última versión por user)
+            // Forecast base (última versión por usuario y mes - calendario)
             $lv = DB::table('forecasts')
                 ->whereIn('client_profit_center_id', $cpcIds)
                 ->where('fiscal_year', $y)->where('month', $m)
@@ -185,35 +179,34 @@ class DetectDeviations extends Command
             $fBase = (float) DB::table('forecasts')
                 ->joinSub($lv, 'lv', function($j){
                     $j->on('forecasts.client_profit_center_id','=','lv.client_profit_center_id')
-                      ->on('forecasts.fiscal_year','=','lv.fiscal_year')
-                      ->on('forecasts.month','=','lv.month')
-                      ->on('forecasts.user_id','=','lv.user_id')
-                      ->on('forecasts.version','=','lv.max_version');
+                    ->on('forecasts.fiscal_year','=','lv.fiscal_year')
+                    ->on('forecasts.month','=','lv.month')
+                    ->on('forecasts.user_id','=','lv.user_id')
+                    ->on('forecasts.version','=','lv.max_version');
                 })
                 ->sum('forecasts.volume');
 
-            // Extra quota forecast (oportunidades abiertas * prob)
-            $fEqa = $this->extraQuotaForecastOpenForMonth(
+            // EQ Forecast (MAX versión por oportunidad y mes) — calendario + FY en opp
+            $fEq = $this->extraQuotaForecastForMonthYM(
                 pcCode: $pcCode,
                 userId: $userId,
-                Y:      $y,
-                m:      $m
+                y:      $y,
+                m:      $m,
+                fyStartForOpp: $fyStart
             );
 
-            // Ventas reales del mes
+            // Ventas reales del mes (calendario)
             $s = (float) DB::table('sales')
                 ->whereIn('client_profit_center_id', $cpcIds)
                 ->where('fiscal_year', $y)->where('month', $m)
                 ->sum('volume');
 
-            $f = $fBase + $fEqa;
-
             $budgetSeries[]   = $b;
-            $forecastSeries[] = $f;
+            $forecastSeries[] = $fBase + $fEq; // ⬅️ incluye EQF
             $salesSeries[]    = $s;
 
             $totalBudget  += $b;
-            $totalForecast += $f;
+            $totalForecast += ($fBase + $fEq);
 
             $cursor->addMonth();
         }
@@ -226,6 +219,39 @@ class DetectDeviations extends Command
             'total_budget'    => $totalBudget,
             'total_forecast'  => $totalForecast,
         ];
+    }
+
+    private function extraQuotaForecastForMonthYM(string $pcCode, int $userId, int $y, int $m, int $fyStartForOpp): float
+    {
+        $eqfLv = DB::table('extra_quota_forecasts')
+            ->where('fiscal_year', $y)
+            ->where('month', $m)
+            ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
+            ->groupBy('opportunity_group_id');
+
+        $opLv = DB::table('sales_opportunities')
+            ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
+            ->groupBy('opportunity_group_id');
+
+        $rows = DB::table('extra_quota_forecasts as eqf')
+            ->joinSub($eqfLv, 'lv', function($j){
+                $j->on('eqf.opportunity_group_id','=','lv.opportunity_group_id')
+                ->on('eqf.version','=','lv.max_version');
+            })
+            ->joinSub($opLv, 'oplv', function($j){
+                $j->on('oplv.opportunity_group_id','=','eqf.opportunity_group_id');
+            })
+            ->join('sales_opportunities as op', function($j){
+                $j->on('op.opportunity_group_id','=','oplv.opportunity_group_id')
+                ->on('op.version','=','oplv.max_version');
+            })
+            ->where('op.profit_center_code', $pcCode)
+            ->where('op.user_id', $userId)
+            ->where('op.fiscal_year', $fyStartForOpp)
+            ->whereNotIn('op.status', ['won','lost'])
+            ->sum('eqf.volume');
+
+        return (float)$rows;
     }
 
     private function fyStartFor(int $Y, int $m): int
@@ -350,8 +376,8 @@ class DetectDeviations extends Command
         int $userId,
         int $fy,
         int $m,
-        string $type,          // 'FORECAST' | 'SALES'
-        float $percent,        // ratio * 100
+        string $type,
+        float $percent,
         ?float $sales = null,
         ?float $budget = null,
         ?float $forecast = null,

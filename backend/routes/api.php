@@ -20,7 +20,6 @@ use App\Http\Controllers\UserDetailController;
 use App\Http\Controllers\ErpImportController;
 use App\Http\Controllers\DeviationDetectController;
 
-
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
@@ -28,19 +27,19 @@ Route::get('/deviations/detect', [DeviationDetectController::class, 'detect']);
 Route::get('/erp/auto-sales-update', [ErpImportController::class, 'auto']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     Route::post('/erp/manual-sales-import', [ErpImportController::class, 'manual']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/extra/portfolio', [ExtraQuotaController::class, 'portfolio']);
     Route::get('/profit-centers/{code}/extra-portfolio', [ExtraQuotaController::class, 'pcPortfolio']);
-    
+
     Route::prefix('me')->group(function () {
         Route::get('/clients',        [ForecastController::class, 'getClients']);
         Route::get('/profit-centers', [ForecastController::class, 'getProfitCenters']);
         Route::get('/assignments',    [ForecastController::class, 'getAssignments']);
     });
-    
+
     Route::prefix('forecast')->group(function () {
         Route::get('/series',  [ForecastController::class, 'getSeries']);
         Route::put('/series',  [ForecastController::class, 'saveSeries']);
@@ -59,7 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/users/{id}/transfer', [UserAdministrationController::class, 'transfer']);
         Route::get('/users/{id}/logs',       [UserAdministrationController::class, 'logs']); // opcional
-});
+    });
 
     Route::prefix('analytics')->group(function () {
         Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);
@@ -68,7 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/pc/overview', [CompanyAnalyticsController::class, 'pcOverview']);
         Route::get('/pc/list',     [CompanyAnalyticsController::class, 'pcList']);
     });
-    
+
     Route::prefix('budget-cases')->group(function () {
         Route::post('/',         [BudgetCaseController::class, 'store']);     // save/update
         Route::get('/',          [BudgetCaseController::class, 'show']);      // fetch one by clientPC+FY (query params)
@@ -89,6 +88,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put      ('/password',   [UserDetailController::class, 'updatePassword']);
     });
 
+
+
+
     Route::prefix('extra-quota')->group(function () {
         Route::get      ('/analysis/summary', [ExtraQuotaController::class, 'analysisSummary']);
         Route::get      ('/assignments/my-profit-centers', [ExtraQuotaController::class, 'myProfitCenters']);
@@ -98,20 +100,32 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get      ('/user/{userId}/all', [ExtraQuotaController::class, 'listAllByUserFY']);
         Route::patch    ('/{id}', [ExtraQuotaController::class, 'updateAssignmentVolume']);
         Route::post     ('/assign', [ExtraQuotaController::class, 'upsertAssignment']);
-// Opportunities
+
+        // Opportunities
         Route::get      ('/opportunities', [ExtraQuotaController::class, 'indexOpportunities']);
         Route::get      ('/opportunities/{groupId}', [ExtraQuotaController::class, 'showOpportunityGroup'])->whereNumber('groupId');
         Route::post     ('/opportunities', [ExtraQuotaController::class, 'createOpportunity']);
         Route::post     ('/opportunities/{groupId}/version', [ExtraQuotaController::class, 'createVersion'])->whereNumber('groupId');
-// Budget
+
+        // Budget
         Route::get      ('/budget/{groupId}/{version}', [ExtraQuotaController::class, 'getBudget'])->whereNumber('groupId')->whereNumber('version');
         Route::post     ('/budget/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveBudget'])->whereNumber('groupId')->whereNumber('version');
-// Forecast
+
+        // Forecast
         Route::get      ('/forecast/{groupId}/{version}', [ExtraQuotaController::class, 'getForecast'])->whereNumber('groupId')->whereNumber('version');
         Route::post     ('/forecast/{groupId}/{version}/save', [ExtraQuotaController::class, 'saveForecast'])->whereNumber('groupId')->whereNumber('version');
-// Seasonality
+
+        // Seasonality
         Route::get      ('/profit-centers/seasonality', [ExtraQuotaController::class, 'seasonality']);
-// Finalize (won|lost)
+
+        // Finalize (won|lost)
         Route::post     ('/opportunities/{groupId}/{version}/finalize', [ExtraQuotaController::class, 'finalizeOpportunity'])->whereNumber('groupId')->whereNumber('version');
+
+        // ===== Checks y utilidades Extra-Quota =====
+        Route::get('/clients', [ExtraQuotaController::class, 'listClients']);
+        Route::get('/clients/by-number/{num}', [ExtraQuotaController::class, 'getClientByNumber'])->whereNumber('num');
+        Route::get('/clients/{cgn}/profit-centers', [ExtraQuotaController::class, 'clientProfitCenters'])->whereNumber('cgn');
+        Route::get      ('/clients/exists-in-pc', [ExtraQuotaController::class, 'clientExistsInPc']);
+        Route::post     ('/forecast/merge',       [ExtraQuotaController::class, 'mergeForecast']);
     });
 });
