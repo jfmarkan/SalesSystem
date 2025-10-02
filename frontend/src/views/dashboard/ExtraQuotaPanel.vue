@@ -2,7 +2,7 @@
   <div class="forecast-wrapper">
     <Toast />
 
-    <!-- Ungespeicherte Änderungen -->
+    <!-- Unsaved changes -->
     <Dialog
       v-model:visible="confirmVisible"
       :modal="true"
@@ -13,33 +13,30 @@
     >
       <p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
       <div class="flex justify-content-end gap-2">
-        <Button label="Abbrechen" severity="secondary" @click="((confirmVisible=false),(pendingChange=null))" />
+        <Button label="Abbrechen" severity="secondary" @click="((confirmVisible = false), (pendingChange = null))" />
         <Button label="Verwerfen" severity="danger" @click="discardAndApply" />
         <Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
       </div>
     </Dialog>
 
-    <!-- Gewonnen-Flow -->
+    <!-- Won flow -->
     <Dialog
       v-model:visible="wonDialogVisible"
       :modal="true"
       :draggable="false"
       header="Chance gewonnen"
-      :style="{ width: '560px' }"
+      :style="{ width: '520px' }"
     >
       <div class="field mb-2">
-        <label class="lbl">Kundennummer (10000–19999)</label>
+        <label class="lbl">Kundennummer</label>
         <InputText
           v-model="clientGroupInput"
           class="w-full"
-          inputmode="numeric"
           placeholder="z. B. 12345"
           :class="{ 'p-invalid': wonError }"
         />
         <small v-if="wonError" class="text-danger">{{ wonError }}</small>
-        <small v-else class="text-500">
-          Wenn kein Kunde existiert, wird ein neuer angelegt.
-        </small>
+        <small v-else class="text-muted">Nur 10000–19999. Name wird ggf. automatisch ermittelt.</small>
       </div>
 
       <div class="field mb-2">
@@ -48,15 +45,12 @@
           v-model="clientNameInput"
           class="w-full"
           placeholder="Firmenname"
-          :disabled="wonClientFound && !!clientNameInput"
+          :disabled="officialNameLocked"
         />
-        <small v-if="!wonClientFound && !wonError" class="text-500">
-          Neuer Kunde – Name aus dem Formular übernommen, bitte prüfen/ändern.
-        </small>
       </div>
 
       <div class="field mb-2">
-        <label class="lbl">Kundentyp</label>
+        <label class="lbl">Kundenartikelklassifizierung</label>
         <Dropdown
           v-model="wonClassificationId"
           :options="classificationOptions"
@@ -68,11 +62,10 @@
 
       <div v-if="wonConflict" class="conflict-box">
         <span class="pi pi-exclamation-triangle mr-2"></span>
-        Für diesen Kunden ist bereits eine Beziehung zu diesem Profitcenter vorhanden. Das ist
-        <b>Forecast</b>.
+        Kunde + Profitcenter existieren bereits. Das ist <b>Forecast</b>.
         <div class="mt-2 flex gap-2">
           <Button
-            label="Zum vorhandenen Forecast addieren"
+            label="Zum bestehenden Forecast addieren"
             icon="pi pi-plus"
             severity="warning"
             :loading="mergeLoading"
@@ -82,56 +75,45 @@
       </div>
 
       <div class="mt-3 flex justify-content-end gap-2">
-        <Button
-          label="Abbrechen"
-          severity="secondary"
-          :disabled="finalizing || mergeLoading"
-          @click="cancelWonFlow"
-        />
+        <Button label="Abbrechen" severity="secondary" :disabled="finalizing || mergeLoading" @click="cancelWonFlow" />
         <Button
           label="Übernehmen"
           icon="pi pi-check"
           :loading="finalizing"
-          :disabled="!clientGroupInput || !!wonError || wonConflict || mergeLoading || (!wonClientFound && !clientNameInput)"
+          :disabled="!clientGroupInput || !!wonError || wonConflict || mergeLoading || !clientNameInput"
           @click="finalizeWon"
         />
       </div>
     </Dialog>
 
-    <!-- Kunden-Auswahl -->
+    <!-- Client Picker Modal -->
     <Dialog
       v-model:visible="clientSearchVisible"
       :modal="true"
       :draggable="false"
-      header="Kunde auswählen"
-      :style="{ width: '760px' }"
+      header="Kunden auswählen"
+      :style="{ width: '680px' }"
     >
       <div class="mb-2">
         <InputText
           v-model="clientSearchQuery"
           class="w-full"
-          placeholder="Nach Name oder Kundennummer suchen…"
+          placeholder="Nach Name oder Nummer suchen…"
+          @input="fetchClientsRemote(clientSearchQuery)"
         />
       </div>
 
       <div class="client-list-wrap">
-        <div v-if="clientLoading" class="client-loader">
-          <i class="pi pi-spin pi-spinner mr-2"></i> Laden…
+        <div
+          v-for="c in filteredClients"
+          :key="c.client_number"
+          class="client-row"
+          @click="selectClient(c)"
+        >
+          <div class="cr-name">({{ c.client_number }}) {{ c.name }}</div>
         </div>
-        <template v-else>
-          <div
-            v-for="c in filteredClients"
-            :key="c.client_number"
-            class="client-row"
-            @click="selectClient(c)"
-          >
-            <div class="cr-left">
-              <div class="cr-name">{{ c.name }}</div>
-              <div class="cr-num">Kundennummer: {{ c.client_number }}</div>
-            </div>
-          </div>
-          <div v-if="!filteredClients.length" class="text-500">Keine Ergebnisse…</div>
-        </template>
+        <div v-if="!clientLoading && !filteredClients.length" class="text-500">Keine Ergebnisse…</div>
+        <div v-if="clientLoading" class="text-500">Laden…</div>
       </div>
 
       <div class="mt-3 flex justify-content-end">
@@ -139,17 +121,17 @@
       </div>
     </Dialog>
 
-    <!-- Pre-Creation Forecast Konflikt -->
+    <!-- Pre-Creation Forecast Conflict -->
     <Dialog
       v-model:visible="preCreateConflictVisible"
       :modal="true"
       :draggable="false"
-      header="Dies ist Forecast"
+      header="Das ist Forecast"
       :style="{ width: '520px' }"
     >
       <p>
-        Der ausgewählte Kunde ist bereits diesem Profitcenter zugeordnet. Das ist <b>Forecast</b>;
-        es ist nicht erlaubt, eine neue Chance für diese Kunde/PC-Kombination zu erstellen.
+        Der ausgewählte Kunde ist bereits mit dem gewählten Profitcenter verknüpft.
+        Das ist <b>Forecast</b> – es ist nicht erlaubt, eine neue Chance für diesen Kunden/PC anzulegen.
       </p>
       <div class="mt-3 flex justify-content-end gap-2">
         <Button label="Nein" severity="danger" @click="cancelCreateAndReset" />
@@ -166,10 +148,21 @@
       :margin="[10, 10]"
       :use-css-transforms="true"
     >
-      <GridItem v-for="item in layout" :key="item.i" :i="item.i" :x="item.x" :y="item.y" :w="item.w" :h="item.h">
+      <GridItem
+        v-for="item in layout"
+        :key="item.i"
+        :i="item.i"
+        :x="item.x"
+        :y="item.y"
+        :w="item.w"
+        :h="item.h"
+      >
         <GlassCard :class="{ 'no-strip': item.type === 'title' }" :title="getTitle(item)">
           <!-- TITLE -->
-          <div v-if="item.type === 'title'" class="h-full p-3 flex align-items-center justify-content-between">
+          <div
+            v-if="item.type === 'title'"
+            class="h-full p-3 flex align-items-center justify-content-between"
+          >
             <h2 class="m-0">Zusätzliche Quoten</h2>
             <Button icon="pi pi-plus" label="Neue Chance" class="p-button" @click="startCreateMode" />
           </div>
@@ -183,7 +176,9 @@
             </div>
 
             <div v-if="listLoading" class="local-loader">
-              <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
+              <div class="dots">
+                <span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
+              </div>
               <div class="caption">Wird geladen…</div>
             </div>
             <template v-else>
@@ -224,7 +219,12 @@
                     <label class="lbl">Potentieller Kunde</label>
                     <div class="inline-input">
                       <InputText v-model="opForm.potential_client_name" class="flex-1" :disabled="isReadOnly" />
-                      <Button label="Kunde wählen" class="p-button-text p-button-sm" :disabled="isReadOnly" @click="pickExistingClient" />
+                      <Button
+                        label="Kunde wählen"
+                        class="p-button-text p-button-sm"
+                        :disabled="isReadOnly"
+                        @click="pickExistingClient"
+                      />
                     </div>
                   </div>
                   <div class="top-cell">
@@ -254,9 +254,7 @@
                         @change="updateAvailabilityForPc"
                         :disabled="isReadOnly"
                       />
-                      <small v-if="pcFilteredWarning" class="text-danger">
-                        {{ pcFilteredWarning }}
-                      </small>
+                      <small v-if="pcFilteredWarning" class="text-danger">{{ pcFilteredWarning }}</small>
                     </div>
 
                     <div class="mt-1">
@@ -313,7 +311,13 @@
                   <div class="right-col">
                     <div class="right-top">
                       <label class="lbl">Kommentare</label>
-                      <Textarea v-model="opForm.comments" rows="8" autoResize class="w-full comment-box" :disabled="isReadOnly" />
+                      <Textarea
+                        v-model="opForm.comments"
+                        rows="8"
+                        autoResize
+                        class="w-full comment-box"
+                        :disabled="isReadOnly"
+                      />
                     </div>
                     <div class="right-bottom">
                       <div class="flex gap-2 justify-content-end">
@@ -369,7 +373,9 @@
           <div v-else-if="item.type === 'table'" class="h-full p-2">
             <template v-if="createMode || selectedGroupId">
               <div v-if="tableLoading" class="local-loader">
-                <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
+                <div class="dots">
+                  <span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
+                </div>
                 <div class="caption">Wird geladen…</div>
               </div>
               <template v-else>
@@ -476,10 +482,7 @@ function applyListFilter() {
         name: r.potential_client_name || '',
         amount: Number(r.volume || 0),
         pct: Number(r.probability_pct || 0),
-        statusLabel:
-          normStatus(r.status) === 'won' ? 'Gewonnen'
-          : normStatus(r.status) === 'lost' ? 'Verloren'
-          : 'Offen',
+        statusLabel: normStatus(r.status) === 'won' ? 'Gewonnen' : normStatus(r.status) === 'lost' ? 'Verloren' : 'Offen',
       }
     })
 }
@@ -548,7 +551,7 @@ async function enterCreateMode() {
   initBlankTable()
 }
 
-/* PCs des Users + verfügbar */
+/* PCs del usuario + disponible */
 const assignedPcOptions = ref([])
 const availableForSelected = ref(0)
 async function loadAssignedPcs() {
@@ -577,7 +580,7 @@ async function updateAvailabilityForPc() {
   availableForSelected.value = Number(data?.available || 0)
 }
 
-/* PCs, die der Kunde bereits hat → Dropdown filtern */
+/* NUEVO: PCs ya tomados por el Kunde → filtra Dropdown */
 const clientTakenPcs = ref([])
 const pcFilteredWarning = ref('')
 const pcOptionsForSelection = computed(() => {
@@ -615,15 +618,16 @@ const clientGroupInput = ref('')
 const clientNameInput = ref('')
 const finalizing = ref(false)
 
-/* Won-Dialog State */
+/* Won-Dialog state */
 const wonClientFound = ref(false)
-const wonClassificationId = ref(6) // 6=Potenzial A, 7=Potenzial B
+const officialNameLocked = computed(() => wonClientFound.value) // nur sperren, wenn DB-Kunde gefunden
+const wonClassificationId = ref(6)
 const classificationOptions = ref([
   { label: 'Potenzial A', value: 6 },
   { label: 'Potenzial B', value: 7 },
 ])
 
-/* Won-Validierung */
+/* NUEVO: validación won / conflictos */
 const wonConflict = ref(false)
 const wonError = ref('')
 const mergeLoading = ref(false)
@@ -634,7 +638,7 @@ const isValidClientNumber = (val) => {
   return n >= 10000 && n <= 19999
 }
 
-/* Kunden-Picker */
+/* Cliente picker */
 const clientSearchVisible = ref(false)
 const clientSearchQuery = ref('')
 const clientLoading = ref(false)
@@ -648,17 +652,31 @@ const filteredClients = computed(() => {
     return name.includes(q) || num.includes(q)
   })
 })
-let clientSearchTimer = null
-watch(clientSearchQuery, (v) => {
-  if (clientSearchTimer) clearTimeout(clientSearchTimer)
-  clientSearchTimer = setTimeout(() => fetchClientsRemote(v), 250)
-})
+function normalizeClient(row) {
+  const name = row?.name ?? row?.client_name ?? row?.company_name ?? ''
+  const num  = row?.client_number ?? row?.client_group_number ?? row?.cgn ?? row?.id ?? ''
+  return {
+    id: row?.id ?? num,
+    name: String(name || ''),
+    client_number: String(num || ''),
+    classification_id: row?.classification_id ?? null,
+  }
+}
 async function fetchClientsRemote(q = '') {
   clientLoading.value = true
   try {
     await ensureCsrf()
-    const { data } = await api.get('/api/extra-quota/clients', { params: { q } })
-    allClients.value = Array.isArray(data) ? data : []
+    let data = []
+    try {
+      const res = await api.get('/api/extra-quota/clients', { params: { q } })
+      data = Array.isArray(res.data) ? res.data : []
+    } catch {
+      try {
+        const res2 = await api.get('/api/me/clients')
+        data = Array.isArray(res2.data) ? res2.data : []
+      } catch { data = [] }
+    }
+    allClients.value = data.map(normalizeClient).filter(c => c.client_number)
   } finally { clientLoading.value = false }
 }
 async function openClientPicker() {
@@ -666,17 +684,32 @@ async function openClientPicker() {
   clientSearchVisible.value = true
 }
 function pickExistingClient() { openClientPicker() }
+
 async function selectClient(client) {
   opForm.value.potential_client_name = client.name || ''
   opForm.value.client_group_number = client.client_number || ''
   clientSearchVisible.value = false
+
+  if (client.classification_id != null) {
+    wonClassificationId.value = Number(client.classification_id)
+  }
+
   await fetchClientTakenPcsIfPossible()
   if (wonDialogVisible.value) {
     clientGroupInput.value = String(client.client_number || '')
-    clientNameInput.value = String(client.name || '')
+    clientNameInput.value  = String(client.name || '')
     wonClientFound.value = true
     clearWonValidation()
-    if (isValidClientNumber(clientGroupInput.value)) resolveClientAndValidate()
+    if (Number(opForm.value.profit_center_code)) {
+      const exists = await checkClientPcExists(
+        Number(clientGroupInput.value),
+        Number(opForm.value.profit_center_code),
+      )
+      if (exists) {
+        wonConflict.value = true
+        wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
+      }
+    }
   }
 }
 
@@ -731,14 +764,10 @@ const isLatestVersion = computed(() => {
   if (!selectedVersion.value || !maxVersion.value) return true
   return Number(selectedVersion.value) === Number(maxVersion.value)
 })
-const isReadOnly = computed(() => {
-  return statusNormalized.value === 'won' || statusNormalized.value === 'lost' || !isLatestVersion.value
-})
-const isStatusMenuDisabled = computed(() => {
-  return !isLatestVersion.value || statusNormalized.value === 'won' || statusNormalized.value === 'lost'
-})
+const isReadOnly = computed(() => statusNormalized.value === 'won' || statusNormalized.value === 'lost' || !isLatestVersion.value)
+const isStatusMenuDisabled = computed(() => !isLatestVersion.value || statusNormalized.value === 'won' || statusNormalized.value === 'lost')
 
-/* Status → Won/Lost */
+/* Status change → öffnet Won-Modal */
 watch(
   () => opForm.value.status,
   async (st, prev) => {
@@ -748,13 +777,10 @@ watch(
     if (st === 'won') {
       opForm.value.probability_pct = 100
       await rebuildBudgetFromForm()
+      clientNameInput.value  = String(opForm.value.potential_client_name || '')
       clientGroupInput.value = String(opForm.value.client_group_number || '')
-      // Immer mit dem potentiellen Namen vorfüllen – editierbar
-      clientNameInput.value = String(opForm.value.potential_client_name || '')
-      wonClassificationId.value = 6
       wonClientFound.value = false
       clearWonValidation()
-      if (isValidClientNumber(clientGroupInput.value)) await resolveClientAndValidate()
       wonDialogVisible.value = true
       return
     }
@@ -772,7 +798,7 @@ function cancelWonFlow() {
   clearWonValidation()
 }
 
-/* Tabelle */
+/* Table */
 const months = ref([])
 const sales = ref(Array(12).fill(0))
 const budget = ref([])
@@ -781,37 +807,13 @@ const baseBudget = ref([])
 const baseForecast = ref([])
 const tableLoading = ref(false)
 
-function fiscalIndexFromCalMonth(calM) {
-  const map = { 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7, 11: 8, 12: 9, 1: 10, 2: 11, 3: 12 }
-  return map[calM] || 1
-}
+function fiscalIndexFromCalMonth(calM) { const map = {4:1,5:2,6:3,7:4,8:5,9:6,10:7,11:8,12:9,1:10,2:11,3:12}; return map[calM] || 1 }
 function calMonthFromFiscalIndex(idx) { return [4,5,6,7,8,9,10,11,12,1,2,3][idx-1] || 4 }
 function ym(y, m) { return `${y}-${String(m).padStart(2, '0')}` }
-function fiscalMonths(fy) {
-  return Array.from({ length: 12 }, (_, i) => {
-    const m = calMonthFromFiscalIndex(i + 1)
-    const y = m >= 4 ? fy : fy + 1
-    return ym(y, m)
-  })
-}
+function fiscalMonths(fy) { return Array.from({ length: 12 }, (_, i) => { const m = calMonthFromFiscalIndex(i + 1); const y = m >= 4 ? fy : fy + 1; return ym(y, m) }) }
 function num0(v) { return Number(v || 0) }
-function isPastYM(ymStr) {
-  if (!ymStr) return false
-  const [yS, mS] = ymStr.split('-')
-  const y = +yS, m = +mS
-  const now = new Date()
-  const cur = new Date(now.getFullYear(), now.getMonth(), 1)
-  const tgt = new Date(y, m - 1, 1)
-  return tgt < cur
-}
-function initBlankTable() {
-  const fy = opForm.value.fiscal_year || new Date().getFullYear()
-  months.value = fiscalMonths(fy)
-  budget.value = Array(12).fill(0)
-  forecast.value = Array(12).fill(0)
-  baseBudget.value = [...budget.value]
-  baseForecast.value = [...forecast.value]
-}
+function isPastYM(ymStr) { if (!ymStr) return false; const [yS,mS]=ymStr.split('-'); const y=+yS,m=+mS; const now=new Date(); return new Date(y,m-1,1) < new Date(now.getFullYear(),now.getMonth(),1) }
+function initBlankTable() { const fy = opForm.value.fiscal_year || new Date().getFullYear(); months.value = fiscalMonths(fy); budget.value = Array(12).fill(0); forecast.value = Array(12).fill(0); baseBudget.value = [...budget.value]; baseForecast.value = [...forecast.value] }
 const changedBudgetCount = computed(() => budget.value.reduce((n, v, i) => n + (v !== baseBudget.value[i] ? 1 : 0), 0))
 const changedForecastCount = computed(() => forecast.value.reduce((n, v, i) => n + (v !== baseForecast.value[i] ? 1 : 0), 0))
 
@@ -821,28 +823,13 @@ async function getSeasonalityForPc(code, fy) {
   const parsePayload = (p) => {
     if (Array.isArray(p) && p.length === 12) return p.map(toNum)
     if (p && Array.isArray(p.weights) && p.weights.length === 12) return p.weights.map(toNum)
-    if (Array.isArray(p)) {
-      const out = Array(12).fill(0)
-      for (const r of p) {
-        const m = Number(r?.month ?? r?.m ?? 0)
-        const v = toNum(r?.weight ?? r?.value ?? r?.v ?? 0)
-        if (m >= 1 && m <= 12) out[m - 1] = v
-      }
-      return out
-    }
-    if (p && typeof p === 'object') {
-      const out = Array(12).fill(0)
-      const map = { apr:1, may:2, jun:3, jul:4, aug:5, sep:6, oct:7, nov:8, dec:9, jan:10, feb:11, mar:12 }
-      for (const [k, idx] of Object.entries(map)) out[idx - 1] = toNum(p[k])
-      return out
-    }
+    if (Array.isArray(p)) { const out = Array(12).fill(0); for (const r of p) { const m = Number(r?.month ?? r?.m ?? 0); const v = toNum(r?.weight ?? r?.value ?? r?.v ?? 0); if (m>=1 && m<=12) out[m-1]=v } return out }
+    if (p && typeof p === 'object') { const out = Array(12).fill(0); const map={apr:1,may:2,jun:3,jul:4,aug:5,sep:6,oct:7,nov:8,dec:9,jan:10,feb:11,mar:12}; for (const [k,idx] of Object.entries(map)) out[idx-1]=toNum(p[k]); return out }
     return Array(12).fill(1)
   }
   try {
     await ensureCsrf()
-    const { data } = await api.get('/api/extra-quota/profit-centers/seasonality', {
-      params: { profit_center_code: Number(code), fiscal_year: fy },
-    })
+    const { data } = await api.get('/api/extra-quota/profit-centers/seasonality', { params: { profit_center_code: Number(code), fiscal_year: fy } })
     const arr = parsePayload(data)
     if (arr.some((v) => v > 0)) return arr
   } catch {}
@@ -892,10 +879,7 @@ function scaleForecastByRatio() {
   const newPct = Math.max(0, Math.round(num0(opForm.value.probability_pct)))
   const oldExp = oldAmt * (oldPct / 100)
   const newExp = newAmt * (newPct / 100)
-  if (oldExp <= 0) {
-    forecast.value = forecast.value.map((v, i) => (isPastYM(months.value[i]) ? v : budget.value[i]))
-    return
-  }
+  if (oldExp <= 0) { forecast.value = forecast.value.map((v, i) => (isPastYM(months.value[i]) ? v : budget.value[i])); return }
   const r = newExp / oldExp
   const raw = forecast.value.map((v) => v * r)
   const base = raw.map(Math.floor)
@@ -905,7 +889,7 @@ function scaleForecastByRatio() {
   forecast.value = base
 }
 
-/* Create (mit Vorab-Check Kunde+PC) */
+/* Create (con pre-chequeo Kunde+PC → Forecast) */
 const preCreateConflictVisible = ref(false)
 async function onGenerateBudget() {
   if (!canCreateBudget.value) return
@@ -914,9 +898,7 @@ async function onGenerateBudget() {
   const pc = Number(opForm.value.profit_center_code)
   if (cgNum >= 10000 && cgNum <= 19999 && pc) {
     await ensureCsrf()
-    const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', {
-      params: { client_group_number: cgNum, profit_center_code: pc },
-    })
+    const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', { params: { client_group_number: cgNum, profit_center_code: pc } })
     if (data?.exists) { preCreateConflictVisible.value = true; return }
   }
 
@@ -969,9 +951,7 @@ async function loadGroupMeta() {
     const latest = data?.latest || {}
     latestMeta.value = latest
 
-    const vers = Array.isArray(data?.versions)
-      ? data.versions.map((v) => Number(v.version)).sort((a, b) => a - b)
-      : []
+    const vers = Array.isArray(data?.versions) ? data.versions.map((v) => Number(v.version)).sort((a, b) => a - b) : []
     versionOptions.value = vers.map((v) => ({ value: v, label: `v${v}` }))
     selectedVersion.value = vers.length ? vers[vers.length - 1] : 1
     maxVersion.value = vers.length ? vers[vers.length - 1] : selectedVersion.value
@@ -1060,7 +1040,6 @@ async function saveNewVersion() {
   toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Aktualisiert', life: 1400 })
   await loadGroupMeta()
 }
-
 async function saveBudget(opts = {}) {
   if (!selectedGroupId.value) return
   await ensureCsrf()
@@ -1091,7 +1070,9 @@ async function lookupClientByNumber(num) {
     await ensureCsrf()
     const { data } = await api.get(`/api/extra-quota/clients/by-number/${num}`)
     if (!data) return null
-    return { id: data.id, name: data.name, client_number: data.client_number ?? num, classification_id: data.classification_id }
+    const name = data?.name ?? data?.client_name ?? ''
+    const number = data?.client_number ?? data?.client_group_number ?? num
+    return { id: data.id, name, client_number: number, classification_id: data.classification_id }
   } catch { return null }
 }
 async function checkClientPcExists(cgNum, pc) {
@@ -1104,79 +1085,68 @@ async function checkClientPcExists(cgNum, pc) {
   } catch { return false }
 }
 
+/* Nummer: überschreibe Name NUR wenn Kunde existiert */
 let cgLookupTimer = null
-watch(clientGroupInput, () => {
+watch(clientGroupInput, (v) => {
   if (!wonDialogVisible.value) return
   if (cgLookupTimer) clearTimeout(cgLookupTimer)
-  cgLookupTimer = setTimeout(() => resolveClientAndValidate(), 250)
+  cgLookupTimer = setTimeout(async () => {
+    clearWonValidation()
+    const numStr = String(clientGroupInput.value || '').trim()
+    if (!isValidClientNumber(numStr)) {
+      wonClientFound.value = false
+      wonError.value = numStr ? 'Die Nummer muss zwischen 10000 und 19999 liegen.' : ''
+      return
+    }
+    const cgNum = Number(numStr)
+    const client = await lookupClientByNumber(cgNum)
+    if (client) {
+      wonClientFound.value = true
+      clientNameInput.value = client.name || clientNameInput.value
+      if (client.classification_id != null) {
+        wonClassificationId.value = Number(client.classification_id)
+      }
+      const pc = Number(opForm.value.profit_center_code)
+      if (pc) {
+        const exists = await checkClientPcExists(cgNum, pc)
+        if (exists) {
+          wonConflict.value = true
+          wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
+        }
+      }
+    } else {
+      wonClientFound.value = false
+      wonError.value = ''
+    }
+  }, 300)
 })
+
 watch(wonDialogVisible, async (vis) => {
   if (vis) {
+    clientNameInput.value  = String(opForm.value.potential_client_name || '')
     clientGroupInput.value = String(opForm.value.client_group_number || '')
-    // Immer potentiellen Namen einsetzen (editierbar)
-    clientNameInput.value = String(opForm.value.potential_client_name || '')
-    wonClassificationId.value = 6
     wonClientFound.value = false
     clearWonValidation()
-    if (isValidClientNumber(clientGroupInput.value)) await resolveClientAndValidate()
-  } else { clearWonValidation() }
-})
-
-async function resolveClientAndValidate() {
-  clearWonValidation()
-  const numStr = String(clientGroupInput.value || '').trim()
-  if (!numStr) { wonError.value = 'Bitte Kundennummer eingeben.'; wonClientFound.value = false; return }
-  if (!isValidClientNumber(numStr)) { wonError.value = 'Die Nummer muss zwischen 10000 und 19999 liegen.'; wonClientFound.value = false; return }
-
-  const cgNum = Number(numStr)
-  const client = await lookupClientByNumber(cgNum)
-  if (!client) {
-    // KEIN Kunde → Name immer aus Formular übernehmen und editierbar lassen
-    wonClientFound.value = false
-    clientNameInput.value = String(opForm.value.potential_client_name || '')
   } else {
-    // Existierender Kunde → Name aus DB und Feld sperren
-    wonClientFound.value = true
-    clientNameInput.value = client.name || ''
+    clearWonValidation()
   }
-
-  const pc = Number(opForm.value.profit_center_code)
-  if (pc && wonClientFound.value) {
-    const exists = await checkClientPcExists(cgNum, pc)
-    if (exists) {
-      wonConflict.value = true
-      wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
-    }
-  }
-}
+})
 
 async function finalizeWon() {
   if (!selectedGroupId.value || !selectedVersion.value) return
   finalizing.value = true
   try {
     clearWonValidation()
-    const cg = String(clientGroupInput.value || '').trim()
-    if (!isValidClientNumber(cg)) throw new Error('Kundennummer muss zwischen 10000 und 19999 liegen.')
-    const cgNum = Number(cg)
+    const numStr = String(clientGroupInput.value || '').trim()
+    if (!isValidClientNumber(numStr)) throw new Error('Kundennummer muss zwischen 10000 und 19999 liegen.')
+    const cgNum = Number(numStr)
 
-    // Falls neuer Kunde: Name MUSS vorhanden sein (aus Formular übernommen, editierbar)
-    if (!wonClientFound.value) {
-      if (!clientNameInput.value || !clientNameInput.value.trim()) {
-        throw new Error('Bitte Kundenname eingeben.')
-      }
-    } else {
-      // Für bestehend: sicherheitshalber nochmal holen (nicht zwingend)
-      const client = await lookupClientByNumber(cgNum)
-      clientNameInput.value = client?.name || clientNameInput.value || ''
-    }
+    const cn = String(clientNameInput.value || '').trim()
+    if (!cn) throw new Error('Kundenname erforderlich.')
 
-    const pc = Number(opForm.value.profit_center_code)
-    if (pc && wonClientFound.value) {
-      const exists = await checkClientPcExists(cgNum, pc)
-      if (exists) {
-        wonConflict.value = true
-        throw new Error('Kunde+Profitcenter existieren bereits. Das ist Forecast.')
-      }
+    if (wonClientFound.value && Number(opForm.value.profit_center_code)) {
+      const exists = await checkClientPcExists(cgNum, Number(opForm.value.profit_center_code))
+      if (exists) { wonConflict.value = true; throw new Error('Kunde+Profitcenter existieren bereits. Das ist Forecast.') }
     }
 
     scaleForecastForWinning()
@@ -1207,9 +1177,6 @@ async function finalizeWon() {
       opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
     }
 
-    const cn = String(clientNameInput.value || '').trim()
-    if (!cn) throw new Error('Kundenname erforderlich.')
-
     await ensureCsrf()
     await api.post(
       `/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
@@ -1217,7 +1184,7 @@ async function finalizeWon() {
         status: 'won',
         client_group_number: cgNum,
         client_name: cn,
-        classification_id: wonClassificationId.value, // 6 oder 7
+        classification_id: wonClassificationId.value,
       },
     )
 
@@ -1270,7 +1237,7 @@ function scaleForecastForWinning() {
   forecast.value = base
 }
 
-/* Merge Forecast (Won-Konflikt) */
+/* Merge forecast */
 async function mergeForecastToExisting() {
   try {
     mergeLoading.value = true
@@ -1411,7 +1378,7 @@ function applyChange(kind, value) {
   }
 }
 
-/* Reaktionen */
+/* Reacciones */
 watch(() => opForm.value.profit_center_code, () => { updateAvailabilityForPc() })
 watch(() => opForm.value.client_group_number, async () => { await fetchClientTakenPcsIfPossible() })
 
@@ -1421,6 +1388,7 @@ onMounted(async () => {
   await loadList()
 })
 </script>
+
 
 <style scoped>
 .forecast-wrapper {
