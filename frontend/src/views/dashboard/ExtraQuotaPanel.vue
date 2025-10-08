@@ -1,3 +1,4 @@
+<!-- ExtraQuotaPanel.vue -->
 <template>
   <div class="forecast-wrapper">
     <Toast />
@@ -19,101 +20,48 @@
       </div>
     </Dialog>
 
-    <!-- Won flow -->
-    <Dialog
+    <!-- Gewonnen: Modal (EXTERNO) -->
+    <WonChanceModal
       v-model:visible="wonDialogVisible"
-      :modal="true"
-      :draggable="false"
-      header="Chance gewonnen"
-      :style="{ width: '520px' }"
-    >
-      <div class="field mb-2">
-        <label class="lbl">Kundennummer</label>
-        <InputText
-          v-model="clientGroupInput"
-          class="w-full"
-          placeholder="z. B. 12345"
-          :class="{ 'p-invalid': wonError }"
-        />
-        <small v-if="wonError" class="text-danger">{{ wonError }}</small>
-        <small v-else class="text-muted">Nur 10000–19999. Name wird ggf. automatisch ermittelt.</small>
-      </div>
+      :lookupClientByNumber="lookupClientByNumber"
+      :checkClientPcExists="checkClientPcExists"
+      :initialClientNumber="opForm.client_group_number"
+      :initialClientName="opForm.potential_client_name"
+      :initialClassificationId="null"
+      :profitCenterCode="opForm.profit_center_code"
+      :fiscalYear="opForm.fiscal_year"
+      @finalize="onModalFinalize"
+      @merge-forecast="onModalMerge"
+    />
 
-      <div class="field mb-2">
-        <label class="lbl">Kundenname</label>
-        <InputText
-          v-model="clientNameInput"
-          class="w-full"
-          placeholder="Firmenname"
-          :disabled="officialNameLocked"
-        />
-      </div>
-
-      <div class="field mb-2">
-        <label class="lbl">Kundenartikelklassifizierung</label>
-        <Dropdown
-          v-model="wonClassificationId"
-          :options="classificationOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full"
-        />
-      </div>
-
-      <div v-if="wonConflict" class="conflict-box">
-        <span class="pi pi-exclamation-triangle mr-2"></span>
-        Kunde + Profitcenter existieren bereits. Das ist <b>Forecast</b>.
-        <div class="mt-2 flex gap-2">
-          <Button
-            label="Zum bestehenden Forecast addieren"
-            icon="pi pi-plus"
-            severity="warning"
-            :loading="mergeLoading"
-            @click="mergeForecastToExisting"
-          />
-        </div>
-      </div>
-
-      <div class="mt-3 flex justify-content-end gap-2">
-        <Button label="Abbrechen" severity="secondary" :disabled="finalizing || mergeLoading" @click="cancelWonFlow" />
-        <Button
-          label="Übernehmen"
-          icon="pi pi-check"
-          :loading="finalizing"
-          :disabled="!clientGroupInput || !!wonError || wonConflict || mergeLoading || !clientNameInput"
-          @click="finalizeWon"
-        />
-      </div>
-    </Dialog>
-
-    <!-- Client Picker Modal -->
+    <!-- Kunde wählen -->
     <Dialog
       v-model:visible="clientSearchVisible"
       :modal="true"
       :draggable="false"
       header="Kunden auswählen"
-      :style="{ width: '680px' }"
+      :style="{ width: '720px' }"
     >
       <div class="mb-2">
         <InputText
           v-model="clientSearchQuery"
           class="w-full"
-          placeholder="Nach Name oder Nummer suchen…"
-          @input="fetchClientsRemote(clientSearchQuery)"
+          placeholder="Suche nach Name oder Nummer…"
         />
       </div>
 
-      <div class="client-list-wrap">
+      <div class="client-list-wrap" style="max-height: 420px; overflow: auto;">
         <div
           v-for="c in filteredClients"
           :key="c.client_number"
           class="client-row"
           @click="selectClient(c)"
+          style="padding: 12px 10px; cursor: pointer; border-radius: 10px; margin-bottom: 6px; border: 1px solid rgba(0,0,0,.08);"
         >
-          <div class="cr-name">({{ c.client_number }}) {{ c.name }}</div>
+          <div class="cr-name" v-html="renderClientRow(c)" style="font-size: 16px; font-weight: 600;"></div>
         </div>
-        <div v-if="!clientLoading && !filteredClients.length" class="text-500">Keine Ergebnisse…</div>
-        <div v-if="clientLoading" class="text-500">Laden…</div>
+        <div v-if="!clientLoading && !filteredClients.length">Keine Ergebnisse…</div>
+        <div v-if="clientLoading">Laden…</div>
       </div>
 
       <div class="mt-3 flex justify-content-end">
@@ -121,7 +69,7 @@
       </div>
     </Dialog>
 
-    <!-- Pre-Creation Forecast Conflict -->
+    <!-- Das ist Forecast (vor Erstellung) -->
     <Dialog
       v-model:visible="preCreateConflictVisible"
       :modal="true"
@@ -131,7 +79,7 @@
     >
       <p>
         Der ausgewählte Kunde ist bereits mit dem gewählten Profitcenter verknüpft.
-        Das ist <b>Forecast</b> – es ist nicht erlaubt, eine neue Chance für diesen Kunden/PC anzulegen.
+        Das ist <b>Forecast</b> – neue Chance nicht erlaubt.
       </p>
       <div class="mt-3 flex justify-content-end gap-2">
         <Button label="Nein" severity="danger" @click="cancelCreateAndReset" />
@@ -167,7 +115,7 @@
             <Button icon="pi pi-plus" label="Neue Chance" class="p-button" @click="startCreateMode" />
           </div>
 
-          <!-- LEFT: LIST -->
+          <!-- LEFT -->
           <div v-else-if="item.type === 'list'" class="h-full p-3">
             <div class="status-filter mb-2">
               <Button label="Offen" size="small" :severity="statusFilter === 'open' ? 'primary' : 'secondary'" @click="setStatusFilter('open')" />
@@ -206,11 +154,11 @@
                   </div>
                 </template>
               </Listbox>
-              <div v-else class="text-500">Keine Chancen vorhanden.</div>
+              <div v-else>Keine Chancen vorhanden.</div>
             </template>
           </div>
 
-          <!-- CENTER: FORM -->
+          <!-- FORM -->
           <div v-else-if="item.type === 'form'" class="h-full p-3">
             <template v-if="createMode || selectedGroupId">
               <div class="form-card-body">
@@ -343,12 +291,12 @@
                 </div>
               </div>
             </template>
-            <div v-else class="text-500">Bitte Chance auswählen oder „Neue Chance“ drücken…</div>
+            <div v-else>Bitte Chance auswählen oder „Neue Chance“ drücken…</div>
           </div>
 
-          <!-- RIGHT: EXTRAS -->
+          <!-- EXTRAS -->
           <div v-else-if="item.type === 'extras'" class="h-full p-3 extras-wrap">
-            <div v-if="!selectedGroupId" class="text-500">Keine Auswahl.</div>
+            <div v-if="!selectedGroupId">Keine Auswahl.</div>
             <template v-else>
               <div>
                 <Listbox
@@ -360,7 +308,7 @@
                   class="w-full dark-list"
                   @change="(e) => onSelectVersion(e.value)"
                 />
-                <div v-else class="text-500">—</div>
+                <div v-else>—</div>
               </div>
               <div class="extras-bottom text-500 text-sm">
                 <div>Aktuelle Version: <b>v{{ selectedVersion || '—' }}</b></div>
@@ -369,7 +317,7 @@
             </template>
           </div>
 
-          <!-- BOTTOM: TABLE -->
+          <!-- TABLE -->
           <div v-else-if="item.type === 'table'" class="h-full p-2">
             <template v-if="createMode || selectedGroupId">
               <div v-if="tableLoading" class="local-loader">
@@ -398,7 +346,7 @@
                 </div>
               </template>
             </template>
-            <div v-else class="text-500">Keine Tabelle.</div>
+            <div v-else>Keine Tabelle.</div>
           </div>
         </GlassCard>
       </GridItem>
@@ -425,6 +373,7 @@ import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import GlassCard from '@/components/ui/GlassCard.vue'
 import ComponentTable from '@/components/tables/ComponentTable.vue'
+import WonChanceModal from '@/components/modals/WonChanceModal.vue'
 
 const toast = useToast()
 
@@ -574,13 +523,11 @@ async function updateAvailabilityForPc() {
   availableForSelected.value = 0
   if (!code || !fy) return
   await ensureCsrf()
-  const { data } = await api.get('/api/extra-quota/assignments/my-availability', {
-    params: { profit_center_code: code, fiscal_year: fy },
-  })
+  const { data } = await api.get('/api/extra-quota/assignments/my-availability', { params: { profit_center_code: code, fiscal_year: fy } })
   availableForSelected.value = Number(data?.available || 0)
 }
 
-/* NUEVO: PCs ya tomados por el Kunde → filtra Dropdown */
+/* Kunde hat schon PCs → filtern */
 const clientTakenPcs = ref([])
 const pcFilteredWarning = ref('')
 const pcOptionsForSelection = computed(() => {
@@ -614,29 +561,7 @@ const statusOpts = ref([
 ])
 
 const wonDialogVisible = ref(false)
-const clientGroupInput = ref('')
-const clientNameInput = ref('')
 const finalizing = ref(false)
-
-/* Won-Dialog state */
-const wonClientFound = ref(false)
-const officialNameLocked = computed(() => wonClientFound.value) // nur sperren, wenn DB-Kunde gefunden
-const wonClassificationId = ref(6)
-const classificationOptions = ref([
-  { label: 'Potenzial A', value: 6 },
-  { label: 'Potenzial B', value: 7 },
-])
-
-/* NUEVO: validación won / conflictos */
-const wonConflict = ref(false)
-const wonError = ref('')
-const mergeLoading = ref(false)
-const isValidClientNumber = (val) => {
-  const s = String(val || '').trim()
-  if (!/^\d{5}$/.test(s)) return false
-  const n = Number(s)
-  return n >= 10000 && n <= 19999
-}
 
 /* Cliente picker */
 const clientSearchVisible = ref(false)
@@ -655,13 +580,21 @@ const filteredClients = computed(() => {
 function normalizeClient(row) {
   const name = row?.name ?? row?.client_name ?? row?.company_name ?? ''
   const num  = row?.client_number ?? row?.client_group_number ?? row?.cgn ?? row?.id ?? ''
-  return {
-    id: row?.id ?? num,
-    name: String(name || ''),
-    client_number: String(num || ''),
-    classification_id: row?.classification_id ?? null,
-  }
+  return { id: row?.id ?? num, name: String(name || ''), client_number: String(num || ''), classification_id: row?.classification_id ?? null }
 }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'}[m])) }
+function renderClientRow(c) {
+  const q = clientSearchQuery.value.trim()
+  const base = `(${escapeHtml(c.client_number)}) ${escapeHtml(c.name)}`
+  if (!q) return base
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  return base.replace(re, (m) => `<mark>${escapeHtml(m)}</mark>`)
+}
+let clientSearchTimer = null
+watch(clientSearchQuery, (q) => {
+  if (clientSearchTimer) clearTimeout(clientSearchTimer)
+  clientSearchTimer = setTimeout(() => fetchClientsRemote(q), 250)
+})
 async function fetchClientsRemote(q = '') {
   clientLoading.value = true
   try {
@@ -680,39 +613,21 @@ async function fetchClientsRemote(q = '') {
   } finally { clientLoading.value = false }
 }
 async function openClientPicker() {
+  clientSearchQuery.value = ''
   await fetchClientsRemote('')
   clientSearchVisible.value = true
 }
 function pickExistingClient() { openClientPicker() }
 
 async function selectClient(client) {
+  // Picker → existierender Kunde
   opForm.value.potential_client_name = client.name || ''
   opForm.value.client_group_number = client.client_number || ''
   clientSearchVisible.value = false
-
-  if (client.classification_id != null) {
-    wonClassificationId.value = Number(client.classification_id)
-  }
-
   await fetchClientTakenPcsIfPossible()
-  if (wonDialogVisible.value) {
-    clientGroupInput.value = String(client.client_number || '')
-    clientNameInput.value  = String(client.name || '')
-    wonClientFound.value = true
-    clearWonValidation()
-    if (Number(opForm.value.profit_center_code)) {
-      const exists = await checkClientPcExists(
-        Number(clientGroupInput.value),
-        Number(opForm.value.profit_center_code),
-      )
-      if (exists) {
-        wonConflict.value = true
-        wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
-      }
-    }
-  }
 }
 
+/* Base form */
 const creating = ref(false)
 const opMonthModel = ref(null)
 const suppressStatusWatch = ref(false)
@@ -743,7 +658,6 @@ const canCreateBudget = computed(
     !!opForm.value.estimated_start_date &&
     Number(opForm.value.probability_pct) > 0,
 )
-
 function syncMonthYear(d) {
   if (!d) { opForm.value.estimated_start_date = null; return }
   const dt = new Date(d)
@@ -767,7 +681,7 @@ const isLatestVersion = computed(() => {
 const isReadOnly = computed(() => statusNormalized.value === 'won' || statusNormalized.value === 'lost' || !isLatestVersion.value)
 const isStatusMenuDisabled = computed(() => !isLatestVersion.value || statusNormalized.value === 'won' || statusNormalized.value === 'lost')
 
-/* Status change → öffnet Won-Modal */
+/* Status change → open won modal */
 watch(
   () => opForm.value.status,
   async (st, prev) => {
@@ -777,10 +691,6 @@ watch(
     if (st === 'won') {
       opForm.value.probability_pct = 100
       await rebuildBudgetFromForm()
-      clientNameInput.value  = String(opForm.value.potential_client_name || '')
-      clientGroupInput.value = String(opForm.value.client_group_number || '')
-      wonClientFound.value = false
-      clearWonValidation()
       wonDialogVisible.value = true
       return
     }
@@ -792,13 +702,7 @@ watch(
   },
 )
 
-function cancelWonFlow() {
-  wonDialogVisible.value = false
-  opForm.value.status = 'open'
-  clearWonValidation()
-}
-
-/* Table */
+/* Table & helpers */
 const months = ref([])
 const sales = ref(Array(12).fill(0))
 const budget = ref([])
@@ -889,7 +793,7 @@ function scaleForecastByRatio() {
   forecast.value = base
 }
 
-/* Create (con pre-chequeo Kunde+PC → Forecast) */
+/* Create (pre-check Kunde+PC → Forecast) */
 const preCreateConflictVisible = ref(false)
 async function onGenerateBudget() {
   if (!canCreateBudget.value) return
@@ -940,6 +844,7 @@ function acceptForecastAndAbort() {
   toast.add({ severity: 'info', summary: 'Info', detail: 'Nutze den vorhandenen Forecast für diesen Kunden/PC.', life: 1800 })
 }
 
+/* Backend meta/series */
 const versionOptions = ref([])
 async function loadGroupMeta() {
   if (!selectedGroupId.value) return
@@ -1063,8 +968,7 @@ async function saveForecast(opts = {}) {
   if (!opts.silent) toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Forecast gespeichert', life: 1400 })
 }
 
-/* --------- WON helpers ---------- */
-function clearWonValidation() { wonConflict.value = false; wonError.value = '' }
+/* WON: funciones usadas por el modal */
 async function lookupClientByNumber(num) {
   try {
     await ensureCsrf()
@@ -1078,140 +982,9 @@ async function lookupClientByNumber(num) {
 async function checkClientPcExists(cgNum, pc) {
   try {
     await ensureCsrf()
-    const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', {
-      params: { client_group_number: cgNum, profit_center_code: Number(pc) },
-    })
+    const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', { params: { client_group_number: cgNum, profit_center_code: Number(pc) } })
     return !!data?.exists
   } catch { return false }
-}
-
-/* Nummer: überschreibe Name NUR wenn Kunde existiert */
-let cgLookupTimer = null
-watch(clientGroupInput, (v) => {
-  if (!wonDialogVisible.value) return
-  if (cgLookupTimer) clearTimeout(cgLookupTimer)
-  cgLookupTimer = setTimeout(async () => {
-    clearWonValidation()
-    const numStr = String(clientGroupInput.value || '').trim()
-    if (!isValidClientNumber(numStr)) {
-      wonClientFound.value = false
-      wonError.value = numStr ? 'Die Nummer muss zwischen 10000 und 19999 liegen.' : ''
-      return
-    }
-    const cgNum = Number(numStr)
-    const client = await lookupClientByNumber(cgNum)
-    if (client) {
-      wonClientFound.value = true
-      clientNameInput.value = client.name || clientNameInput.value
-      if (client.classification_id != null) {
-        wonClassificationId.value = Number(client.classification_id)
-      }
-      const pc = Number(opForm.value.profit_center_code)
-      if (pc) {
-        const exists = await checkClientPcExists(cgNum, pc)
-        if (exists) {
-          wonConflict.value = true
-          wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
-        }
-      }
-    } else {
-      wonClientFound.value = false
-      wonError.value = ''
-    }
-  }, 300)
-})
-
-watch(wonDialogVisible, async (vis) => {
-  if (vis) {
-    clientNameInput.value  = String(opForm.value.potential_client_name || '')
-    clientGroupInput.value = String(opForm.value.client_group_number || '')
-    wonClientFound.value = false
-    clearWonValidation()
-  } else {
-    clearWonValidation()
-  }
-})
-
-async function finalizeWon() {
-  if (!selectedGroupId.value || !selectedVersion.value) return
-  finalizing.value = true
-  try {
-    clearWonValidation()
-    const numStr = String(clientGroupInput.value || '').trim()
-    if (!isValidClientNumber(numStr)) throw new Error('Kundennummer muss zwischen 10000 und 19999 liegen.')
-    const cgNum = Number(numStr)
-
-    const cn = String(clientNameInput.value || '').trim()
-    if (!cn) throw new Error('Kundenname erforderlich.')
-
-    if (wonClientFound.value && Number(opForm.value.profit_center_code)) {
-      const exists = await checkClientPcExists(cgNum, Number(opForm.value.profit_center_code))
-      if (exists) { wonConflict.value = true; throw new Error('Kunde+Profitcenter existieren bereits. Das ist Forecast.') }
-    }
-
-    scaleForecastForWinning()
-
-    const mustVersion =
-      opBaseline.value.volume !== opForm.value.volume ||
-      100 !== opBaseline.value.probability_pct ||
-      opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
-
-    if (mustVersion) {
-      await ensureCsrf()
-      const payload = {
-        fiscal_year: opForm.value.fiscal_year,
-        profit_center_code: Number(opForm.value.profit_center_code),
-        volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
-        probability_pct: 100,
-        estimated_start_date: opForm.value.estimated_start_date,
-        comments: opForm.value.comments,
-        potential_client_name: opForm.value.potential_client_name,
-        client_group_number: opForm.value.client_group_number,
-        status: opBaseline.value.status || 'open',
-      }
-      const { data } = await api.post(`/api/extra-quota/opportunities/${selectedGroupId.value}/version`, payload)
-      selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
-      maxVersion.value = selectedVersion.value
-      await saveBudget({ silent: true })
-      await saveForecast({ silent: true })
-      opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
-    }
-
-    await ensureCsrf()
-    await api.post(
-      `/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
-      {
-        status: 'won',
-        client_group_number: cgNum,
-        client_name: cn,
-        classification_id: wonClassificationId.value,
-      },
-    )
-
-    suppressStatusWatch.value = true
-    opForm.value.status = 'won'
-    await nextTick()
-    suppressStatusWatch.value = false
-
-    wonDialogVisible.value = false
-    clientGroupInput.value = ''
-    clientNameInput.value = ''
-    wonClientFound.value = false
-    clearWonValidation()
-    opBaseline.value = cloneDeep(opForm.value)
-    baseBudget.value = [...budget.value]
-    baseForecast.value = [...forecast.value]
-
-    toast.add({ severity: 'success', summary: 'Überführt', detail: 'In Stamm-Budget übernommen', life: 1600 })
-    await loadList()
-    selectedGroupId.value = null
-    selectedVersion.value = null
-    enterCreateMode()
-  } catch (e) {
-    const msg = e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
-    wonError.value = msg
-    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
-  } finally { finalizing.value = false }
 }
 function scaleForecastForWinning() {
   const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
@@ -1237,22 +1010,91 @@ function scaleForecastForWinning() {
   forecast.value = base
 }
 
-/* Merge forecast */
-async function mergeForecastToExisting() {
+/* Handlers de eventos del modal */
+async function onModalFinalize({ client_group_number, client_name, classification_id }) {
+  if (!selectedGroupId.value || !selectedVersion.value) {
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Gruppe/Version fehlt.', life: 1800 })
+    return
+  }
+  finalizing.value = true
   try {
-    mergeLoading.value = true
-    const numStr = String(clientGroupInput.value || '').trim()
-    if (!isValidClientNumber(numStr)) throw new Error('Ungültige Nummer (10000–19999).')
-    const cgNum = Number(numStr)
+    // Escalar forecast a 100% y versionar si corresponde
+    const mustVersion =
+      opBaseline.value.volume !== opForm.value.volume ||
+      100 !== opBaseline.value.probability_pct ||
+      opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
+
+    scaleForecastForWinning()
+
+    if (mustVersion) {
+      await ensureCsrf()
+      const payload = {
+        fiscal_year: opForm.value.fiscal_year,
+        profit_center_code: Number(opForm.value.profit_center_code),
+        volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
+        probability_pct: 100,
+        estimated_start_date: opForm.value.estimated_start_date,
+        comments: opForm.value.comments,
+        potential_client_name: opForm.value.potential_client_name,
+        client_group_number: opForm.value.client_group_number,
+        status: opBaseline.value.status || 'open',
+      }
+      const { data } = await api.post(`/api/extra-quota/opportunities/${selectedGroupId.value}/version`, payload)
+      selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
+      maxVersion.value = selectedVersion.value
+      await saveBudget({ silent: true })
+      await saveForecast({ silent: true })
+      opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
+    }
+
+    // Finaliza como WON
+    await ensureCsrf()
+    await api.post(
+      `/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
+      {
+        status: 'won',
+        client_group_number,
+        client_name,
+        classification_id,
+      },
+    )
+
+    // Refrescos UI
+    suppressStatusWatch.value = true
+    opForm.value.status = 'won'
+    await nextTick()
+    suppressStatusWatch.value = false
+
+    wonDialogVisible.value = false
+    opBaseline.value = cloneDeep(opForm.value)
+    baseBudget.value = [...budget.value]
+    baseForecast.value = [...forecast.value]
+
+    toast.add({ severity: 'success', summary: 'Überführt', detail: 'In Stamm-Budget übernommen', life: 1600 })
+    await loadList()
+    selectedGroupId.value = null
+    selectedVersion.value = null
+    enterCreateMode()
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
+    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
+  } finally {
+    finalizing.value = false
+  }
+}
+
+async function onModalMerge({ client_group_number }) {
+  try {
+    const cgNum = Number(client_group_number)
     const pc = Number(opForm.value.profit_center_code)
     const fy = Number(opForm.value.fiscal_year)
 
     const items = months.value
       .map((ymStr, i) => {
-        const [y, m] = ymStr.split('-').map((n) => parseInt(n, 10))
+        const [y, m] = ymStr.split('-').map(n => parseInt(n, 10))
         return { month: m, fiscal_year: y, volume: Number(forecast.value[i] || 0) }
       })
-      .filter((r) => !isPastYM(ym(r.fiscal_year, r.month)) && r.volume > 0)
+      .filter(r => !isPastYM(ym(r.fiscal_year, r.month)) && r.volume > 0)
 
     if (!items.length) throw new Error('Kein zukünftiger Forecast zum Addieren.')
 
@@ -1266,7 +1108,6 @@ async function mergeForecastToExisting() {
 
     toast.add({ severity: 'success', summary: 'Forecast', detail: 'Forecast zum bestehenden Kunden hinzugefügt.', life: 1600 })
     wonDialogVisible.value = false
-    clearWonValidation()
     suppressStatusWatch.value = true
     opForm.value.status = 'open'
     await nextTick()
@@ -1274,9 +1115,10 @@ async function mergeForecastToExisting() {
   } catch (e) {
     const msg = e?.response?.data?.message || e?.message || 'Fehler beim Hinzufügen des Forecasts'
     toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
-  } finally { mergeLoading.value = false }
+  }
 }
 
+/* Lost flow */
 async function finalizeLost() {
   if (!selectedGroupId.value || !selectedVersion.value) return
   try {
@@ -1378,7 +1220,7 @@ function applyChange(kind, value) {
   }
 }
 
-/* Reacciones */
+/* Reaktionen */
 watch(() => opForm.value.profit_center_code, () => { updateAvailabilityForPc() })
 watch(() => opForm.value.client_group_number, async () => { await fetchClientTakenPcsIfPossible() })
 
@@ -1388,7 +1230,6 @@ onMounted(async () => {
   await loadList()
 })
 </script>
-
 
 <style scoped>
 .forecast-wrapper {

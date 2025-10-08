@@ -222,9 +222,8 @@ const budgetArr = computed(() => {
   const ctx = s.context?.type
   const base = toNums12(s.budgets?.[k] || [])
 
-  if (['company','team','user','pc'].includes(ctx)) {
-    return base
-  }
+  return base
+  
 
   const assignedTotal = toNum(s?.extra_breakdown?.assigned?.[k]) || 0  // opcional
   const wonTotal      = toNum(s?.extra_breakdown?.won?.[k])      || 0  // opcional
