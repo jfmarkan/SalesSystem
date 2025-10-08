@@ -99,10 +99,10 @@ return [
 
         'sqlsrv_stbspot' => [
             'driver' => 'sqlsrv',
-            'host' => env('MSSQL_HOST', 'localhost'),
+            'host' => env('MSSQL_HOST', 'mssql'),
             'port' => env('MSSQL_PORT', '1433'),
-            'database' => env('MSSQL_DATABASE', 'forge'),
-            'username' => env('MSSQL_USERNAME', 'forge'),
+            'database' => env('MSSQL_DATABASE', 'STBSPOT'),
+            'username' => env('MSSQL_USERNAME', 'sa'),
             'password' => env('MSSQL_PASSWORD', ''),
             'charset' => 'utf8',
             'prefix' => '',

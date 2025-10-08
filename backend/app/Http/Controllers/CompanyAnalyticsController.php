@@ -281,346 +281,338 @@ class CompanyAnalyticsController extends Controller
         return $ids;
     }
 
-public function series(Request $request){
-    try {
-        $nodeId = (string)$request->query('node_id', '');
-        if ($nodeId === '') return response()->json(['error'=>'node_id ist erforderlich'], 422);
+    public function series(Request $request){
+        try {
+            $nodeId = (string)$request->query('node_id', '');
+            if ($nodeId === '') return response()->json(['error'=>'node_id ist erforderlich'], 422);
 
-        $ctx = $this->parseNodeId($nodeId);
-        $fyStart = (int) $request->query('fiscal_year', (int)date('Y'));
-        if ($fyStart < 2024) $fyStart = 2024;
+            $ctx = $this->parseNodeId($nodeId);
+            $fyStart = (int) $request->query('fiscal_year', (int)date('Y'));
+            if ($fyStart < 2024) $fyStart = 2024;
 
-        // Labels FY (Abr–Mar)
-        $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
-        $labels = [];
-        foreach ($monthsOrdered as $m) {
-            $y = ($m >= 4) ? $fyStart : ($fyStart + 1);
-            $labels[] = sprintf('%04d-%02d', $y, $m);
-        }
-        $fyLabel = 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2);
-
-        // CPCs según contexto
-        $cpcQuery = DB::table('assignments')
-            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
-            ->select('client_profit_centers.id', 'client_profit_centers.profit_center_code')
-            ->distinct();
-
-        if (($ctx['type'] ?? '') === 'team') {
-            $cpcQuery->where('assignments.team_id', $ctx['team_id']);
-        } elseif (($ctx['type'] ?? '') === 'user') {
-            $cpcQuery->where('assignments.team_id', $ctx['team_id'])
-                     ->where('assignments.user_id', $ctx['user_id']);
-        } elseif (($ctx['type'] ?? '') === 'pc') {
-            $cpcQuery->where('assignments.team_id', $ctx['team_id'])
-                     ->where('assignments.user_id', $ctx['user_id'])
-                     ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
-        } elseif (($ctx['type'] ?? '') === 'client') {
-            $cpcQuery->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
-                     ->where('assignments.team_id', $ctx['team_id'])
-                     ->where('assignments.user_id', $ctx['user_id'])
-                     ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
-                     ->where('clients.client_group_number', $ctx['client_group_number']);
-        }
-
-        $cpcs = $cpcQuery->distinct()->get();
-        if ($cpcs->isEmpty()) {
-            return response()->json($this->emptyFiscalSeries($fyStart, $ctx));
-        }
-        $cpcIds = collect($cpcs)->pluck('id')->unique()->values()->all();
-
-        // Helpers FY
-        $applyFY = function($q, $tbl) use ($fyStart) {
-            $q->where(function($w) use ($tbl, $fyStart) {
-                $w->where(function($a) use ($tbl, $fyStart) {
-                    $a->where($tbl.'.fiscal_year', $fyStart)->whereBetween($tbl.'.month', [4,12]);
-                })->orWhere(function($b) use ($tbl, $fyStart) {
-                    $b->where($tbl.'.fiscal_year', $fyStart+1)->whereBetween($tbl.'.month', [1,3]);
-                });
-            });
-        };
-        $fyIndex = fn(int $rowFy, int $month) => ($rowFy === $fyStart) ? max(0, min(11, $month - 4)) : max(0, min(11, 8 + $month));
-        $make12 = fn() => array_fill(0, 12, 0.0);
-
-        // Unit conversions (aggregate por PC)
-        $ucAgg = DB::table('unit_conversions')
-            ->select(
-                'profit_center_code',
-                DB::raw('MAX(factor_to_m3) as factor_to_m3'),
-                DB::raw('MAX(factor_to_euro) as factor_to_euro')
-            )->groupBy('profit_center_code');
-
-        /* =========================
-           SALES
-        ==========================*/
-        $salesQ = DB::table('sales')
-            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
-            ->whereIn('sales.client_profit_center_id', $cpcIds);
-        $applyFY($salesQ, 'sales');
-
-        $sales = $make12(); $salesM3 = $make12(); $salesEur = $make12();
-        foreach ($salesQ->select(
-            'sales.fiscal_year','sales.month',
-            DB::raw('SUM(sales.volume) as units'),
-            DB::raw('SUM(sales.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
-            DB::raw('SUM(sales.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
-        )->groupBy('sales.fiscal_year','sales.month')->get() as $r) {
-            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
-            $sales[$i] = (float)$r->units;
-            $salesM3[$i] = (float)$r->m3;
-            $salesEur[$i] = (float)$r->euro;
-        }
-
-        /* =========================
-           BUDGETS (base)
-        ==========================*/
-        $budQ = DB::table('budgets')
-            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'budgets.client_profit_center_id')
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
-            ->whereIn('budgets.client_profit_center_id', $cpcIds);
-        $applyFY($budQ, 'budgets');
-
-        $budgets = $make12(); $budgetM3 = $make12(); $budgetEur = $make12();
-        foreach ($budQ->select(
-            'budgets.fiscal_year','budgets.month',
-            DB::raw('SUM(budgets.volume) as units'),
-            DB::raw('SUM(budgets.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
-            DB::raw('SUM(budgets.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
-        )->groupBy('budgets.fiscal_year','budgets.month')->get() as $r) {
-            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
-            $budgets[$i] = (float)$r->units;
-            $budgetM3[$i] = (float)$r->m3;
-            $budgetEur[$i] = (float)$r->euro;
-        }
-
-        /* =========================
-           FORECASTS (base: última versión por autor)
-        ==========================*/
-        $fcBase = DB::table('forecasts')
-            ->select('client_profit_center_id','fiscal_year','month','user_id', DB::raw('MAX(version) as max_version'))
-            ->groupBy('client_profit_center_id','fiscal_year','month','user_id');
-
-        $fcQ = DB::table('forecasts')
-            ->joinSub($fcBase, 'lv', function($j) {
-                $j->on('forecasts.client_profit_center_id','=','lv.client_profit_center_id')
-                  ->on('forecasts.fiscal_year','=','lv.fiscal_year')
-                  ->on('forecasts.month','=','lv.month')
-                  ->on('forecasts.user_id','=','lv.user_id')
-                  ->on('forecasts.version','=','lv.max_version');
-            })
-            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'forecasts.client_profit_center_id')
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
-            ->whereIn('forecasts.client_profit_center_id', $cpcIds);
-        $applyFY($fcQ, 'forecasts');
-
-        $fc = $make12(); $fcM3 = $make12(); $fcEur = $make12();
-        foreach ($fcQ->select(
-            'forecasts.fiscal_year','forecasts.month',
-            DB::raw('SUM(forecasts.volume) as units'),
-            DB::raw('SUM(forecasts.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
-            DB::raw('SUM(forecasts.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
-        )->groupBy('forecasts.fiscal_year','forecasts.month')->get() as $r) {
-            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
-            $fc[$i] = (float)$r->units;
-            $fcM3[$i] = (float)$r->m3;
-            $fcEur[$i] = (float)$r->euro;
-        }
-
-        /* =======================================================
-           EXTRA QUOTA FORECASTS (EQF): max versión por opp y mes
-           – solo oportunidades abiertas (no won/lost) – dentro del FY
-        ========================================================*/
-        $opLv = DB::table('sales_opportunities')
-            ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
-            ->groupBy('opportunity_group_id');
-
-        $eqfLv = DB::table('extra_quota_forecasts')
-            ->select('opportunity_group_id','fiscal_year','month', DB::raw('MAX(version) as max_version'))
-            ->groupBy('opportunity_group_id','fiscal_year','month');
-
-        $eqfQ = DB::table('extra_quota_forecasts as eqf')
-            ->joinSub($eqfLv, 'lv', function($j){
-                $j->on('eqf.opportunity_group_id','=','lv.opportunity_group_id')
-                  ->on('eqf.fiscal_year','=','lv.fiscal_year')
-                  ->on('eqf.month','=','lv.month')
-                  ->on('eqf.version','=','lv.max_version');
-            })
-            ->joinSub($opLv, 'oplv', function($j){
-                $j->on('oplv.opportunity_group_id','=','eqf.opportunity_group_id');
-            })
-            ->join('sales_opportunities as op', function($j){
-                $j->on('op.opportunity_group_id','=','oplv.opportunity_group_id')
-                  ->on('op.version','=','oplv.max_version');
-            })
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','op.profit_center_code'))
-            ->whereNotIn('op.status', ['won','lost']);
-
-        // scope por contexto
-        if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
-            $eqfQ->where('op.user_id', $ctx['user_id'] ?? 0);
-        } elseif (($ctx['type'] ?? '') === 'team') {
-            $eqfQ->whereIn('op.user_id', $this->teamUserIds($ctx['team_id']));
-        }
-        if (in_array($ctx['type'] ?? '', ['pc','client'])) {
-            $eqfQ->where('op.profit_center_code', $ctx['pc_code'] ?? '');
-        }
-        $applyFY($eqfQ, 'eqf');
-
-        $eqfU = $make12(); $eqfM3 = $make12(); $eqfEur = $make12();
-        foreach ($eqfQ->select(
-            'eqf.fiscal_year','eqf.month',
-            DB::raw('SUM(eqf.volume) as units'),
-            DB::raw('SUM(eqf.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
-            DB::raw('SUM(eqf.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
-        )->groupBy('eqf.fiscal_year','eqf.month')->get() as $r) {
-            $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
-            $eqfU[$i]  = (float)$r->units;
-            $eqfM3[$i] = (float)$r->m3;
-            $eqfEur[$i]= (float)$r->euro;
-        }
-
-        // Forecast final = forecast base + EQF
-        $fcU_plus   = array_map(fn($a,$b)=>$a+$b, $fc,   $eqfU);
-        $fcM3_plus  = array_map(fn($a,$b)=>$a+$b, $fcM3, $eqfM3);
-        $fcEur_plus = array_map(fn($a,$b)=>$a+$b, $fcEur,$eqfEur);
-
-        /* =======================================================
-           EXTRA QUOTA remaining = ASSIGNED - WON converted(b)
-        ========================================================*/
-        $eqUserIds = null;
-        if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
-            $eqUserIds = [$ctx['user_id'] ?? 0];
-        } elseif (($ctx['type'] ?? '') === 'team') {
-            $eqUserIds = $this->teamUserIds($ctx['team_id']);
-        }
-
-        // ASSIGNED (publicado en FY)
-        $eqAssignedQ = DB::table('extra_quota_assignments as eq')
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','eq.profit_center_code'))
-            ->where('eq.fiscal_year', $fyStart)->where('eq.is_published', 1)
-            ->when($eqUserIds, fn($q)=>$q->whereIn('eq.user_id', $eqUserIds))
-            ->when(in_array($ctx['type'] ?? '', ['pc','client']), fn($q)=>$q->where('eq.profit_center_code', $ctx['pc_code'] ?? ''));
-        $eqAssignedRow = $eqAssignedQ->selectRaw("
-                COALESCE(SUM(eq.volume),0) as units,
-                COALESCE(SUM(eq.volume * COALESCE(uc.factor_to_m3,1)),0) as m3,
-                COALESCE(SUM(eq.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)),0) as euro
-            ")->first();
-
-        $assignedU = (float)($eqAssignedRow->units ?? 0.0);
-        $assignedM3= (float)($eqAssignedRow->m3 ?? 0.0);
-        $assignedE = (float)($eqAssignedRow->euro ?? 0.0);
-
-        // WON converted (sum de budget de la versión ganada)
-        $wonConvQ = DB::table('sales_opportunities as s')
-            ->join('extra_quota_budgets as b', function($j){
-                $j->on('b.opportunity_group_id','=','s.opportunity_group_id')
-                  ->on('b.version','=','s.version');
-            })
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','s.profit_center_code'))
-            ->where('s.status','won')
-            ->when($eqUserIds, fn($q)=>$q->whereIn('s.user_id', $eqUserIds))
-            ->when(in_array($ctx['type'] ?? '', ['pc','client']), fn($q)=>$q->where('s.profit_center_code', $ctx['pc_code'] ?? ''));
-        $applyFY($wonConvQ, 'b');
-
-        $wonConvRow = $wonConvQ->selectRaw("
-                COALESCE(SUM(b.volume),0) as units,
-                COALESCE(SUM(b.volume * COALESCE(uc.factor_to_m3,1)),0) as m3,
-                COALESCE(SUM(b.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)),0) as euro
-            ")->first();
-
-        $wonU = (float)($wonConvRow->units ?? 0.0);
-        $wonM3= (float)($wonConvRow->m3 ?? 0.0);
-        $wonE = (float)($wonConvRow->euro ?? 0.0);
-
-        // Remaining
-        $extraUnits = max(0.0, $assignedU  - $wonU);
-        $extraM3    = max(0.0, $assignedM3 - $wonM3);
-        $extraEur   = max(0.0, $assignedE  - $wonE);
-
-        // Distribuir remaining a budgets (company/team/user/pc); en client no
-        $applyExtraQuota = in_array($ctx['type'] ?? '', ['company', 'team', 'user', 'pc']);
-        $distribute = function($base, $extra) {
-            $total = array_sum($base);
-            if ($extra == 0) return $base;
-            if ($total == 0) return array_map(fn($v)=>$v + ($extra/12), $base);
-            foreach ($base as $i => $v) {
-                $frac = $v > 0 ? $v / $total : 0;
-                $base[$i] = $v + $extra * $frac;
+            // Labels FY (Abr–Mar)
+            $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
+            $labels = [];
+            foreach ($monthsOrdered as $m) {
+                $y = ($m >= 4) ? $fyStart : ($fyStart + 1);
+                $labels[] = sprintf('%04d-%02d', $y, $m);
             }
-            return $base;
-        };
-        $budgetsAdj   = $applyExtraQuota ? $distribute($budgets,  $extraUnits) : $budgets;
-        $budgetM3Adj  = $applyExtraQuota ? $distribute($budgetM3, $extraM3)    : $budgetM3;
-        $budgetEurAdj = $applyExtraQuota ? $distribute($budgetEur,$extraEur)   : $budgetEur;
+            $fyLabel = 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2);
 
-        // Respuesta
-        return response()->json([
-            'context' => $ctx,
-            'fy_start' => $fyStart,
-            'fy_label' => $fyLabel,
-            'months' => $labels,
-            'unit_mode_allowed' => in_array($ctx['type'] ?? '', ['pc','client']),
+            // CPCs según contexto
+            $cpcQuery = DB::table('assignments')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
+                ->select('client_profit_centers.id', 'client_profit_centers.profit_center_code')
+                ->distinct();
 
-            'sales' => [
-                'units' => $this->fmtArr($sales),
-                'm3'    => $this->fmtArr($salesM3),
-                'euro'  => $this->fmtArr($salesEur),
-            ],
-            'budgets' => [
-                'units' => $this->fmtArr($budgetsAdj),
-                'm3'    => $this->fmtArr($budgetM3Adj),
-                'euro'  => $this->fmtArr($budgetEurAdj),
-            ],
-            // Forecasts incluyen EQF
-            'forecasts' => [
-                'units' => $this->fmtArr($fcU_plus),
-                'm3'    => $this->fmtArr($fcM3_plus),
-                'euro'  => $this->fmtArr($fcEur_plus),
-            ],
-            // (opcional para debug)
-            'extra_quota_forecasts' => [
-                'units' => $this->fmtArr($eqfU),
-                'm3'    => $this->fmtArr($eqfM3),
-                'euro'  => $this->fmtArr($eqfEur),
-            ],
-            'extra_quotas' => [
-                'units' => $this->fmt($extraUnits),
-                'm3'    => $this->fmt($extraM3),
-                'euro'  => $this->fmt($extraEur),
-            ],
-            'totals' => [
+            if (($ctx['type'] ?? '') === 'team') {
+                $cpcQuery->where('assignments.team_id', $ctx['team_id']);
+            } elseif (($ctx['type'] ?? '') === 'user') {
+                $cpcQuery->where('assignments.team_id', $ctx['team_id'])
+                         ->where('assignments.user_id', $ctx['user_id']);
+            } elseif (($ctx['type'] ?? '') === 'pc') {
+                $cpcQuery->where('assignments.team_id', $ctx['team_id'])
+                         ->where('assignments.user_id', $ctx['user_id'])
+                         ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
+            } elseif (($ctx['type'] ?? '') === 'client') {
+                $cpcQuery->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+                         ->where('assignments.team_id', $ctx['team_id'])
+                         ->where('assignments.user_id', $ctx['user_id'])
+                         ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
+                         ->where('clients.client_group_number', $ctx['client_group_number']);
+            }
+
+            $cpcs = $cpcQuery->distinct()->get();
+            if ($cpcs->isEmpty()) {
+                return response()->json($this->emptyFiscalSeries($fyStart, $ctx));
+            }
+            $cpcIds = collect($cpcs)->pluck('id')->unique()->values()->all();
+
+            // Helpers FY
+            $applyFY = function($q, $tbl) use ($fyStart) {
+                $q->where(function($w) use ($tbl, $fyStart) {
+                    $w->where(function($a) use ($tbl, $fyStart) {
+                        $a->where($tbl.'.fiscal_year', $fyStart)->whereBetween($tbl.'.month', [4,12]);
+                    })->orWhere(function($b) use ($tbl, $fyStart) {
+                        $b->where($tbl.'.fiscal_year', $fyStart+1)->whereBetween($tbl.'.month', [1,3]);
+                    });
+                });
+            };
+            $fyIndex = fn(int $rowFy, int $month) => ($rowFy === $fyStart) ? max(0, min(11, $month - 4)) : max(0, min(11, 8 + $month));
+            $make12 = fn() => array_fill(0, 12, 0.0);
+
+            // Unit conversions (aggregate por PC)
+            $ucAgg = DB::table('unit_conversions')
+                ->select(
+                    'profit_center_code',
+                    DB::raw('MAX(factor_to_m3) as factor_to_m3'),
+                    DB::raw('MAX(factor_to_euro) as factor_to_euro')
+                )->groupBy('profit_center_code');
+
+            /* SALES */
+            $salesQ = DB::table('sales')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
+                ->whereIn('sales.client_profit_center_id', $cpcIds);
+            $applyFY($salesQ, 'sales');
+
+            $sales = $make12(); $salesM3 = $make12(); $salesEur = $make12();
+            foreach ($salesQ->select(
+                'sales.fiscal_year','sales.month',
+                DB::raw('SUM(sales.volume) as units'),
+                DB::raw('SUM(sales.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(sales.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
+            )->groupBy('sales.fiscal_year','sales.month')->get() as $r) {
+                $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+                $sales[$i] = (float)$r->units;
+                $salesM3[$i] = (float)$r->m3;
+                $salesEur[$i] = (float)$r->euro;
+            }
+
+            /* BUDGETS */
+            $budQ = DB::table('budgets')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'budgets.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
+                ->whereIn('budgets.client_profit_center_id', $cpcIds);
+            $applyFY($budQ, 'budgets');
+
+            $budgets = $make12(); $budgetM3 = $make12(); $budgetEur = $make12();
+            foreach ($budQ->select(
+                'budgets.fiscal_year','budgets.month',
+                DB::raw('SUM(budgets.volume) as units'),
+                DB::raw('SUM(budgets.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(budgets.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
+            )->groupBy('budgets.fiscal_year','budgets.month')->get() as $r) {
+                $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+                $budgets[$i] = (float)$r->units;
+                $budgetM3[$i] = (float)$r->m3;
+                $budgetEur[$i] = (float)$r->euro;
+            }
+
+            /* FORECASTS (última por autor) */
+            $fcBase = DB::table('forecasts')
+                ->select('client_profit_center_id','fiscal_year','month','user_id', DB::raw('MAX(version) as max_version'))
+                ->groupBy('client_profit_center_id','fiscal_year','month','user_id');
+
+            $fcQ = DB::table('forecasts')
+                ->joinSub($fcBase, 'lv', function($j) {
+                    $j->on('forecasts.client_profit_center_id','=','lv.client_profit_center_id')
+                      ->on('forecasts.fiscal_year','=','lv.fiscal_year')
+                      ->on('forecasts.month','=','lv.month')
+                      ->on('forecasts.user_id','=','lv.user_id')
+                      ->on('forecasts.version','=','lv.max_version');
+                })
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'forecasts.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code'))
+                ->whereIn('forecasts.client_profit_center_id', $cpcIds);
+            $applyFY($fcQ, 'forecasts');
+
+            $fc = $make12(); $fcM3 = $make12(); $fcEur = $make12();
+            foreach ($fcQ->select(
+                'forecasts.fiscal_year','forecasts.month',
+                DB::raw('SUM(forecasts.volume) as units'),
+                DB::raw('SUM(forecasts.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(forecasts.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
+            )->groupBy('forecasts.fiscal_year','forecasts.month')->get() as $r) {
+                $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+                $fc[$i] = (float)$r->units;
+                $fcM3[$i] = (float)$r->m3;
+                $fcEur[$i] = (float)$r->euro;
+            }
+
+            /* EQF: oportunidad abierta, última versión por opp+mes, FY, + filtros */
+            $opLv = DB::table('sales_opportunities')
+                ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
+                ->groupBy('opportunity_group_id');
+
+            $eqfLv = DB::table('extra_quota_forecasts')
+                ->select('opportunity_group_id','fiscal_year','month', DB::raw('MAX(version) as max_version'))
+                ->groupBy('opportunity_group_id','fiscal_year','month');
+
+            $eqfQ = DB::table('extra_quota_forecasts as eqf')
+                ->joinSub($eqfLv, 'lv', function($j){
+                    $j->on('eqf.opportunity_group_id','=','lv.opportunity_group_id')
+                      ->on('eqf.fiscal_year','=','lv.fiscal_year')
+                      ->on('eqf.month','=','lv.month')
+                      ->on('eqf.version','=','lv.max_version');
+                })
+                ->joinSub($opLv, 'oplv', function($j){
+                    $j->on('oplv.opportunity_group_id','=','eqf.opportunity_group_id');
+                })
+                ->join('sales_opportunities as op', function($j){
+                    $j->on('op.opportunity_group_id','=','oplv.opportunity_group_id')
+                      ->on('op.version','=','oplv.max_version');
+                })
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','op.profit_center_code'))
+                ->whereNotIn('op.status', ['won','lost']);
+
+            // scoping por contexto
+            if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
+                $eqfQ->where('op.user_id', $ctx['user_id'] ?? 0);
+            } elseif (($ctx['type'] ?? '') === 'team') {
+                $eqfQ->whereIn('op.user_id', $this->teamUserIds($ctx['team_id']));
+            }
+            if (in_array($ctx['type'] ?? '', ['pc','client'])) {
+                $eqfQ->where('op.profit_center_code', $ctx['pc_code'] ?? '');
+            }
+            // 🔧 FIX: en contexto cliente, filtrar por cliente
+            if (($ctx['type'] ?? '') === 'client') {
+                $eqfQ->where('op.client_group_number', $ctx['client_group_number'] ?? '');
+            }
+
+            $applyFY($eqfQ, 'eqf');
+
+            $eqfU = $make12(); $eqfM3 = $make12(); $eqfEur = $make12();
+            foreach ($eqfQ->select(
+                'eqf.fiscal_year','eqf.month',
+                DB::raw('SUM(eqf.volume) as units'),
+                DB::raw('SUM(eqf.volume * COALESCE(uc.factor_to_m3,1)) as m3'),
+                DB::raw('SUM(eqf.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
+            )->groupBy('eqf.fiscal_year','eqf.month')->get() as $r) {
+                $i = $fyIndex((int)$r->fiscal_year, (int)$r->month);
+                $eqfU[$i]  = (float)$r->units;
+                $eqfM3[$i] = (float)$r->m3;
+                $eqfEur[$i]= (float)$r->euro;
+            }
+
+            // Forecast final = forecast base + EQF
+            $fcU_plus   = array_map(fn($a,$b)=>$a+$b, $fc,   $eqfU);
+            $fcM3_plus  = array_map(fn($a,$b)=>$a+$b, $fcM3, $eqfM3);
+            $fcEur_plus = array_map(fn($a,$b)=>$a+$b, $fcEur,$eqfEur);
+
+            /* EXTRA QUOTA remaining = ASSIGNED - WON converted */
+            $eqUserIds = null;
+            if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
+                $eqUserIds = [$ctx['user_id'] ?? 0];
+            } elseif (($ctx['type'] ?? '') === 'team') {
+                $eqUserIds = $this->teamUserIds($ctx['team_id']);
+            }
+
+            // ASSIGNED (publicado en FY)
+            $eqAssignedQ = DB::table('extra_quota_assignments as eq')
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','eq.profit_center_code'))
+                ->where('eq.fiscal_year', $fyStart)->where('eq.is_published', 1)
+                ->when($eqUserIds, fn($q)=>$q->whereIn('eq.user_id', $eqUserIds))
+                ->when(in_array($ctx['type'] ?? '', ['pc','client']), fn($q)=>$q->where('eq.profit_center_code', $ctx['pc_code'] ?? ''));
+            $eqAssignedRow = $eqAssignedQ->selectRaw("
+                    COALESCE(SUM(eq.volume),0) as units,
+                    COALESCE(SUM(eq.volume * COALESCE(uc.factor_to_m3,1)),0) as m3,
+                    COALESCE(SUM(eq.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)),0) as euro
+                ")->first();
+
+            $assignedU = (float)($eqAssignedRow->units ?? 0.0);
+            $assignedM3= (float)($eqAssignedRow->m3 ?? 0.0);
+            $assignedE = (float)($eqAssignedRow->euro ?? 0.0);
+
+            // WON converted (sum presupuesto de versión ganada)
+            $wonConvQ = DB::table('sales_opportunities as s')
+                ->join('extra_quota_budgets as b', function($j){
+                    $j->on('b.opportunity_group_id','=','s.opportunity_group_id')
+                      ->on('b.version','=','s.version');
+                })
+                ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','s.profit_center_code'))
+                ->where('s.status','won')
+                ->when($eqUserIds, fn($q)=>$q->whereIn('s.user_id', $eqUserIds))
+                ->when(in_array($ctx['type'] ?? '', ['pc','client']), fn($q)=>$q->where('s.profit_center_code', $ctx['pc_code'] ?? ''));
+            $applyFY($wonConvQ, 'b');
+
+            $wonConvRow = $wonConvQ->selectRaw("
+                    COALESCE(SUM(b.volume),0) as units,
+                    COALESCE(SUM(b.volume * COALESCE(uc.factor_to_m3,1)),0) as m3,
+                    COALESCE(SUM(b.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)),0) as euro
+                ")->first();
+
+            $wonU = (float)($wonConvRow->units ?? 0.0);
+            $wonM3= (float)($wonConvRow->m3 ?? 0.0);
+            $wonE = (float)($wonConvRow->euro ?? 0.0);
+
+            // Remaining
+            $extraUnits = max(0.0, $assignedU  - $wonU);
+            $extraM3    = max(0.0, $assignedM3 - $wonM3);
+            $extraEur   = max(0.0, $assignedE  - $wonE);
+
+            // Distribuir remaining a budgets (company/team/user/pc); en client NO
+            $applyExtraQuota = in_array($ctx['type'] ?? '', ['company', 'team', 'user', 'pc']);
+            $distribute = function($base, $extra) {
+                $total = array_sum($base);
+                if ($extra == 0) return $base;
+                if ($total == 0) return array_map(fn($v)=>$v + ($extra/12), $base);
+                foreach ($base as $i => $v) {
+                    $frac = $v > 0 ? $v / $total : 0;
+                    $base[$i] = $v + $extra * $frac;
+                }
+                return $base;
+            };
+            $budgetsAdj   = $applyExtraQuota ? $distribute($budgets,  $extraUnits) : $budgets;
+            $budgetM3Adj  = $applyExtraQuota ? $distribute($budgetM3, $extraM3)    : $budgetM3;
+            $budgetEurAdj = $applyExtraQuota ? $distribute($budgetEur,$extraEur)   : $budgetEur;
+
+            // Respuesta
+            return response()->json([
+                'context' => $ctx,
+                'fy_start' => $fyStart,
+                'fy_label' => $fyLabel,
+                'months' => $labels,
+                'unit_mode_allowed' => in_array($ctx['type'] ?? '', ['pc','client']),
+
                 'sales' => [
-                    'units' => $this->fmt(array_sum($sales)),
-                    'm3'    => $this->fmt(array_sum($salesM3)),
-                    'euro'  => $this->fmt(array_sum($salesEur)),
+                    'units' => $this->fmtArr($sales),
+                    'm3'    => $this->fmtArr($salesM3),
+                    'euro'  => $this->fmtArr($salesEur),
                 ],
                 'budgets' => [
-                    'units' => $this->fmt(array_sum($budgetsAdj)),
-                    'm3'    => $this->fmt(array_sum($budgetM3Adj)),
-                    'euro'  => $this->fmt(array_sum($budgetEurAdj)),
+                    'units' => $this->fmtArr($budgetsAdj),
+                    'm3'    => $this->fmtArr($budgetM3Adj),
+                    'euro'  => $this->fmtArr($budgetEurAdj),
                 ],
-                // Totales de forecast con EQF incluido
+                // Forecasts incluyen EQF
                 'forecasts' => [
-                    'units' => $this->fmt(array_sum($fcU_plus)),
-                    'm3'    => $this->fmt(array_sum($fcM3_plus)),
-                    'euro'  => $this->fmt(array_sum($fcEur_plus)),
+                    'units' => $this->fmtArr($fcU_plus),
+                    'm3'    => $this->fmtArr($fcM3_plus),
+                    'euro'  => $this->fmtArr($fcEur_plus),
                 ],
-            ],
-            'meta' => [
-                'forecasts_includes_eqf' => true,
-            ],
-        ]);
-    } catch (\Throwable $e) {
-        \Log::error('series() failed', [
-            'msg' => $e->getMessage(),
-            'line'=> $e->getLine(),
-            'file'=> $e->getFile(),
-        ]);
-        return response()->json(['error'=>'internal_error'], 500);
+                // (opcional para debug)
+                'extra_quota_forecasts' => [
+                    'units' => $this->fmtArr($eqfU),
+                    'm3'    => $this->fmtArr($eqfM3),
+                    'euro'  => $this->fmtArr($eqfEur),
+                ],
+                'extra_quotas' => [
+                    'units' => $this->fmt($extraUnits),
+                    'm3'    => $this->fmt($extraM3),
+                    'euro'  => $this->fmt($extraEur),
+                ],
+                'totals' => [
+                    'sales' => [
+                        'units' => $this->fmt(array_sum($sales)),
+                        'm3'    => $this->fmt(array_sum($salesM3)),
+                        'euro'  => $this->fmt(array_sum($salesEur)),
+                    ],
+                    'budgets' => [
+                        'units' => $this->fmt(array_sum($budgetsAdj)),
+                        'm3'    => $this->fmt(array_sum($budgetM3Adj)),
+                        'euro'  => $this->fmt(array_sum($budgetEurAdj)),
+                    ],
+                    // Totales de forecast con EQF incluido
+                    'forecasts' => [
+                        'units' => $this->fmt(array_sum($fcU_plus)),
+                        'm3'    => $this->fmt(array_sum($fcM3_plus)),
+                        'euro'  => $this->fmt(array_sum($fcEur_plus)),
+                    ],
+                ],
+                'meta' => [
+                    'forecasts_includes_eqf' => true,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('series() failed', [
+                'msg' => $e->getMessage(),
+                'line'=> $e->getLine(),
+                'file'=> $e->getFile(),
+            ]);
+            return response()->json(['error'=>'internal_error'], 500);
+        }
     }
-}
-
-
 
     private function emptyFiscalSeries(int $fyStart, array $ctx): array{
         $monthsOrdered = [4,5,6,7,8,9,10,11,12,1,2,3];
@@ -635,7 +627,7 @@ public function series(Request $request){
             'fy_start'          => $fyStart,
             'fy_label'          => 'WJ ' . $fyStart . '/' . substr((string)($fyStart+1), -2),
             'months'            => $labels,
-            'unit_mode_allowed' => in_array($ctx['type'] ?? '', ['pc','client']),
+            'unit_mode_allowed' => in_array(($ctx['type'] ?? ''), ['pc','client']),
             'sales'             => ['units'=>$this->fmtArr($zeros),'m3'=>$this->fmtArr($zeros),'euro'=>$this->fmtArr($zeros)],
             'budgets'           => ['units'=>$this->fmtArr($zeros),'m3'=>$this->fmtArr($zeros),'euro'=>$this->fmtArr($zeros)],
             'forecasts'         => ['units'=>$this->fmtArr($zeros),'m3'=>$this->fmtArr($zeros),'euro'=>$this->fmtArr($zeros)],
@@ -660,19 +652,19 @@ public function series(Request $request){
         $cpcs = DB::table('assignments')
             ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
             ->select('client_profit_centers.id as cpc_id', 'client_profit_centers.profit_center_code')
-            ->when($ctx['type'] === 'team', function($q) use ($ctx) {
+            ->when(($ctx['type'] ?? '') === 'team', function($q) use ($ctx) {
                 $q->where('assignments.team_id', $ctx['team_id']);
             })
-            ->when($ctx['type'] === 'user', function($q) use ($ctx) {
+            ->when(($ctx['type'] ?? '') === 'user', function($q) use ($ctx) {
                 $q->where('assignments.team_id', $ctx['team_id'])
                   ->where('assignments.user_id', $ctx['user_id']);
             })
-            ->when($ctx['type'] === 'pc', function($q) use ($ctx) {
+            ->when(($ctx['type'] ?? '') === 'pc', function($q) use ($ctx) {
                 $q->where('assignments.team_id', $ctx['team_id'])
                   ->where('assignments.user_id', $ctx['user_id'])
                   ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
             })
-            ->when($ctx['type'] === 'client', function($q) use ($ctx) {
+            ->when(($ctx['type'] ?? '') === 'client', function($q) use ($ctx) {
                 $q->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
                   ->where('assignments.team_id', $ctx['team_id'])
                   ->where('assignments.user_id', $ctx['user_id'])
@@ -767,17 +759,17 @@ public function series(Request $request){
             ->get();
 
         $sum = fn($rows, $f) => (float)collect($rows)->sum($f);
-        $includeUnits = in_array($ctx['type'], ['pc','client']);
+        $includeUnits = in_array(($ctx['type'] ?? ''), ['pc','client']);
 
-        // === EXTRA QUOTAS REMAINING by PC: assigned - wonConverted ===
+        // === EXTRA QUOTAS REMAINING by PC ===
         $nowY = (int)date('Y'); $nowM = (int)date('n');
         $currentFy = ($nowM >= 4) ? $nowY : ($nowY - 1);
         $fyForEQ = $fy ?: $currentFy;
 
         $eqUserFilter = null;
-        if (in_array($ctx['type'], ['user','pc','client']) && !empty($ctx['user_id'])) {
+        if (in_array(($ctx['type'] ?? ''), ['user','pc','client']) && !empty($ctx['user_id'])) {
             $eqUserFilter = [$ctx['user_id']];
-        } elseif ($ctx['type'] === 'team') {
+        } elseif (($ctx['type'] ?? '') === 'team') {
             $eqUserFilter = $this->teamUserIds($ctx['team_id']);
         }
 
@@ -787,7 +779,7 @@ public function series(Request $request){
             ->where('eq.fiscal_year', $fyForEQ)
             ->where('eq.is_published', 1)
             ->when(is_array($eqUserFilter) && !empty($eqUserFilter), fn($q)=>$q->whereIn('eq.user_id', $eqUserFilter))
-            ->when(in_array($ctx['type'], ['pc','client']), fn($q)=>$q->where('eq.profit_center_code', $ctx['pc_code']))
+            ->when(in_array(($ctx['type'] ?? ''), ['pc','client']), fn($q)=>$q->where('eq.profit_center_code', $ctx['pc_code']))
             ->select(
                 'eq.profit_center_code',
                 DB::raw('SUM(eq.volume) as units'),
@@ -797,11 +789,11 @@ public function series(Request $request){
             ->groupBy('eq.profit_center_code')
             ->get();
 
-        // WON converted by pc (sum b of won versions)
+        // WON converted by pc
         $wonQ = DB::table('sales_opportunities as s')
             ->where('s.status','won')
             ->when(is_array($eqUserFilter) && !empty($eqUserFilter), fn($q)=>$q->whereIn('s.user_id', $eqUserFilter))
-            ->when(in_array($ctx['type'], ['pc','client']), fn($q)=>$q->where('s.profit_center_code', $ctx['pc_code']))
+            ->when(in_array(($ctx['type'] ?? ''), ['pc','client']), fn($q)=>$q->where('s.profit_center_code', $ctx['pc_code']))
             ->join('extra_quota_budgets as b', function($j){
                 $j->on('b.opportunity_group_id','=','s.opportunity_group_id')
                   ->on('b.version','=','s.version');
@@ -841,29 +833,35 @@ public function series(Request $request){
         $extraRows = collect(array_values($remMap));
 
         // Merge budgets.by_pc + extraRemaining.by_pc
-        $budgetMap = [];
-        foreach ($budgetRows as $r) {
-            $code = $r->profit_center_code;
-            $budgetMap[$code] = [
-                'profit_center_code' => $code,
-                'units' => (float)$r->units,
-                'm3'    => (float)$r->m3,
-                'euro'  => (float)$r->euro,
-            ];
-        }
-        foreach ($extraRows as $r) {
-            $code = $r['profit_center_code'];
-            if (!isset($budgetMap[$code])) {
+        $shouldApplyExtra = in_array(($ctx['type'] ?? ''), ['company','team','user','pc']);
+        if ($shouldApplyExtra) {
+            $budgetMap = [];
+            foreach ($budgetRows as $r) {
+                $code = $r->profit_center_code;
                 $budgetMap[$code] = [
                     'profit_center_code' => $code,
-                    'units' => 0.0, 'm3' => 0.0, 'euro'  => 0.0
+                    'units' => (float)$r->units,
+                    'm3'    => (float)$r->m3,
+                    'euro'  => (float)$r->euro,
                 ];
             }
-            $budgetMap[$code]['units'] += (float)$r['units'];
-            $budgetMap[$code]['m3']    += (float)$r['m3'];
-            $budgetMap[$code]['euro']  += (float)$r['euro'];
+            foreach ($extraRows as $r) {
+                $code = $r['profit_center_code'];
+                if (!isset($budgetMap[$code])) {
+                    $budgetMap[$code] = [
+                        'profit_center_code' => $code,
+                        'units' => 0.0, 'm3' => 0.0, 'euro'  => 0.0
+                    ];
+                }
+                $budgetMap[$code]['units'] += (float)$r['units'];
+                $budgetMap[$code]['m3']    += (float)$r['m3'];
+                $budgetMap[$code]['euro']  += (float)$r['euro'];
+            }
+            $budgetWithExtraRows = collect(array_values($budgetMap));
+        } else {
+            // client: NO sumar extra remaining al budget
+            $budgetWithExtraRows = $budgetRows;
         }
-        $budgetWithExtraRows = collect(array_values($budgetMap));
 
         $extraTotals = [
             'm3'   => $sum($extraRows, 'm3'),
@@ -1114,15 +1112,7 @@ public function series(Request $request){
         $budUAdj = $applyExtra($budU, $extraU);
         $budMAdj = $applyExtra($budM, $extraM);
 
-        // === USED: EQF (ya ponderado) última versión, solo OPEN, dentro del FY hasta as_of ===
-        $now = new \DateTimeImmutable('now');
-        $nowY = (int)$now->format('Y'); $nowM = (int)$now->format('n');
-        $currentFYStart = ($nowM >= 4) ? $nowY : ($nowY - 1);
-        $asOfDate = ($currentFYStart === $fyStart)
-            ? $now->modify('first day of this month')->modify('-1 day')->setTime(23,59,59)
-            : (new \DateTimeImmutable(sprintf('%04d-03-31 23:59:59', $fyStart + 1)));
-        $asOfStr = $asOfDate->format('Y-m-d H:i:s');
-
+        // === USED: EQF (open) última versión, <= as_of (omitido aquí en pcMonthly para simplicidad) ===
         $lv = DB::table('sales_opportunities')
             ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
             ->where('profit_center_code', $pc)
@@ -1140,8 +1130,7 @@ public function series(Request $request){
             ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','s.profit_center_code'))
             ->where('s.fiscal_year', $fyStart)
             ->where('s.profit_center_code', $pc)
-            ->where('s.status', 'open')
-            ->where('eqf.created_at', '<=', $asOfStr);
+            ->where('s.status', 'open');
         $applyFY($eqfQ, 'eqf', $fyStart);
 
         $eqfRow = $eqfQ->selectRaw('
@@ -1158,7 +1147,6 @@ public function series(Request $request){
         $extraRemM = max(0.0, $extraM - $eqfM);
         $extraRemE = max(0.0, $extraE - $eqfE);
 
-        // Build response
         $fmt = fn($n) => number_format((float)$n, 0, ',', '.');
         $fmtArr = fn($arr) => array_map($fmt, $arr);
 
@@ -1177,7 +1165,7 @@ public function series(Request $request){
             ],
 
             'extra_quota' => [
-                'allocated' => ['units'=>$fmt($extraU),  'm3'=>$fmt($extraM),  'euro'=>$fmt($extraE)], // remaining
+                'allocated' => ['units'=>$fmt($extraU),  'm3'=>$fmt($extraM),  'euro'=>$fmt($extraE)],
                 'used'      => ['units'=>$fmt($eqfU),    'm3'=>$fmt($eqfM),    'euro'=>$fmt($eqfE)],
                 'remaining' => ['units'=>$fmt($extraRemU), 'm3'=>$fmt($extraRemM), 'euro'=>$fmt($extraRemE)],
             ],
@@ -1377,7 +1365,7 @@ public function series(Request $request){
         $budMAdj = $applyExtra($budM, $extraM);
         $budEAdj = $applyExtra($budE, $extraE);
 
-        // FORECASTS (monthly) - latest per author; first try as-of snapshot, fallback overall
+        // FORECASTS (monthly) - latest per author; as-of snapshot fallback overall
         $buildForecast = function(bool $useAsOf) use ($cpcIds, $ucAgg, $applyFY, $fyIndex, $make12, $asOfStr) {
             $fcU = $make12(); $fcM = $make12(); $fcE = $make12();
 
@@ -1429,7 +1417,7 @@ public function series(Request $request){
             [$fcU,$fcM,$fcE,$fcCount] = $buildForecast(false);
         }
 
-        // USED from EQF (ya ponderado), última versión por grupo, solo OPEN, dentro del FY y <= as_of
+        // USED from EQF, última versión por grupo, solo OPEN, FY y <= as_of
         $lv = DB::table('sales_opportunities')
             ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
             ->where('profit_center_code', $pc)
@@ -1527,7 +1515,6 @@ public function series(Request $request){
             ],
 
             'extra_quota' => [
-                // allocated = remaining
                 'allocated' => ['units'=>$fmt($extraU),  'm3'=>$fmt($extraM),  'euro'=>$fmt($extraE)],
                 'used'      => ['units'=>$fmt($eqfU),    'm3'=>$fmt($eqfM),    'euro'=>$fmt($eqfE)],
                 'remaining' => ['units'=>$fmt($eqRemU),  'm3'=>$fmt($eqRemM),  'euro'=>$fmt($eqRemE)],

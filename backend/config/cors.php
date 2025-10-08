@@ -10,6 +10,7 @@ return [
     ],
     'allowed_methods' => ['*'],
     'allowed_origins' => [
+        'http://zat10079.steinbacher.at:20005',
         'http://localhost:5173',
     ],
     'allowed_headers' => ['*'],
