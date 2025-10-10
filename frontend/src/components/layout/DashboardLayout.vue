@@ -1,153 +1,189 @@
-<!-- src/layouts/DashboardLayout.vue -->
 <template>
-    <div class="dashboard-bg">
-        <div class="dashboard-layout">
-            <header class="dashboard-header glass">
-                <div class="logo-container">
-                    <img src="@/assets/img/logos/stb.png" alt="Logo" class="logo" />
-                </div>
-
-                <div class="nav-buttons">
-                    <!-- DASHBOARD -->
-                    <Button
-                        icon="pi pi-th-large"
-                        class="nav-icon-button"
-                        :class="{ 'is-active': isActive('/dashboard') }"
-                        @click="$router.push('/dashboard')"
-                        v-tooltip.top="'Dashboard'"
-                    />
-
-                    <!-- SALES: manager+ dropdown / sales_rep inline -->
-                    <template v-if="isManagerOrUp">
-                        <Menu ref="salesMenu" :model="salesItems" popup />
-                        <Button
-                            icon="pi pi-chart-line"
-                            class="nav-icon-button"
-                            @click="salesMenu.toggle($event)"
-                            v-tooltip.top="'Vertrieb'"
-                        />
-                        <!-- REPORTS (separado, pegado a Sales) -->
-                        <Menu ref="reportsMenu" :model="reportsItems" popup />
-                        <Button
-                            icon="pi pi-file"
-                            class="nav-icon-button"
-                            @click="reportsMenu.toggle($event)"
-                            v-tooltip.top="'Berichte'"
-                        />
-                    </template>
-                    <template v-else>
-                        <div class="nav-item-wrap" title="Prognosen">
-                            <Button
-                                icon="pi pi-chart-line"
-                                class="nav-icon-button"
-                                @click="$router.push('/forecasts')"
-                                v-tooltip.top="'Vertrieb'"
-                            />
-                        </div>
-                        <div class="nav-item-wrap" title="Budgetfälle">
-                            <Button
-                                icon="pi pi-briefcase"
-                                class="nav-icon-button"
-                                @click="$router.push('/budget-cases')"
-                            />
-                        </div>
-                        <div class="nav-item-wrap" title="Abweichungen">
-                            <Button
-                                icon="pi pi-sliders-h"
-                                class="nav-icon-button"
-                                @click="$router.push('/deviations')"
-                            />
-                            <span v-if="deviationsCount > 0" class="nav-badge">{{
-                                deviationsCount
-                            }}</span>
-                        </div>
-                        <div class="nav-item-wrap" title="Zusatzquoten">
-                            <Button
-                                icon="pi pi-percentage"
-                                class="nav-icon-button"
-                                @click="$router.push('/extra-quotas')"
-                            />
-                        </div>
-                        <div class="nav-item-wrap" title="Aktionspläne">
-                            <Button
-                                icon="pi pi-list-check"
-                                class="nav-icon-button"
-                                @click="$router.push('/action-plans')"
-                            />
-                        </div>
-                    </template>
-
-                    <!-- LOGISTICS / CLAIMS: visible pero deshabilitados -->
-                    <span class="disabled-wrap" v-tooltip.top="'Kommt bald'">
-                        <Button icon="pi pi-truck" class="nav-icon-button" :disabled="true" />
-                    </span>
-                    <span class="disabled-wrap" v-tooltip.top="'Kommt bald'">
-                        <Button
-                            icon="pi pi-exclamation-triangle"
-                            class="nav-icon-button"
-                            :disabled="true"
-                        />
-                    </span>
-
-                    <!-- SOLO SUPERADMIN: engranaje (admin usuarios) -->
-                    <Button
-                        v-if="isSuperAdmin"
-                        icon="pi pi-cog"
-                        class="nav-icon-button"
-                        @click="$router.push('/settings/users')"
-                        v-tooltip.top="'Einstellungen · Benutzerverwaltung'"
-                    />
-
-                    <!-- USER MENU -->
-                    <Menu ref="userMenu" :model="userItems" popup>
-                        <template #item="{ item, props }">
-                            <div v-if="item.type === 'header'" class="user-menu-header glass-gray">
-                                <div class="name-line">
-                                    <span class="first">{{ firstName }}</span>
-                                    <span class="last">{{ lastName || '—' }}</span>
-                                </div>
-                                <div class="role-line">
-                                    <em>{{ displayRole }}</em>
-                                </div>
-                                <div class="email-line">{{ auth.user?.email }}</div>
-                            </div>
-
-                            <div v-else-if="item.separator" class="p-menu-separator"></div>
-
-                            <a
-                                v-else-if="!item.danger"
-                                v-bind="props.action"
-                                class="user-menu-item glass-mid"
-                            >
-                                <i :class="['pi', item.icon]"></i>
-                                <span class="ml-2">{{ item.label }}</span>
-                            </a>
-
-                            <a
-                                v-else
-                                v-bind="props.action"
-                                class="user-menu-item glass-dark logout-item"
-                                @click.prevent="onLogout"
-                            >
-                                <i class="pi pi-sign-out danger-icon"></i>
-                                <span class="ml-2">{{ item.label }}</span>
-                            </a>
-                        </template>
-                    </Menu>
-                    <Button
-                        icon="pi pi-user"
-                        class="nav-icon-button"
-                        @click="userMenu.toggle($event)"
-                        v-tooltip.top="'Benutzermenü'"
-                    />
-                </div>
-            </header>
-
-            <main class="dashboard-content">
-                <router-view />
-            </main>
+  <div class="dashboard-bg">
+    <div class="dashboard-layout">
+      <header class="dashboard-header glass">
+        <div class="logo-container">
+          <img src="@/assets/img/logos/stb.png" alt="Logo" class="logo" />
         </div>
+
+        <div class="nav-buttons">
+          <!-- DASHBOARD -->
+          <Button
+            icon="fas fa-th-large"
+            class="nav-icon-button"
+            :class="{ 'is-active': isActive('/dashboard') }"
+            @click="$router.push('/dashboard')"
+            v-tooltip.top="'Dashboard'"
+          />
+
+          <!-- 🔧 ANALYSIS ICON -->
+          <Button
+            icon="fas fa-chart-pie"
+            class="nav-icon-button"
+            @click="$router.push('/sales-force')"
+            v-tooltip.top="'Análisis'"
+          />
+
+          <!-- SALES + REPORTS (Manager or Up) -->
+          <template v-if="isManagerOrUp">
+            <!-- 🔧 SEPARATED SALES ICONS -->
+            <Button
+              icon="fas fa-bullseye"
+              class="nav-icon-button"
+              @click="$router.push('/forecasts')"
+              v-tooltip.top="'Prognosen'"
+            />
+            <Button
+              icon="fas fa-briefcase"
+              class="nav-icon-button"
+              @click="$router.push('/budget-cases')"
+              v-tooltip.top="'Budgetfälle'"
+            />
+            <Button
+              icon="fas fa-sliders-h"
+              class="nav-icon-button"
+              @click="$router.push('/deviations')"
+              v-tooltip.top="'Abweichungen'"
+            />
+            <Button
+              icon="fas fa-percent"
+              class="nav-icon-button"
+              @click="$router.push('/extra-quotas')"
+              v-tooltip.top="'Zusatzquoten'"
+            />
+            <Button
+              icon="fas fa-list-check"
+              class="nav-icon-button"
+              @click="$router.push('/action-plans')"
+              v-tooltip.top="'Aktionspläne'"
+            />
+
+            <!-- REPORTS DROPDOWN -->
+            <Menu ref="reportsMenu" :model="reportsItems" popup />
+            <Button
+              icon="fas fa-file-lines"
+              class="nav-icon-button"
+              @click="reportsMenu.toggle($event)"
+              v-tooltip.top="'Berichte'"
+            />
+          </template>
+
+          <!-- SALES REP SIMPLE ICONS -->
+          <template v-else>
+            <div class="nav-item-wrap" title="Prognosen">
+              <Button
+                icon="fas fa-bullseye"
+                class="nav-icon-button"
+                @click="$router.push('/forecasts')"
+                v-tooltip.top="'Vertrieb'"
+              />
+            </div>
+            <div class="nav-item-wrap" title="Budgetfälle">
+              <Button
+                icon="fas fa-briefcase"
+                class="nav-icon-button"
+                @click="$router.push('/budget-cases')"
+              />
+            </div>
+            <div class="nav-item-wrap" title="Abweichungen">
+              <Button
+                icon="fas fa-sliders-h"
+                class="nav-icon-button"
+                @click="$router.push('/deviations')"
+              />
+              <span v-if="deviationsCount > 0" class="nav-badge">{{
+                deviationsCount
+              }}</span>
+            </div>
+            <div class="nav-item-wrap" title="Zusatzquoten">
+              <Button
+                icon="fas fa-percent"
+                class="nav-icon-button"
+                @click="$router.push('/extra-quotas')"
+              />
+            </div>
+            <div class="nav-item-wrap" title="Aktionspläne">
+              <Button
+                icon="fas fa-list-check"
+                class="nav-icon-button"
+                @click="$router.push('/action-plans')"
+              />
+            </div>
+          </template>
+
+          <!-- LOGISTICS / CLAIMS: 🔧 COMENTADOS TEMPORALMENTE -->
+          <!--
+          <span class="disabled-wrap" v-tooltip.top="'Kommt bald'">
+            <Button icon="pi pi-truck" class="nav-icon-button" :disabled="true" />
+          </span>
+          <span class="disabled-wrap" v-tooltip.top="'Kommt bald'">
+            <Button
+              icon="pi pi-exclamation-triangle"
+              class="nav-icon-button"
+              :disabled="true"
+            />
+          </span>
+          -->
+
+          <!-- SOLO SUPERADMIN: engranaje (admin usuarios) -->
+          <Button
+            v-if="isSuperAdmin"
+            icon="fas fa-users-cog"
+            class="nav-icon-button"
+            @click="$router.push('/settings/users')"
+            v-tooltip.top="'Einstellungen · Benutzerverwaltung'"
+          />
+
+          <!-- USER MENU -->
+          <Menu ref="userMenu" :model="userItems" popup>
+            <template #item="{ item, props }">
+              <div v-if="item.type === 'header'" class="user-menu-header glass-gray">
+                <div class="name-line">
+                  <span class="first">{{ firstName }}</span>
+                  <span class="last">{{ lastName || '—' }}</span>
+                </div>
+                <div class="role-line">
+                  <em>{{ displayRole }}</em>
+                </div>
+                <div class="email-line">{{ auth.user?.email }}</div>
+              </div>
+
+              <div v-else-if="item.separator" class="p-menu-separator"></div>
+
+              <a
+                v-else-if="!item.danger"
+                v-bind="props.action"
+                class="user-menu-item glass-mid"
+              >
+                <i :class="['fas', item.icon]"></i>
+                <span class="ml-2">{{ item.label }}</span>
+              </a>
+
+              <a
+                v-else
+                v-bind="props.action"
+                class="user-menu-item glass-dark logout-item"
+                @click.prevent="onLogout"
+              >
+                <i class="fas fa-sign-out-alt danger-icon"></i>
+                <span class="ml-2">{{ item.label }}</span>
+              </a>
+            </template>
+          </Menu>
+          <Button
+            icon="fas fa-user-circle"
+            class="nav-icon-button"
+            @click="userMenu.toggle($event)"
+            v-tooltip.top="'Benutzermenü'"
+          />
+        </div>
+      </header>
+
+      <main class="dashboard-content">
+        <router-view />
+      </main>
     </div>
+  </div>
 </template>
 
 <script setup>

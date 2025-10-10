@@ -3,6 +3,8 @@ import './assets/css/main.css';
 import '@primevue/themes/lara'; // 🎨 Tema Lara (por defecto)
 import 'primeicons/primeicons.css'; // Iconos
 import 'primeflex/primeflex.css'; // Utilidades de grid y spacing
+import '@fortawesome/fontawesome-free/css/all.min.css'
+
 
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';

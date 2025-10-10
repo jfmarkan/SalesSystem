@@ -18,6 +18,7 @@ import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
 import Users from '@/views/dashboard/admin/settings/Users.vue';
 import QuotaByUser from '@/views/dashboard/admin/settings/QuotaByUser.vue';
+import SalesForceAnalytics from '@/views/dashboard/manager/SalesForceAnalytics.vue';
 
 const routes = [
     {
@@ -78,6 +79,13 @@ const routes = [
             { 
                 path: '/extra-quota/analyse', 
                 component: ExtraQuotaAnalysis, 
+                meta: { 
+                    requiresAuth: true 
+                }
+            },
+            { 
+                path: '/sales-force', 
+                component: SalesForceAnalytics, 
                 meta: { 
                     requiresAuth: true 
                 }
