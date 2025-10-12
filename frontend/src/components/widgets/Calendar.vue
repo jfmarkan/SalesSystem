@@ -165,38 +165,27 @@ async function fetchEvents() {
         const ym = from.slice(0, 7)
         events.value = normalize([
             {
-                date: `${ym}-02`,
-                type: 'class',
-                title: 'Academy · Short game',
-                start: '10:00',
-                teacher: 'Ana',
-                venue: 'HQ',
+                date: `${ym}-04`,
+                type: 'magazine',
+                title: 'Reporting',
             },
             {
-                date: `${ym}-02`,
+                date: `${ym}-10`,
+                type: 'magazine',
+                title: 'Reporting',
+            },
+            {
+                date: `${ym}-15`,
                 type: 'health',
-                title: 'Physio session',
-                start: '12:30',
-                teacher: 'Dr. Ruiz',
-                venue: 'Clinic',
+                title: 'Forecasting',
             },
             {
-                date: `${ym}-06`,
+                date: `${ym}-17`,
                 type: 'tournament',
-                title: 'Monthly Open',
-                start: '08:00',
-                venue: 'North Course',
+                title: 'Controlling Gesprächt',
+                start: '09:45',
             },
-            { date: `${ym}-15`, type: 'magazine', title: 'Digital Magazine', start: '09:00' },
-            { date: `${ym}-22`, type: 'class', title: 'Tee time', start: '14:10', venue: 'West' },
-            {
-                date: `${ym}-22`,
-                type: 'class',
-                title: 'Private class',
-                start: '16:00',
-                teacher: 'Luis',
-                venue: 'HQ',
-            },
+
         ])
     } finally {
         loading.value = false

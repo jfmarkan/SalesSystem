@@ -47,7 +47,7 @@ import api from '@/plugins/axios'
 
 import GlassCard from '@/components/ui/GlassCard.vue'
 import KpiCard from '@/components/widgets/KpiCard.vue'
-import CalendarCard from '@/components/widgets/CalendarCard.vue'
+import CalendarCard from '@/components/widgets/Calendar.vue'
 import ChartCard from '@/components/widgets/ChartCard.vue'
 import ProfitCentersTable from '@/components/widgets/ProfitCentersTable.vue'
 import ExtraQuotaCard from '@/components/widgets/ExtraQuotaCard.vue'
