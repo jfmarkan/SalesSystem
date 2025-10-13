@@ -166,7 +166,7 @@ async function fetchEvents() {
         events.value = normalize([
             {
                 date: `${ym}-04`,
-                type: 'magazine',
+                type: 'detection',
                 title: 'Reporting',
             },
             {
@@ -184,6 +184,11 @@ async function fetchEvents() {
                 type: 'tournament',
                 title: 'Controlling Gesprächt',
                 start: '09:45',
+            },
+            {
+                date: `${ym}-18`,
+                type: 'chota',
+                title: 'Controlling Gesprächt',
             },
 
         ])
@@ -211,7 +216,7 @@ const selectedIso = ref(null)
 const drawerOpen = computed(() => !!selectedIso.value)
 const agenda = computed(() => (selectedIso.value ? dayEvents(selectedIso.value) : []))
 const drawerTitle = computed(() =>
-    selectedIso.value ? f(new Date(selectedIso.value), 'EEEE, MMM dd', 'en-US') : '',
+    selectedIso.value ? f(new Date(selectedIso.value), 'EEEE, MMM dd', 'de-DE') : '',
 )
 function openDay(iso) {
     selectedIso.value = iso
@@ -222,17 +227,17 @@ function closeDay() {
 
 /* UI helpers */
 function badgeClass(t) {
-    if (t === 'class') return 'badge--class'
+    if (t === 'detection') return 'badge--detection'
     if (t === 'tournament') return 'badge--tournament'
     if (t === 'magazine') return 'badge--magazine'
     if (t === 'health') return 'badge--health'
     return ''
 }
 function iconFor(t) {
-    if (t === 'class') return 'pi-calendar'
-    if (t === 'tournament') return 'pi-trophy'
+    if (t === 'detection') return 'pi-calendar'
+    if (t === 'tournament') return 'pi-comment'
     if (t === 'magazine') return 'pi-book'
-    if (t === 'health') return 'pi-heart'
+    if (t === 'health') return 'pi-chart-scatter'
     return 'pi-circle'
 }
 function short(s) {
@@ -283,7 +288,7 @@ function short(s) {
 }
 
 .cell {
-    min-height: 96px;
+    min-height: 80px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.06);
@@ -355,7 +360,7 @@ function short(s) {
     background: rgba(22, 163, 74, 0.14);
     border-color: rgba(22, 163, 74, 0.45);
 }
-.badge--class {
+.badge--detection {
     color: #EC1F27;
     background: rgba(239, 68, 68, 0.14);
     border-color: rgba(239, 68, 68, 0.45);
@@ -487,7 +492,7 @@ function short(s) {
     background: rgba(22, 163, 74, 0.15);
     border-color: rgba(22, 163, 74, 0.35);
 }
-.ic.badge--class {
+.ic.badge--detection {
     color: #ef4444;
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.35);

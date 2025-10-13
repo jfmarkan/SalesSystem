@@ -25,6 +25,7 @@ class UserAdministrationController extends Controller
                 'email' => $u->email,
                 'disabled' => (bool)($u->disabled ?? false),
                 'roles' => $u->getRoleNames()->values(),
+                'role_id' => $u->role_id ?? null,
                 'teamIds' => TeamMember::where('user_id',$u->id)->pluck('team_id')->values(),
                 'online' => $u->online ?? null,          // opcional si lo tienes
                 'last_seen' => $u->last_seen ?? null,    // opcional
