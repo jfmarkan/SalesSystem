@@ -1,40 +1,36 @@
 <!-- src/views/SalesManagerProDashboardPrime.vue -->
 <template>
-	<div class="view-wrap full-bleed">
+	<div class="view-wrap full-bleed" style="--top-offset: 80px">
 		<div class="grid">
-			<!-- IZQ 2/12 · lista limpia, transparente, alto completo -->
+			<!-- IZQ: LISTA VENDEDORES -->
 			<aside class="col-12 md:col-2">
 				<div class="glass card-shadow panel aside">
 					<Listbox
 						v-model="selectedSeller"
 						:options="sellerItems"
 						optionValue="id"
-						optionLabel="displayName"
+						optionLabel="__displayName"
 						dataKey="id"
 						class="seller-listbox"
+						listStyle="max-height: 90vh"
 					>
 						<template #option="{ option }">
 							<div class="seller-item">
-								<div
-									:class="[
-										'avatar-ring',
-										option.teamId === 1 ? 'team-alpha' : 'team-beta',
-									]"
-								>
+								<div :class="['avatar-ring', teamClass(option)]">
 									<Avatar
-										v-if="option.photo"
-										:image="option.photo"
+										v-if="option.__photo"
+										:image="option.__photo"
 										class="avatar-img"
 										shape="circle"
 									/>
 									<Avatar
 										v-else
-										:label="initials(option.name)"
+										:label="initials(option.__displayName)"
 										class="avatar-initials"
 										shape="circle"
 									/>
 								</div>
-								<div class="seller-name">{{ option.displayName }}</div>
+								<div class="seller-name">{{ option.__displayName }}</div>
 							</div>
 						</template>
 						<template #empty><div class="empty">Keine Einträge.</div></template>
@@ -42,52 +38,33 @@
 				</div>
 			</aside>
 
-			<!-- DER 10/12 -->
+			<!-- DER -->
 			<section class="col-12 md:col-10">
-				<div class="grid">
-					<!-- Header controles -->
-					<div class="col-12">
-						<div class="glass card-shadow panel">
-							<div class="flex align-items-center justify-content-between gap-2">
-								<h3 class="m-0">Übersicht</h3>
-								<div class="flex align-items-center gap-2">
-									<SelectButton
-										v-model="dataType"
-										:options="typeOptions"
-										optionLabel="label"
-										optionValue="value"
-										:allowEmpty="false"
-									/>
-									<SelectButton
-										v-model="selectedPeriod"
-										:options="periodOptions"
-										optionLabel="label"
-										optionValue="value"
-										:allowEmpty="false"
-									/>
-									<Button
-										icon="pi pi-chevron-left"
-										class="p-button-rounded p-button-text"
-										@click="shiftPeriod(-1)"
-										:disabled="dataType === 'forecast' && periodOffset <= -12"
-									/>
-									<span class="pill"
-										><i class="pi pi-calendar mr-2" />{{ periodLabel }}</span
-									>
-									<Button
-										icon="pi pi-chevron-right"
-										class="p-button-rounded p-button-text"
-										@click="shiftPeriod(1)"
-										:disabled="dataType === 'forecast' && periodOffset >= 12"
-									/>
-								</div>
-							</div>
+				<div class="glass card-shadow panel header-strip">
+					<div class="flex align-items-center justify-content-between gap-2">
+						<h3 class="m-0">Übersicht</h3>
+						<div class="flex align-items-center gap-2">
+							<Button
+								icon="pi pi-chevron-left"
+								class="p-button-rounded p-button-text"
+								@click="shiftPeriod(-1)"
+							/>
+							<span class="pill"
+								><i class="pi pi-calendar mr-2" />{{ periodLabel }}</span
+							>
+							<Button
+								icon="pi pi-chevron-right"
+								class="p-button-rounded p-button-text"
+								@click="shiftPeriod(1)"
+							/>
 						</div>
 					</div>
+				</div>
 
-					<!-- 6 + 6 -->
-					<div class="col-12 md:col-6">
-						<div class="glass card-shadow panel">
+				<div class="grid">
+					<!-- Tabla de desvíos -->
+					<div class="col-12 md:col-8">
+						<div class="glass card-shadow panel tall-vh">
 							<div class="panel-head">
 								<h3>Abweichungsbegründungen</h3>
 								<div class="kpis flex align-items-center gap-2">
@@ -99,165 +76,99 @@
 								</div>
 							</div>
 
-							<template v-if="dataType === 'ventas'">
-								<DataTable
-									:value="visibleJustifications"
-									size="small"
-									responsiveLayout="scroll"
-									:rows="10"
-									:paginator="true"
-									:rowsPerPageOptions="[10, 20, 50]"
-									paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
-									currentPageReportTemplate="{first}–{last} von {totalRecords}"
-									class="no-bg-table"
-								>
-									<Column
-										field="date"
-										header="Datum"
-										:body="dateBody"
-										style="width: 120px"
-									/>
-									<Column field="client" header="Kunde" style="width: 160px" />
-									<Column field="reason" header="Grund" />
-									<Column
-										header="Status"
-										:body="statusBody"
-										style="width: 140px"
-									/>
-									<Column header="Frist" :body="termBody" style="width: 140px" />
-									<template #empty
-										><div class="empty">
-											Keine Daten für den Zeitraum.
-										</div></template
-									>
-								</DataTable>
-							</template>
-							<template v-else
-								><div class="empty p-3">
-									Dieser Bereich gilt für <strong>Vertrieb</strong>.
-								</div></template
+							<DataTable
+								:value="deviationsSorted"
+								responsiveLayout="scroll"
+								:rows="10"
+								:paginator="true"
+								paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+								currentPageReportTemplate="{first}–{last} von {totalRecords}"
+								class="table-plain table-flex roomy-rows"
+								:loading="isLoadingDevs"
+								@row-click="onDeviationRowClick"
 							>
-						</div>
-					</div>
+								<Column header="Typ" style="width: 140px">
+									<template #body="{ data: r }">
+										<span
+											v-if="String(r.type).toLowerCase() === 'forecast'"
+											class="pill-tag pill-forecast"
+											>Forecast</span
+										>
+										<span v-else class="pill-tag pill-ist">Ist</span>
+									</template>
+								</Column>
 
-					<div class="col-12 md:col-6">
-						<div class="glass card-shadow panel">
-							<div class="panel-head">
-								<h3>Profitcenter</h3>
-								<div class="breadcrumbs" v-if="selectedPC || selectedClient">
-									<Button class="p-button-text p-button-sm" @click="resetPC"
-										><i class="pi pi-home mr-2" />{{
-											selectedSellerObj?.displayName || '—'
-										}}</Button
-									>
-									<i class="pi pi-angle-right mx-2" v-if="selectedPC" />
-									<Button
-										v-if="selectedPC"
-										class="p-button-text p-button-sm"
-										@click="resetClient"
-										>{{ selectedPC.name }}</Button
-									>
-									<i class="pi pi-angle-right mx-2" v-if="selectedClient" />
-									<span v-if="selectedClient" class="crumb-current">{{
-										selectedClient.name
-									}}</span>
-								</div>
-							</div>
+								<Column header="Profitcenter" style="width: 280px">
+									<template #body="{ data: r }">
+										<span v-if="r.pcName">{{ r.pcName }}</span>
+									</template>
+								</Column>
 
-							<div v-if="!selectedPC" class="bars">
-								<div
-									v-for="pc in pcsAgg"
-									:key="pc.id"
-									class="bar-row"
-									:title="pcTitle(pc)"
-									@click="selectPC(pc)"
-								>
-									<div class="bar-label">
-										<span class="dot" :style="{ background: pc.color }" />{{
-											pc.name
-										}}
-									</div>
-									<div class="bar-track">
-										<div
-											class="bar-fill"
-											:style="{
-												width: pc.achievedPct + '%',
-												background: pc.color,
-											}"
+								<Column header="Delta" style="width: 160px">
+									<template #body="{ data: r }">
+										<span :class="Number(r.deltaAbs || 0) >= 0 ? 'pos' : 'neg'">
+											{{ fmtCurrency(Number(r.deltaAbs || 0)) }}
+										</span>
+									</template>
+								</Column>
+
+								<Column header="Plan" style="width: 130px">
+									<template #body="{ data: r }">
+										<span
+											v-if="hasPlan(r)"
+											class="p-tag p-tag-success p-tag-rounded"
+											>Plan</span
+										>
+										<span v-else class="p-tag p-tag-secondary p-tag-rounded"
+											>Kein Plan</span
+										>
+									</template>
+								</Column>
+
+								<Column header="Status" style="width: 160px">
+									<template #body="{ data: r }">
+										<span
+											v-if="isOverdue(r)"
+											class="p-tag p-tag-danger p-tag-rounded"
+											>Überfällig</span
+										>
+										<span
+											v-else
+											class="p-tag p-tag-rounded"
+											:class="r.justified ? 'p-tag-success' : 'p-tag-warning'"
+										>
+											{{ r.justified ? 'Begründet' : 'Offen' }}
+										</span>
+									</template>
+								</Column>
+
+								<Column header="" style="width: 120px">
+									<template #body="{ data: r }">
+										<Button
+											label="Ansehen"
+											class="p-button-text p-button-sm"
+											@click.stop="openDeviation(r)"
 										/>
-									</div>
-									<div class="bar-val">{{ pc.achievedPct }}%</div>
-								</div>
-								<div v-if="!pcsAgg.length" class="empty">
-									Keine Profitcenter vorhanden.
-								</div>
-							</div>
+									</template>
+								</Column>
 
-							<div v-else-if="!selectedClient">
-								<div class="subhead">
-									<strong>Kunden von {{ selectedPC.name }}</strong>
-								</div>
-								<DataTable
-									:value="selectedPC.clients"
-									size="small"
-									responsiveLayout="scroll"
-									class="no-bg-table"
-								>
-									<Column field="name" header="Kunde" />
-									<Column
-										field="sales"
-										header="Umsatz"
-										:body="currencyBody('sales')"
-										style="width: 160px"
-									/>
-									<Column
-										field="target"
-										header="Ziel"
-										:body="currencyBody('target')"
-										style="width: 160px"
-									/>
-									<Column
-										header="Abweichung"
-										:body="deltaBody"
-										style="width: 160px"
-									/>
-									<Column
-										header=""
-										:body="clientActionBody"
-										style="width: 120px"
-									/>
-								</DataTable>
-							</div>
-
-							<div v-else class="client-detail">
-								<div class="subhead">
-									<strong>{{ selectedClient.name }}</strong> — Detail
-								</div>
-								<ul class="bullets">
-									<li>
-										<i class="pi pi-dollar mr-2" />Umsatz:
-										<strong>{{ fmtCurrency(selectedClient.sales) }}</strong>
-									</li>
-									<li>
-										<i class="pi pi-bullseye mr-2" />Ziel:
-										<strong>{{ fmtCurrency(selectedClient.target) }}</strong>
-									</li>
-									<li>
-										<i class="pi pi-chart-line mr-2" />Trend (3M):
-										<strong>{{ trendLabel(selectedClient.trend3m) }}</strong>
-									</li>
-									<li>
-										<i class="pi pi-exclamation-triangle mr-2" />Abweichungen:
-										<strong>{{ selectedClient.deviations }}</strong>
-									</li>
-								</ul>
-							</div>
+								<template #empty>
+									<div class="empty">Keine Daten für den Zeitraum.</div>
+								</template>
+							</DataTable>
 						</div>
 					</div>
 
-					<!-- 4 + 4 + 4 -->
+					<!-- KPIs/otros -->
 					<div class="col-12 md:col-4">
-						<div class="glass card-shadow panel tall" @click="openExtraQuota">
+						<div class="glass card-shadow panel">
+							<div class="panel-head"><h3>Profitcenter</h3></div>
+							<div class="empty">
+								Profitcenter werden im nächsten Schritt geladen.
+							</div>
+						</div>
+
+						<div class="glass card-shadow panel">
 							<div class="kpi-head">
 								<h4>Zusatzquote</h4>
 								<Tag :value="extraQuotaPct + '%'" rounded />
@@ -265,9 +176,7 @@
 							<ProgressBar :value="extraQuotaPct" />
 							<div class="kpi-foot">Klicken für Analyse</div>
 						</div>
-					</div>
 
-					<div class="col-12 md:col-4">
 						<div class="glass card-shadow panel">
 							<div class="kpi-head"><h4>Begründungen</h4></div>
 							<div class="pairs">
@@ -276,18 +185,18 @@
 										><i
 											class="pi pi-check-circle text-success mr-2"
 										/>Fristgerecht</span
-									><span class="value">{{ kpiJust.inTerm }}</span>
+									>
+									<span class="value">{{ kpiJust.inTerm }}</span>
 								</div>
 								<div class="pair">
 									<span class="label"
 										><i class="pi pi-clock text-warn mr-2" />Verspätet</span
-									><span class="value">{{ kpiJust.outTerm }}</span>
+									>
+									<span class="value">{{ kpiJust.outTerm }}</span>
 								</div>
 							</div>
 						</div>
-					</div>
 
-					<div class="col-12 md:col-4">
 						<div class="glass card-shadow panel">
 							<div class="kpi-head"><h4>Aktionspläne</h4></div>
 							<div class="pairs">
@@ -296,13 +205,15 @@
 										><i
 											class="pi pi-check-circle text-success mr-2"
 										/>Erfüllt</span
-									><span class="value">{{ kpiPlans.done }}</span>
+									>
+									<span class="value">{{ kpiPlans.done }}</span>
 								</div>
 								<div class="pair">
 									<span class="label"
 										><i class="pi pi-times-circle text-danger mr-2" />Nicht
 										erfüllt</span
-									><span class="value">{{ kpiPlans.notDone }}</span>
+									>
+									<span class="value">{{ kpiPlans.notDone }}</span>
 								</div>
 							</div>
 						</div>
@@ -311,28 +222,176 @@
 			</section>
 		</div>
 
-		<!-- Dialog -->
+		<!-- MODAL -->
 		<Dialog
-			v-model:visible="showExtraQuota"
+			v-model:visible="showDeviationModal"
 			modal
-			:style="{ width: 'min(1100px, 95vw)' }"
-			:breakpoints="{ '960px': '95vw', '640px': '100vw' }"
-			header="Analyse der Zusatzquote"
+			appendTo="body"
+			:draggable="false"
+			:blockScroll="true"
+			:style="{ width: 'min(900px, 96vw)' }"
+			:breakpoints="{ '960px': '96vw', '640px': '100vw' }"
+			header="Abweichung · Detail"
 			class="glass-modal"
 		>
-			<div class="dialog-subtitle">
-				Verkäufer: <strong>{{ selectedSellerObj?.displayName }}</strong>
-			</div>
+			<template v-if="activeDeviation">
+				<div class="dev-header">
+					<div class="dev-title">
+						<i class="pi pi-sliders-h mr-2" />
+						<span>{{ activeDeviation.pcName || '—' }}</span>
+						<span class="sep-dot">·</span>
+						<span>{{ typeLabel(activeDeviation.type) }}</span>
+						<span class="sep-dot">·</span>
+						<span>{{ periodText(activeDeviation.year, activeDeviation.month) }}</span>
+					</div>
+					<div>
+						<span
+							v-if="isOverdue(activeDeviation)"
+							class="p-tag p-tag-danger p-tag-rounded"
+							>Überfällig</span
+						>
+						<span
+							v-else
+							class="p-tag p-tag-rounded"
+							:class="activeDeviation.justified ? 'p-tag-success' : 'p-tag-warning'"
+						>
+							{{ activeDeviation.justified ? 'Begründet' : 'Offen' }}
+						</span>
+					</div>
+				</div>
+
+				<div class="grid gap-3">
+					<div class="col-12 md:col-6">
+						<div class="inner glass card-shadow">
+							<h4 class="inner-title">Kennzahlen</h4>
+							<ul class="kv">
+								<li>
+									<span>Umsatz</span
+									><strong>{{ fmtCurrency(activeDeviation.sales) }}</strong>
+								</li>
+								<li>
+									<span>Budget</span
+									><strong>{{ fmtCurrency(activeDeviation.budget) }}</strong>
+								</li>
+								<li>
+									<span>Forecast</span
+									><strong>{{ fmtCurrency(activeDeviation.forecast) }}</strong>
+								</li>
+								<li>
+									<span>Delta</span>
+									<strong
+										:class="
+											(activeDeviation.deltaAbs ?? 0) >= 0 ? 'pos' : 'neg'
+										"
+									>
+										{{ fmtCurrency(activeDeviation.deltaAbs) }}
+										<small
+											>({{
+												Math.round(activeDeviation.deltaPct ?? 0)
+											}}%)</small
+										>
+									</strong>
+								</li>
+								<li>
+									<span>Status</span>
+									<strong>
+										<span v-if="isOverdue(activeDeviation)">Überfällig</span>
+										<span v-else>{{
+											activeDeviation.justified ? 'Begründet' : 'Offen'
+										}}</span>
+									</strong>
+								</li>
+							</ul>
+						</div>
+					</div>
+
+					<div class="col-12 md:col-6">
+						<div class="inner glass card-shadow">
+							<h4 class="inner-title">Begründung</h4>
+							<p
+								class="mono"
+								v-if="
+									activeDeviation.comment && activeDeviation.comment.trim().length
+								"
+							>
+								{{ activeDeviation.comment }}
+							</p>
+							<p v-else class="muted">Keine Begründung angegeben.</p>
+							<div
+								class="muted small"
+								v-if="activeDeviation.justAuthor || activeDeviation.justDate"
+							>
+								<i class="pi pi-user mr-1" v-if="activeDeviation.justAuthor" />{{
+									activeDeviation.justAuthor || ''
+								}}
+								<span
+									v-if="activeDeviation.justAuthor && activeDeviation.justDate"
+									class="mx-2"
+									>·</span
+								>
+								<i class="pi pi-calendar mr-1" v-if="activeDeviation.justDate" />{{
+									activeDeviation.justDate
+										? fmtDate(activeDeviation.justDate)
+										: ''
+								}}
+							</div>
+						</div>
+					</div>
+
+					<div class="col-12">
+						<div class="inner glass card-shadow">
+							<h4 class="inner-title">Aktionsplan</h4>
+							<p
+								v-if="
+									activeDeviation.plan &&
+									String(activeDeviation.plan).trim().length
+								"
+								class="mono"
+							>
+								<i class="pi pi-flag mr-2" />{{ activeDeviation.plan }}
+							</p>
+							<template
+								v-if="
+									Array.isArray(activeDeviation.actions) &&
+									activeDeviation.actions.length
+								"
+							>
+								<ul class="actions">
+									<li v-for="(a, i) in activeDeviation.actions" :key="i">
+										<i
+											:class="[
+												'pi',
+												a.done
+													? 'pi-check-circle text-success'
+													: 'pi-circle',
+											]"
+										/>
+										<span class="ml-2">{{ a.title || '—' }}</span>
+										<span class="muted ml-2" v-if="a.due"
+											>· Fällig: {{ fmtDate(a.due) }}</span
+										>
+										<span class="muted ml-2" v-if="a.desc">· {{ a.desc }}</span>
+									</li>
+								</ul>
+							</template>
+							<p v-else class="muted">Kein Aktionsplan vorhanden.</p>
+						</div>
+					</div>
+				</div>
+			</template>
+
+			<template #footer>
+				<Button label="Schließen" icon="pi pi-check" @click="showDeviationModal = false" />
+			</template>
 		</Dialog>
 	</div>
 </template>
 
 <script setup>
-/* English names & comments, UI in German */
+/* English code & comments; UI strings German */
 import { ref, computed, onMounted, watch } from 'vue'
 import Listbox from 'primevue/listbox'
 import Avatar from 'primevue/avatar'
-import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import DataTable from 'primevue/datatable'
@@ -342,219 +401,196 @@ import ProgressBar from 'primevue/progressbar'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 
-/* state */
+/* ========= STATE ========= */
 const sellers = ref([])
 const selectedSeller = ref(null)
-const selectedPC = ref(null)
-const selectedClient = ref(null)
 
-const dataType = ref('ventas')
-const selectedPeriod = ref('last_month')
+const showDeviationModal = ref(false)
+const activeDeviation = ref(null)
+const isLoadingDevs = ref(false)
+const deviations = ref([])
+
 const periodOffset = ref(0)
-const showExtraQuota = ref(false)
+const periodLabel = computed(() => {
+  const [s] = monthRangeFromOffset(periodOffset.value)
+  return `${labelMonth(s)} ${s.getFullYear()}`
+})
 
-/* JUSTIFICATIONS from server (drives the table) */
-const justificationsRaw = ref([])   // <- se llena por API
-const isLoadingJust = ref(false)
-const loadErrorJust = ref(null)
+/* ========= KPIs ========= */
+const kpiJust = computed(() => {
+  const a = deviations.value || []
+  const today = new Date()
+  const curY = today.getFullYear()
+  const curM = today.getMonth() + 1
+  const day  = today.getDate()
+  let inTerm = 0, outTerm = 0
+  for (const d of a) {
+    const justified = !!d.justified
+    const isThisMonth = Number(d.year) === curY && Number(d.month) === curM
+    const overdue = !justified && isThisMonth && day > 10
+    if (justified) inTerm++
+    else outTerm++ // incluye Überfällig
+  }
+  return { inTerm, outTerm }
+})
+const kpiPlans = computed(() => ({ done: 0, notDone: 0 }))
+const extraQuotaPct = computed(() => 0)
 
-/* options */
-const typeOptions = [
-  { label: 'Vertrieb', value: 'ventas' },
-  { label: 'Forecast', value: 'forecast' },
-]
-const periodOptions = computed(() =>
-  dataType.value === 'ventas'
-    ? [
-        { label: 'Letzter Monat', value: 'last_month' },
-        { label: 'YTD bis letzten Monat', value: 'ytd_until_last' },
-      ]
-    : [{ label: 'Nächste 6 Monate (ohne aktuellen)', value: 'next_6' }],
-)
-
-/* names & sorting */
-function splitName(full = '') {
-  const p = String(full).trim().split(/\s+/).filter(Boolean)
-  return p.length <= 1 ? { first: p[0] || '', last: '' } : { first: p.slice(0, -1).join(' '), last: p[p.length - 1] }
+/* ========= HELPERS ========= */
+function labelMonth(d) { return d.toLocaleString('de-DE', { month: 'long' }).replace(/^./, m => m.toUpperCase()) }
+function monthRangeFromOffset(off = 0) {
+  const now = new Date()
+  const base = new Date(now.getFullYear(), now.getMonth() + off, 1)
+  const start = new Date(base.getFullYear(), base.getMonth(), 1)
+  const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999)
+  return [start, end]
 }
-function displayName(full = '') { const { first, last } = splitName(full); return last ? `${last}, ${first}` : first }
-function compareNachname(aName = '', bName = '') {
-  const a = splitName(aName), b = splitName(bName)
-  const c = a.last.localeCompare(b.last, 'de', { sensitivity: 'base' })
-  return c !== 0 ? c : a.first.localeCompare(b.first, 'de', { sensitivity: 'base' })
+function fmtDate(iso) { const d = new Date(String(iso)); return isNaN(d) ? '—' : d.toLocaleDateString('de-DE') }
+function fmtCurrency(n) { return Number(n || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }
+function initials(n = '') { return n.split(' ').filter(Boolean).map(w => w[0]?.toUpperCase()).slice(0, 2).join('') }
+function periodText(y, m) { const date = new Date(Number(y), Number(m) - 1, 1); return `${labelMonth(date)} ${date.getFullYear()}` }
+function typeLabel(type) { return String(type||'').toLowerCase() === 'forecast' ? 'Forecast' : 'Ist' }
+function hasPlan(r){ return !!r?.plan || (Array.isArray(r?.actions) && r.actions.length > 0) }
+function isOverdue(row) {
+  const justified = !!row?.justified
+  const today = new Date()
+  const curY = today.getFullYear()
+  const curM = today.getMonth() + 1
+  const day  = today.getDate()
+  const isThisMonth = Number(row?.year) === curY && Number(row?.month) === curM
+  return !justified && isThisMonth && day > 10
+}
+
+/* ========= TEAM NORMALIZATION ========= */
+function getTeamId(u) {
+  const candidates = [
+    u?.team_id,
+    u?.teamId,
+    u?.team?.id,
+    Array.isArray(u?.teams) ? u.teams[0]?.id : undefined,
+    Array.isArray(u?.team_members) ? u.team_members[0]?.team_id : undefined,
+    Array.isArray(u?.memberships) ? u.memberships[0]?.team_id : undefined,
+  ].filter(v => v !== undefined && v !== null)
+  for (const c of candidates) {
+    const n = Number(c)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return NaN
+}
+function teamClass(u) {
+  const tid = Number(u?.__teamId ?? getTeamId(u))
+  if (Number.isFinite(tid)) return (tid % 2) ? 'team-alpha' : 'team-beta' // o mapea 1/2 directo si querés
+  const id = Number(u?.id ?? 0)
+  return id % 2 ? 'team-alpha' : 'team-beta'
+}
+
+/* ========= SELLERS ADAPTER ========= */
+function displayNameFromApiUser(u = {}) {
+  const name = u.name || [u.first_name ?? u.firstName, u.last_name ?? u.lastName].filter(Boolean).join(' ').trim()
+  const p = String(name || '').trim().split(/\s+/).filter(Boolean)
+  if (p.length <= 1) return p[0] || ''
+  const last = p[p.length - 1]
+  const first = p.slice(0, -1).join(' ')
+  return `${last}, ${first}`
 }
 const sellerItems = computed(() => {
-  const arr = sellers.value.map(s => ({ ...s, displayName: displayName(s.name) }))
-  arr.sort((a, b) => compareNachname(a.name, b.name))
+  const arr = Array.isArray(sellers.value) ? sellers.value.slice() : []
+  for (const u of arr) {
+    u.__displayName = displayNameFromApiUser(u)
+    u.__photo = u.avatar_url ?? u.photo_url ?? u.profile_photo_url ?? u.photo ?? null
+    u.__teamId = getTeamId(u) // normalizado
+  }
+  arr.sort((a, b) => String(a.__displayName).localeCompare(String(b.__displayName), 'de', { sensitivity: 'base' }))
   return arr
 })
-const selectedSellerObj = computed(() => sellerItems.value.find(s => s.id === selectedSeller.value) || null)
 
-/* dashboard computed (uses justificationsRaw) */
-const pcsAgg = computed(() => selectedSellerObj.value?.profitCenters ?? [])
-const justificationsFiltered = computed(() => {
-  // Si el server ignoró el rango, filtramos acá por las mismas fechas
-  const all = Array.isArray(justificationsRaw.value) ? justificationsRaw.value : []
-  if (dataType.value !== 'ventas') return []
-  if (selectedPeriod.value === 'last_month') {
-    const [s, e] = monthRangeFromOffset(-1 + periodOffset.value)
-    return all.filter(a => inRange(a.date, s, e))
-  }
-  if (selectedPeriod.value === 'ytd_until_last') {
-    const [s, e] = ytdUntilLastWithOffset(periodOffset.value)
-    return all.filter(a => inRange(a.date, s, e))
-  }
-  return all
-})
-const visibleJustifications = computed(() => justificationsFiltered.value)
-const kpiJust = computed(() => {
-  const a = justificationsFiltered.value
-  return { inTerm: a.filter(x => x.inTerm).length, outTerm: a.filter(x => !x.inTerm).length }
-})
-const kpiPlans = computed(() => selectedSellerObj.value?.plans ?? { done: 0, notDone: 0 })
-const extraQuota = computed(() => selectedSellerObj.value?.extraQuota ?? { meta: 0, reached: 0 })
-const extraQuotaPct = computed(() => { const { meta, reached } = extraQuota.value; return meta > 0 ? Math.min(100, Math.round((reached / meta) * 100)) : 0 })
-const periodLabel = computed(() => {
-  if (dataType.value === 'ventas') {
-    if (selectedPeriod.value === 'last_month') { const [s] = monthRangeFromOffset(-1 + periodOffset.value); return `${labelMonth(s)} ${s.getFullYear()}` }
-    const [s, e] = ytdUntilLastWithOffset(periodOffset.value)
-    return `YTD: ${labelMonth(new Date(s.getFullYear(), 0, 1))} ${s.getFullYear()} – ${labelMonth(e)} ${e.getFullYear()}`
-  }
-  const [s, e] = next6MonthsWindow(periodOffset.value)
-  return `${labelMonth(s)} ${s.getFullYear()} → ${labelMonth(e)} ${e.getFullYear()}`
+/* ========= TABLE ORDER ========= */
+const deviationsSorted = computed(() => {
+  return [...(deviations.value || [])].sort((a, b) =>
+    String(a.pcCode || '').localeCompare(String(b.pcCode || ''), 'de', { sensitivity: 'base' })
+  )
 })
 
-/* actions */
-function selectPC(pc) { selectedPC.value = pc; selectedClient.value = null }
-function resetPC() { selectedPC.value = null; selectedClient.value = null }
-function resetClient() { selectedClient.value = null }
-function openExtraQuota() { showExtraQuota.value = true }
-function shiftPeriod(d) { periodOffset.value += d }
+/* ========= UI Actions ========= */
+function shiftPeriod(delta) { periodOffset.value += delta }
+function onDeviationRowClick(e) { openDeviation(e?.data) }
+function openDeviation(row) { if (!row) return; activeDeviation.value = { ...row }; showDeviationModal.value = true }
+function openTestModal() {
+  activeDeviation.value = {
+    pcName: 'PC Demo', type: 'forecast',
+    year: new Date().getFullYear(), month: new Date().getMonth() + 1,
+    sales: 100000, budget: 120000, forecast: 110000,
+    deltaAbs: -10000, deltaPct: -8.3, justified: false,
+    comment: 'Beispielkommentar', justAuthor: 'Max Mustermann', justDate: new Date().toISOString(),
+    plan: 'Umsatz durch Kampagne Q4 steigern',
+    actions: [{ title: 'Kampagne starten', desc: 'E-Mail + Ads', due: '2025-11-05', done: false }],
+  }
+  showDeviationModal.value = true
+}
 
-/* helpers */
-function initials(n = '') { return n.split(' ').filter(Boolean).map(w => w[0]?.toUpperCase()).slice(0, 2).join('') }
-function dateBody(r) { return fmtDate(r.date) }
-function statusBody(r) { const sev = r.justified ? 'success' : 'warning'; const txt = r.justified ? 'Begründet' : 'Offen'; return `<span class="p-tag p-tag-${sev} p-tag-rounded">${txt}</span>` }
-function termBody(r) { const sev = r.inTerm ? 'success' : 'danger'; const txt = r.inTerm ? 'Fristgerecht' : 'Verspätet'; return `<span class="p-tag p-tag-${sev} p-tag-rounded">${txt}</span>` }
-function currencyBody(f) { return (r) => fmtCurrency(r[f]) }
-function deltaBody(r) { const d = r.sales - r.target; const cls = d >= 0 ? 'pos' : 'neg'; return `<span class="${cls}">${fmtCurrency(d)}</span>` }
-function clientActionBody() { return `<button class="p-button p-button-text p-button-sm link-btn">Ansehen</button>` }
-
-function fmtCurrency(n) { return Number(n || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) }
-function fmtDate(iso) { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('de-DE') }
-function trendLabel(v) { return v > 0 ? 'Aufwärts' : v < 0 ? 'Abwärts' : 'Stabil' }
-function inRange(iso, s, e) { const d = new Date(iso); return !isNaN(d) && d >= s && d <= e }
-function labelMonth(d) { return d.toLocaleString('de-DE', { month: 'long' }).replace(/^./, m => m.toUpperCase()) }
-function monthRangeFromOffset(rel) { const now = new Date(); const y = now.getFullYear(); const m = now.getMonth() + rel; const s = new Date(y, m, 1); const e = new Date(y, m + 1, 0, 23, 59, 59, 999); return [s, e] }
-function ytdUntilLastWithOffset(off) { const [, e] = monthRangeFromOffset(-1 + off); const s = new Date(e.getFullYear(), 0, 1); const eAdj = new Date(e.getFullYear(), e.getMonth() + 1, 0, 23, 59, 59, 999); return [s, eAdj] }
-function next6MonthsWindow(off) { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth() + 1 + off, 1); const e = new Date(s.getFullYear(), s.getMonth() + 6, 0, 23, 59, 59, 999); return [s, e] }
-function pcTitle(pc) { return `${pc.name}: ${pc.achievedPct}%` }
-
-/* API helpers */
-function extractRows(payload) {
-  const cands = [payload?.data?.data, payload?.data, Array.isArray(payload) ? payload : null]
-  for (const c of cands) if (Array.isArray(c)) return c
+/* ========= API Utils ========= */
+function extractArrayAny(resp) {
+  const root = resp?.data ?? resp
+  if (Array.isArray(root)) return root
+  if (Array.isArray(root?.data)) return root.data
   return []
 }
-function normalizeRoleId(u) {
-  const direct = Number(u.role_id ?? u.roleId)
-  if (direct) return direct
-  if (Array.isArray(u.roles)) {
-    const r = u.roles.find(r => Number(r.id ?? r.role_id))
-    if (r) return Number(r.id ?? r.role_id)
-  }
-  return Number(u.role?.id ?? 0)
-}
-function joinName(u) {
-  const f = (u.first_name ?? u.firstName ?? '').toString().trim()
-  const l = (u.last_name ?? u.lastName ?? '').toString().trim()
-  const n = (u.name ?? '').toString().trim()
-  return (f || l) ? `${f} ${l}`.trim() : n
-}
-function pickTeamId(u) {
-  const flat = u.team_id ?? u.teamId
-  const arr = (u.teams ?? u.team ?? [])[0]
-  const arrId = arr ? (arr.id ?? arr.team_id ?? arr.teamId) : undefined
-  const id = Number(flat ?? arrId ?? 0)
-  return id || ((Number(u.id) % 2 === 0) ? 2 : 1)
-}
-function pickPhoto(u) { return u.avatar_url ?? u.photo_url ?? u.profile_photo_url ?? u.photo ?? null }
 
-/* Load sellers (role_id=4) */
+/* ========= API Calls ========= */
 async function loadSellers() {
   try {
     await ensureCsrf()
-    const { data } = await api.get('/api/sales-force/users', { params: { per_page: 1000, role_id: 4 } })
-    const rows = extractRows(data).filter(u => normalizeRoleId(u) === 4)
-    sellers.value = rows.map(u => ({
-      id: Number(u.id),
-      name: joinName(u),
-      teamId: pickTeamId(u),
-      photo: pickPhoto(u),
-      email: u.email ?? null,
-      profitCenters: u.profitCenters ?? [],
-      plans: u.plans ?? { done: 0, notDone: 0 },
-      extraQuota: u.extraQuota ?? { meta: 0, reached: 0 },
-      opportunities: u.opportunities ?? [],
-    })).sort((a, b) => compareNachname(a.name, b.name))
-    selectedSeller.value = sellers.value[0]?.id ?? null
+    // Back ya filtra: role_id=4, disabled=0, y resuelve team_id por team_members
+    const { data } = await api.get('/api/sales-force/users', { params: { per_page: 1000 } })
+    const rows = Array.isArray(data) ? data : []
+    // Defensa extra si el back cambia
+    const filtered = rows.filter(u => Number(u.role_id) === 4 && Number(u.disabled) === 0)
+    sellers.value = filtered
+    if (!selectedSeller.value && filtered.length) selectedSeller.value = filtered[0].id
   } catch {
-    sellers.value = []; selectedSeller.value = null
+    sellers.value = []
+    selectedSeller.value = null
   }
 }
 
-/* Load JUSTIFICATIONS for selected user + period */
-function normalizeDeviation(d) {
-  return {
-    id: Number(d.id ?? d.deviation_id ?? Math.random()*1e9),
-    date: d.date ?? d.created_at ?? d.createdAt ?? d.occurred_at ?? d.updated_at ?? new Date().toISOString(),
-    client: d.client_name ?? d.client?.name ?? d.customer?.name ?? d.client ?? '—',
-    reason: d.reason ?? d.message ?? d.comment ?? '',
-    justified: Boolean(d.justified ?? d.is_justified ?? d.status === 'justified'),
-    inTerm: Boolean(d.in_term ?? d.inTerm ?? d.on_time),
-  }
-}
-function periodParams() {
-  if (dataType.value !== 'ventas') return {}
-  if (selectedPeriod.value === 'last_month') {
-    const [s, e] = monthRangeFromOffset(-1 + periodOffset.value)
-    return { from: s.toISOString().slice(0,10), to: e.toISOString().slice(0,10) }
-  }
-  if (selectedPeriod.value === 'ytd_until_last') {
-    const [s, e] = ytdUntilLastWithOffset(periodOffset.value)
-    return { from: s.toISOString().slice(0,10), to: e.toISOString().slice(0,10) }
-  }
-  return {}
-}
-async function loadJustifications() {
-  if (!selectedSeller.value || dataType.value !== 'ventas') { justificationsRaw.value = []; return }
-  isLoadingJust.value = true; loadErrorJust.value = null
+async function loadDeviationsForMonth() {
+  const uid = selectedSeller.value
+  if (!uid) { deviations.value = []; return }
+  const [start] = monthRangeFromOffset(periodOffset.value)
+  const year = start.getFullYear()
+  const month = start.getMonth() + 1
+
+  isLoadingDevs.value = true
   try {
     await ensureCsrf()
-    const params = { user_id: selectedSeller.value, ...periodParams() }
-    const { data } = await api.get('/api/deviations', { params })
-    const rows = extractRows(data)
-    // si el backend no filtró por user, filtramos client-side con varias llaves comunes
-    const byUser = rows.filter(d => {
-      const uid = Number(d.user_id ?? d.userId ?? d.sales_rep_id ?? d.salesRepId ?? d.owner_id ?? d.ownerId)
-      return uid === Number(selectedSeller.value)
+    const { data } = await api.get('/api/deviations/by-user-month', {
+      params: { user_id: uid, year, month },
     })
-    const base = byUser.length ? byUser : rows
-    justificationsRaw.value = base.map(normalizeDeviation)
-  } catch (e) {
-    loadErrorJust.value = 'Fehler beim Laden der Abweichungen.'
-    justificationsRaw.value = []
+    deviations.value = Array.isArray(data) ? data : []
+  } catch {
+    deviations.value = []
   } finally {
-    isLoadingJust.value = false
+    isLoadingDevs.value = false
   }
 }
 
-/* wires */
-onMounted(loadSellers)
-watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustifications, { immediate: true })
+/* ========= WIRES ========= */
+onMounted(async () => {
+  await loadSellers()
+  await loadDeviationsForMonth()
+  // Debug opcional
+  // console.table((sellers.value || []).map(u => ({ id: u.id, team_id: u.team_id, __teamId: getTeamId(u) })))
+})
+watch([selectedSeller, periodOffset], () => { loadDeviationsForMonth() })
 </script>
 
 <style scoped>
+/* Overlay modal arriba de todo */
+:deep(.p-dialog-mask) {
+	z-index: 10010;
+}
+
+/* Full-bleed */
 .full-bleed {
 	width: 100vw;
 	margin-left: calc(50% - 50vw);
@@ -566,6 +602,7 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 	box-sizing: border-box;
 }
 
+/* Glass */
 .glass {
 	background: rgba(255, 255, 255, 0.45);
 	border: 1px solid rgba(255, 255, 255, 0.35);
@@ -589,38 +626,43 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 .panel {
 	padding: 10px;
 }
+.header-strip {
+	margin-bottom: 12px;
+}
 
-/* ASIDE fijo y alto completo */
+/* Aside */
 .aside {
 	position: sticky;
-	top: 70px;
-	height: calc(100vh - 70px - 16px);
+	top: var(--top-offset, 80px);
+	height: calc(100vh - var(--top-offset, 80px) - 16px);
 	display: flex;
 	flex-direction: column;
+	min-height: 0;
 }
-/* ✅ La clase está en el MISMO nodo que .p-listbox */
-:deep(.p-listbox.seller-listbox){
-  display:flex !important;
-  flex-direction:column !important;
-  flex-wrap: wrap !important;
-  height:auto !important;
-  background:transparent !important;
-  border:0 !important;
-  box-shadow:none !important;
+.seller-listbox {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: 100%;
 }
-
-:deep(.p-listbox.seller-listbox .p-listbox-list-wrapper){
-  max-height:none !important;
-  height:80vh !important;
+:deep(.p-listbox.seller-listbox) {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
 }
-
-@media (prefers-color-scheme: dark) {
-	:deep(.p-listbox.seller-listbox .p-listbox-item.p-highlight) {
-		background: rgba(255, 255, 255, 0.08) !important;
-	}
+:deep(.p-listbox.seller-listbox .p-listbox-list-wrapper) {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+	height: 100%;
+	overflow: auto;
 }
-
-/* item lista */
+:deep(.p-listbox.seller-listbox .p-listbox-list) {
+	max-height: none;
+}
 .seller-item {
 	display: flex;
 	align-items: center;
@@ -632,7 +674,7 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 	font-weight: 500;
 }
 
-/* avatar + colores por team */
+/* Avatar + ring */
 .avatar-ring {
 	width: 42px;
 	height: 42px;
@@ -648,12 +690,16 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 .team-beta {
 	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
 }
-.avatar-img {
-	width: 100%;
-	height: 100%;
-	border-radius: 999px;
-	background: #111;
+
+/* Quitar fondo gris default del Avatar (imagen o iniciales) */
+:deep(.p-avatar.avatar-img),
+:deep(.p-avatar.avatar-initials) {
+	background: transparent !important;
+	border: 0 !important;
 }
+
+/* Contenido del avatar transparente, el color lo da el ring */
+.avatar-img,
 .avatar-initials {
 	width: 100%;
 	height: 100%;
@@ -664,13 +710,43 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 	align-items: center;
 	justify-content: center;
 }
-.team-alpha .avatar-initials {
-	background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
+
+/* Panel alto */
+.tall-vh {
+	height: 82vh;
 }
-.team-beta .avatar-initials {
-	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
+.table-flex :deep(.p-datatable-wrapper) {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+	overflow: auto;
 }
 
+/* Pills Typ */
+.pill-tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.25rem 0.6rem;
+	border-radius: 999px;
+	font-weight: 700;
+	font-size: 0.85rem;
+	line-height: 1;
+}
+.pill-forecast {
+	background: #d8a406;
+	color: #000;
+} /* amarillo */
+.pill-ist {
+	background: #456287;
+	color: #fff;
+} /* azul */
+
+.panel-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 6px;
+}
 .pill {
 	display: inline-flex;
 	align-items: center;
@@ -686,65 +762,8 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 .mx-2 {
 	margin: 0 0.5rem;
 }
-
-/* tablas / barras */
-.no-bg-table :deep(.p-datatable-wrapper),
-.no-bg-table :deep(.p-datatable-table) {
-	background: transparent;
-}
-.bars {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	padding: 10px;
-}
-.bar-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	cursor: pointer;
-}
-.bar-label {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	font-weight: 700;
-	flex: 0 0 30%;
-}
-.dot {
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-}
-.bar-track {
-	flex: 1 1 auto;
-	height: 12px;
-	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.06);
-	overflow: hidden;
-}
-.bar-fill {
-	height: 100%;
-	border-radius: 999px;
-	transition: width 0.35s ease;
-}
-.bar-val {
-	width: 56px;
-	text-align: right;
-	font-weight: 800;
-	opacity: 0.8;
-}
-.subhead {
-	padding: 8px 12px;
-	font-weight: 700;
-}
-
-/* KPIs */
-.panel-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 6px;
+.sep {
+	opacity: 0.55;
 }
 .kpi-head {
 	display: flex;
@@ -776,24 +795,85 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 .text-danger {
 	color: #e11d48;
 }
-.tall {
-	min-height: 300px;
-}
-
-/* dialog */
-.glass-modal :deep(.p-dialog-content) {
-	background: transparent;
-}
-.dialog-subtitle {
-	margin-bottom: 10px;
-	opacity: 0.85;
-}
-
-/* misc */
 .empty {
 	text-align: center;
 	opacity: 0.75;
 	padding: 12px;
+}
+
+/* Modal visuals */
+.glass-modal :deep(.p-dialog-content) {
+	background: transparent;
+}
+.dev-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+.dev-title {
+	font-weight: 800;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.sep-dot {
+	opacity: 0.6;
+	margin: 0 6px;
+}
+.inner {
+	padding: 12px;
+	border-radius: 12px;
+}
+.inner-title {
+	margin: 0 0 8px 0;
+	font-size: 1rem;
+	font-weight: 800;
+}
+.kv {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.kv li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.kv li span {
+	opacity: 0.8;
+}
+.kv li strong small {
+	opacity: 0.7;
+	font-weight: 600;
+	margin-left: 6px;
+}
+.mono {
+	white-space: pre-wrap;
+	font-family:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+		monospace;
+}
+.muted {
+	opacity: 0.75;
+}
+.small {
+	font-size: 0.9rem;
+}
+.actions {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.ml-2 {
+	margin-left: 0.5rem;
 }
 .pos {
 	color: #059669;
@@ -801,13 +881,42 @@ watch([selectedSeller, dataType, selectedPeriod, periodOffset], loadJustificatio
 .neg {
 	color: #e11d48;
 }
-.link-btn {
-	cursor: pointer;
-	color: var(--primary-color, #3b82f6);
-	background: transparent;
-	border: none;
+</style>
+
+<!-- NO SCOPED: tabla realmente transparente -->
+<style>
+.table-plain .p-datatable-wrapper,
+.table-plain table,
+.table-plain .p-datatable-header,
+.table-plain .p-datatable-footer,
+.table-plain .p-paginator,
+.table-plain thead > tr > th,
+.table-plain tbody > tr > td {
+	background-color: transparent !important;
 }
-.sep {
-	opacity: 0.55;
+.table-plain thead > tr > th {
+	border: 0;
+	color: inherit;
+}
+.table-plain tbody > tr > td {
+	color: inherit;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+.table-plain tbody > tr:hover {
+	background-color: rgba(0, 0, 0, 0.04);
+}
+@media (prefers-color-scheme: dark) {
+	.table-plain tbody > tr > td {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	}
+	.table-plain tbody > tr:hover {
+		background-color: rgba(255, 255, 255, 0.06);
+	}
+}
+.table-plain tbody > tr > td {
+	padding: 0.9rem 0.75rem;
+}
+.table-plain thead > tr > th {
+	padding: 0.85rem 0.75rem;
 }
 </style>

@@ -77,7 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('deviations')->group(function () {
         Route::get('/',            [DeviationController::class, 'index']);
-        Route::post('/run',        [DeviationController::class, 'runForMe']);
+        Route::get('/by-user-month', [DeviationController::class, 'byUserAndMonth']);
         Route::put('/{id}/justify',[DeviationController::class, 'justify']);
     });
 

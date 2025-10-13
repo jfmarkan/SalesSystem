@@ -147,11 +147,11 @@ function normalize(list) {
 }
 function mapType(t) {
     const s = String(t || '').toLowerCase()
-    if (['res', 'reservation', 'class', 'tee', 'tee_time'].includes(s)) return 'class'
-    if (['torneo', 'tournament', 'event'].includes(s)) return 'tournament'
-    if (['mag', 'magazine', 'revista'].includes(s)) return 'magazine'
-    if (['health', 'fisio', 'physio', 'kine', 'kinesiologia', 'kinesiology'].includes(s))
-        return 'health'
+    if (['detection'].includes(s)) return 'detection'
+    if (['torneo', 'interview', 'event'].includes(s)) return 'interview'
+    if (['mag', 'repoting', 'revista'].includes(s)) return 'repoting'
+    if (['forecasting', 'fisio', 'physio', 'kine', 'kinesiologia', 'kinesiology'].includes(s))
+        return 'forecasting'
     return 'class'
 }
 async function fetchEvents() {
@@ -167,28 +167,28 @@ async function fetchEvents() {
             {
                 date: `${ym}-04`,
                 type: 'detection',
-                title: 'Reporting',
+                title: 'Abweichungsanalyse',
             },
             {
                 date: `${ym}-10`,
-                type: 'magazine',
+                type: 'repoting',
                 title: 'Reporting',
             },
             {
                 date: `${ym}-15`,
-                type: 'health',
+                type: 'forecasting',
                 title: 'Forecasting',
             },
             {
                 date: `${ym}-17`,
-                type: 'tournament',
+                type: 'interview',
                 title: 'Controlling Gesprächt',
                 start: '09:45',
             },
             {
                 date: `${ym}-18`,
                 type: 'chota',
-                title: 'Controlling Gesprächt',
+                title: 'Aktion Plan',
             },
 
         ])
@@ -228,16 +228,16 @@ function closeDay() {
 /* UI helpers */
 function badgeClass(t) {
     if (t === 'detection') return 'badge--detection'
-    if (t === 'tournament') return 'badge--tournament'
-    if (t === 'magazine') return 'badge--magazine'
-    if (t === 'health') return 'badge--health'
+    if (t === 'interview') return 'badge--interview'
+    if (t === 'repoting') return 'badge--repoting'
+    if (t === 'forecasting') return 'badge--forecasting'
     return ''
 }
 function iconFor(t) {
     if (t === 'detection') return 'pi-calendar'
-    if (t === 'tournament') return 'pi-comment'
-    if (t === 'magazine') return 'pi-book'
-    if (t === 'health') return 'pi-chart-scatter'
+    if (t === 'interview') return 'pi-comment'
+    if (t === 'repoting') return 'pi-book'
+    if (t === 'forecasting') return 'pi-chart-scatter'
     return 'pi-circle'
 }
 function short(s) {
@@ -355,7 +355,7 @@ function short(s) {
 }
 
 /* variants (colores) */
-.badge--tournament {
+.badge--interview {
     color: #799F52;
     background: rgba(22, 163, 74, 0.14);
     border-color: rgba(22, 163, 74, 0.45);
@@ -366,12 +366,12 @@ function short(s) {
     border-color: rgba(239, 68, 68, 0.45);
 }
 
-.badge--magazine {
+.badge--repoting {
     color: #F79520;
     background: rgba(245, 158, 11, 0.16);
     border-color: rgba(245, 158, 11, 0.5);
 }
-.badge--health {
+.badge--forecasting {
     color: #0CEBDF;
     background: rgba(59, 130, 246, 0.14);
     border-color: rgba(59, 130, 246, 0.45);
@@ -487,7 +487,7 @@ function short(s) {
 }
 
 /* drawer color chips for icon box */
-.ic.badge--tournament {
+.ic.badge--interview {
     color: #16a34a;
     background: rgba(22, 163, 74, 0.15);
     border-color: rgba(22, 163, 74, 0.35);
@@ -498,12 +498,12 @@ function short(s) {
     border-color: rgba(239, 68, 68, 0.35);
     
 }
-.ic.badge--magazine {
+.ic.badge--repoting {
     color: #f59e0b;
     background: rgba(245, 158, 11, 0.18);
     border-color: rgba(245, 158, 11, 0.45);
 }
-.ic.badge--health {
+.ic.badge--forecasting {
     color: #3b82f6;
     background: rgba(59, 130, 246, 0.15);
     border-color: rgba(59, 130, 246, 0.35);
