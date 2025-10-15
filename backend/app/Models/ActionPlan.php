@@ -12,9 +12,6 @@ class ActionPlan extends Model
         'deviation_id',
         'user_id',
         'objective',
-    ];
-
-    protected $casts = [
         'is_completed' => 'boolean',
     ];
 

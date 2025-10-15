@@ -1,10 +1,4 @@
 <?php
-// app/Console/Commands/Concerns/ImportsErpSales.php
-//
-// Change:
-// - Keep full precision while summing.
-// - Round ONLY when upserting to DB (default 2 decimals).
-// - Everything else stays the same.
 
 namespace App\Console\Commands\Concerns;
 
@@ -12,7 +6,6 @@ use Illuminate\Support\Facades\DB;
 
 trait ImportsErpSales
 {
-    /** Final rounding decimals (adjust if needed) */
     protected int $roundDecimals = 2;
 
     protected function runImport(string $from, bool $dryRun = false, string $source = 'manual', bool $print = false, int $printMax = 50): array
@@ -26,8 +19,6 @@ trait ImportsErpSales
             $pc3 = strtoupper(substr(trim((string)$r->profit_center_code), 0, 3));
             $cpcMap["{$cg5}|{$pc3}"] = (int)$r->id;
         }
-
-        // SQL (REAL + FUTURE) via Partner→CC, IsCustomer_0004=1, m³ vs UOM by PC, CompanyNumberInt<=20000
         $sql = <<<SQL
 DECLARE @from DATE = ?;
 WITH NowD AS (

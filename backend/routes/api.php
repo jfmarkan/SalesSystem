@@ -19,6 +19,8 @@ use App\Http\Controllers\UserAdministrationController;
 use App\Http\Controllers\UserDetailController;
 use App\Http\Controllers\ErpImportController;
 use App\Http\Controllers\DeviationDetectController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\ActionItemController;
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
@@ -31,6 +33,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/erp/manual-sales-import', [ErpImportController::class, 'manual']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/calendar/events', [CalendarController::class, 'events']);
+    Route::patch('/action-items/{action_item}', [ActionItemController::class, 'update']);
     Route::get('/unit-conversions/by-pc', [DashboardController::class, 'unitsByPc']);
     Route::get('/extra/portfolio', [ExtraQuotaController::class, 'portfolio']);
     Route::get('/profit-centers/{code}/extra-portfolio', [ExtraQuotaController::class, 'pcPortfolio']);

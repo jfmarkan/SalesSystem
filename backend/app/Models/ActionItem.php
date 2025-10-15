@@ -6,18 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class ActionItem extends Model
 {
-    protected $table = 'action_items';
-
-    protected $fillable = [
-        'action_plan_id',
-        'title',
-        'description',
-        'due_date',
-    ];
+    protected $fillable = ['action_plan_id','title','description','due_date','is_completed'];
 
     protected $casts = [
-        'due_date' => 'date',
         'is_completed' => 'boolean',
+        'due_date'     => 'date:Y-m-d',
     ];
 
     public function plan()
