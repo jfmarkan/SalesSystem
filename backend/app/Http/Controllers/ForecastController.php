@@ -394,4 +394,185 @@ public function saveSeries(Request $request)
         if ($base == 0.0) return 0.0; // avoid NaN/INF; return 0% when baseline is zero
         return ($diff / $base) * 100.0;
     }
+
+    // GET /api/forecast/series-table?clientId=&profitCenterId=
+public function getSeriesTable(Request $request)
+{
+    $user = $request->user();
+    if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
+
+    $data = $request->validate([
+        'clientId'       => 'required|integer',
+        'profitCenterId' => 'required|integer',
+    ]);
+    $clientId = (int) $data['clientId'];
+    $pcId     = (int) $data['profitCenterId'];
+
+    $cpcId = ClientProfitCenter::where('client_group_number', $clientId)
+        ->where('profit_center_code', $pcId)
+        ->value('id');
+    if (!$cpcId) return response()->json(['message' => 'Not found'], 404);
+
+    $authorized = Assignment::where('user_id', $user->id)
+        ->where('client_profit_center_id', $cpcId)
+        ->exists();
+    if (!$authorized) return response()->json(['message' => 'Forbidden'], 403);
+
+    $today = now();                     // ventana fiscal desde abril
+    $fy    = $today->month >= 4 ? $today->year : ($today->year - 1);
+    $isExtended = ($today->month >= 10 || $today->month <= 3); // Oct..Mar => 18, else 12
+    $count = $isExtended ? 18 : 12;
+
+    // Gen lista de [m,y] empezando en Abril(FY), por $count meses
+    $pairs = [];
+    $y = $fy; $m = 4;
+    for ($i=0; $i<$count; $i++) {
+        $pairs[] = [$m, $y];
+        $m++; if ($m > 12) { $m = 1; $y++; }
+    }
+    $months = array_map(fn($p) => sprintf('%04d-%02d', $p[1], $p[0]), $pairs);
+
+    $sales = []; $budget = []; $forecast = []; $orders = [];
+
+    foreach ($pairs as [$mm, $yy]) {
+        $s = (float) (Sale::where('client_profit_center_id', $cpcId)
+            ->where('fiscal_year', $yy)->where('month', $mm)->value('volume') ?? 0.0);
+
+        $b = (float) (Budget::where('client_profit_center_id', $cpcId)
+            ->where('fiscal_year', $yy)->where('month', $mm)->value('volume') ?? 0.0);
+
+        $ver = Forecast::where('client_profit_center_id', $cpcId)
+            ->where('fiscal_year', $yy)->where('month', $mm)
+            ->max('version');
+
+        $f = $ver ? (float) (Forecast::where('client_profit_center_id', $cpcId)
+            ->where('fiscal_year', $yy)->where('month', $mm)
+            ->where('version', $ver)
+            ->value('volume') ?? 0.0) : 0.0;
+
+        $sales[] = $s; $budget[] = $b; $forecast[] = $f; $orders[] = 0.0;
+    }
+
+    return response()->json([
+        'months'   => $months,
+        'sales'    => $sales,
+        'budget'   => $budget,
+        'forecast' => $forecast,
+        'orders'   => $orders,
+        'count'    => $count,
+        'fiscal_year' => $fy,
+        'extended' => $isExtended,
+    ]);
+}
+
+// PUT /api/forecast/series-table
+// body: { clientId, profitCenterId, months[12..18], forecast[12..18] }
+public function saveSeriesTable(Request $request)
+{
+    $user = $request->user();
+    if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
+
+    $data = $request->validate([
+        'clientId'       => 'required|integer',
+        'profitCenterId' => 'required|integer',
+        'months'         => ['required','array','min:12','max:18'],
+        'months.*'       => ['required','regex:/^\d{4}\-\d{2}$/'],
+        'forecast'       => ['required','array'],
+        'forecast.*'     => 'required|numeric|min:0',
+    ]);
+
+    $months = $data['months'];
+    if (count($months) !== count($data['forecast'])) {
+        return response()->json(['message' => 'Length mismatch'], 422);
+    }
+
+    $clientId = (int) $data['clientId'];
+    $pcId     = (int) $data['profitCenterId'];
+
+    $cpcId = ClientProfitCenter::where('client_group_number', $clientId)
+        ->where('profit_center_code', $pcId)
+        ->value('id');
+    if (!$cpcId) return response()->json(['message' => 'Not found'], 404);
+
+    $authorized = Assignment::where('user_id', $user->id)
+        ->where('client_profit_center_id', $cpcId)
+        ->exists();
+    if (!$authorized) return response()->json(['message' => 'Forbidden'], 403);
+
+    $today = now();
+    $secondTuesday = $this->getNthWeekdayOfMonth($today, 2, 3); // (weekdayIso=2 martes, nth=3 -> 2do martes? ojo: tu helper usa nth semanas; mantenemos mismo criterio del endpoint 12)
+    // Nota: replico tu lógica de bloqueo del save de 12 slots, aplicada a la ventana que inicia en abril.
+    // Slot 1 y 2: bloqueados; slot 3: bloqueado después del 2do martes del mes corriente.
+
+    $eps = 0.0001;
+    $saved = 0; $changes = []; $unchanged = []; $locked = [];
+
+    foreach ($months as $idx => $ym) {
+        [$yStr, $mStr] = explode('-', $ym);
+        $y = (int) $yStr; $m = (int) $mStr;
+        $slot = $idx + 1;
+        $val  = (float) $data['forecast'][$idx];
+
+        // reglas de edición (idénticas al save de 12, referidas a slots desde abril)
+        if ($slot === 1 || $slot === 2) {
+            $locked[] = ['index'=>$idx,'month'=>$ym,'reason'=>'locked_past'];
+            continue;
+        }
+        if ($slot === 3 && $today->gt($secondTuesday)) {
+            $locked[] = ['index'=>$idx,'month'=>$ym,'reason'=>'locked_after_2nd_tuesday'];
+            continue;
+        }
+
+        $curVer = Forecast::where('client_profit_center_id', $cpcId)
+            ->where('fiscal_year', $y)->where('month', $m)
+            ->max('version') ?? 0;
+
+        $existing = null;
+        if ($curVer > 0) {
+            $existing = Forecast::where('client_profit_center_id', $cpcId)
+                ->where('fiscal_year', $y)->where('month', $m)
+                ->where('version', $curVer)
+                ->value('volume');
+        }
+
+        if ($existing !== null && abs((float)$existing - $val) < $eps) {
+            $unchanged[] = ['index'=>$idx,'month'=>$ym,'value'=>$val];
+            continue;
+        }
+
+        Forecast::create([
+            'client_profit_center_id' => $cpcId,
+            'fiscal_year'             => $y,
+            'month'                   => $m,
+            'version'                 => $curVer + 1,
+            'volume'                  => $val,
+            'user_id'                 => $user->id,
+        ]);
+        $saved++;
+        $changes[] = [
+            'index'        => $idx,
+            'month'        => $ym,
+            'from'         => $existing,
+            'to'           => $val,
+            'version_from' => $curVer,
+            'version_to'   => $curVer + 1,
+        ];
+    }
+
+    $message = $saved > 0
+        ? "Es wurden {$saved} Feld(er) geändert und gespeichert."
+        : "Gespeichert. Keine Änderungen erkannt.";
+
+    return response()->json([
+        'ok'              => true,
+        'changed_count'   => $saved,
+        'changed_fields'  => $changes,
+        'unchanged_count' => count($unchanged),
+        'locked_count'    => count($locked),
+        'unchanged'       => $unchanged,
+        'locked'          => $locked,
+        'message'         => $message,
+    ]);
+}
+
 }

@@ -60,9 +60,9 @@ function mapCumulative(d){
 
   labels.value = m
   const base = [
-    { label:'Ist', data:sales, borderColor:'#456287', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
-    { label:'Budget', data:budget, borderColor:'#9DBB61', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
-    { label:'Forecast', data:forecast, borderColor:'#FFC20E', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
+    { label:'Ist (Kum.)    ', data:sales, borderColor:'#456287', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
+    { label:'Budget (Kum.)    ', data:budget, borderColor:'#9DBB61', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
+    { label:'Forecast (Kum.)    ', data:forecast, borderColor:'#FFC20E', backgroundColor:'rgba(255,255,255,0)', tension:.25, pointRadius:0, fill:false },
     { label:'Ziel Budget', data:fyLine, borderColor:'#44512A', borderDash:[6,6], tension:0, pointRadius:0, fill:false }
   ]
 

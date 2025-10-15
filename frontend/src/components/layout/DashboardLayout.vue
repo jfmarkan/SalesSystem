@@ -16,14 +16,6 @@
             v-tooltip.top="'Dashboard'"
           />
 
-          <!-- 🔧 ANALYSIS ICON -->
-          <Button
-            icon="fas fa-chart-pie"
-            class="nav-icon-button"
-            @click="$router.push('/sales-force')"
-            v-tooltip.top="'Análisis'"
-          />
-
           <!-- SALES + REPORTS (Manager or Up) -->
           <template v-if="isManagerOrUp">
             <!-- 🔧 SEPARATED SALES ICONS -->
@@ -57,16 +49,23 @@
               @click="$router.push('/action-plans')"
               v-tooltip.top="'Aktionspläne'"
             />
+                      <!-- 🔧 ANALYSIS ICON -->
+          <Button
+            icon="fas fa-chart-pie"
+            class="nav-icon-button"
+            @click="$router.push('/sales-force')"
+            v-tooltip.top="'Análisis'"
+          />
 
             <!-- REPORTS DROPDOWN -->
-            <Menu ref="reportsMenu" :model="reportsItems" popup />
+        <Menu ref="reportsMenu" :model="reportsItems" popup />
             <Button
               icon="fas fa-file-lines"
               class="nav-icon-button"
               @click="reportsMenu.toggle($event)"
               v-tooltip.top="'Berichte'"
             />
-          </template>
+        </template>
 
           <!-- SALES REP SIMPLE ICONS -->
           <template v-else>
@@ -459,8 +458,9 @@ function onLogout() {
 .dashboard-content {
     flex: 1;
     padding: 0 1rem;
-    margin-top: 70px;
+    margin-top: 60px;
     z-index: 2;
+    min-height: calc(100vh - 60px)
 }
 
 :deep(.p-menu.p-component) {

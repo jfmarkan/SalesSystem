@@ -13,6 +13,7 @@ class DashboardController extends Controller
 {
     public function index(Request $req)
     {
+        $userId = (int) $req->query('user_id', Auth::id());
         try {
             // ---- inputs (unit base VK-EH; soporta VKEH | M3 | EUR)
             $unit = strtoupper($req->query('unit', 'VKEH'));
@@ -70,7 +71,7 @@ class DashboardController extends Controller
             $assigned = DB::table('assignments AS a')
                 ->join('client_profit_centers AS cpc','cpc.id','=','a.client_profit_center_id')
                 ->leftJoin('profit_centers AS pc','pc.profit_center_code','=','cpc.profit_center_code')
-                ->where('a.user_id', Auth::id())
+                ->where('a.user_id', $userId)   // <-- antes: Auth::id()
                 ->select(
                     'cpc.id AS cpc_id',
                     'cpc.profit_center_code AS pc_code',
@@ -370,6 +371,38 @@ class DashboardController extends Controller
             return response()->json(['message'=>'Server error'], 500);
         }
     }
+
+    public function unitsByPc(Request $req)
+{
+    $codes = $req->query('codes', '');
+    if (is_string($codes)) {
+        $codes = array_filter(array_map('trim', explode(',', $codes)), fn($c)=>$c!=='');
+    }
+    if (!is_array($codes) || empty($codes)) {
+        return response()->json([]);
+    }
+
+    if (!\Illuminate\Support\Facades\Schema::hasTable('unit_conversions')) {
+        // fallback: todo VK-EH si no hay tabla
+        $out = [];
+        foreach ($codes as $c) $out[(string)$c] = 'VKEH';
+        return response()->json($out);
+    }
+
+    $rows = \Illuminate\Support\Facades\DB::table('unit_conversions')
+        ->whereIn('profit_center_code', $codes)
+        ->select('profit_center_code','from_unit')
+        ->get();
+
+    $map = [];
+    foreach ($codes as $c) $map[(string)$c] = 'VKEH'; // default
+    foreach ($rows as $r) {
+        $code = (string)$r->profit_center_code;
+        $fu   = (string)($r->from_unit ?? 'VKEH');
+        $map[$code] = $fu ?: 'VKEH';
+    }
+    return response()->json($map);
+}
 
     /**
      * Build calendar payload from current month forward, for the logged-in user.

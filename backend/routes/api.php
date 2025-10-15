@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/erp/manual-sales-import', [ErpImportController::class, 'manual']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/unit-conversions/by-pc', [DashboardController::class, 'unitsByPc']);
     Route::get('/extra/portfolio', [ExtraQuotaController::class, 'portfolio']);
     Route::get('/profit-centers/{code}/extra-portfolio', [ExtraQuotaController::class, 'pcPortfolio']);
 
@@ -43,6 +44,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('forecast')->group(function () {
         Route::get('/series',  [ForecastController::class, 'getSeries']);
         Route::put('/series',  [ForecastController::class, 'saveSeries']);
+        Route::get('/series-table', [ForecastController::class, 'getSeriesTable']);
+        Route::put('/series-table', [ForecastController::class, 'saveSeriesTable']);
         Route::get('/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
     });
 
