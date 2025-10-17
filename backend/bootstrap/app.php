@@ -56,5 +56,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer()
             ->runInBackground();
-    })
+
+        $schedule->command('erp:auto-sync-clients')
+            ->dailyAt('23:30')
+            ->withoutOverlapping()
+            ->onOneServer()
+            ->runInBackground();
+        })
     ->create();

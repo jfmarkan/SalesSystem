@@ -222,18 +222,17 @@ const budgetArr = computed(() => {
   const ctx = s.context?.type
   const base = toNums12(s.budgets?.[k] || [])
 
-  return base
-  
-
-  const assignedTotal = toNum(s?.extra_breakdown?.assigned?.[k]) || 0  // opcional
-  const wonTotal      = toNum(s?.extra_breakdown?.won?.[k])      || 0  // opcional
-  let delta = 0
-
-  if (assignedTotal > 0 || wonTotal > 0) {
-    delta = assignedTotal - wonTotal
-  } else {
-    delta = toNum(s?.extra_quotas?.[k] ?? 0) // remaining total
+  if (['company', 'team', 'user', 'pc'].includes(ctx)) {
+    return base
   }
+
+  const assignedTotal = toNum(s?.extra_breakdown?.assigned?.[k]) || 0
+  const wonTotal      = toNum(s?.extra_breakdown?.won?.[k])      || 0
+  const remaining     = toNum(s?.extra_quotas?.[k] ?? 0)
+
+  const delta = (assignedTotal > 0 || wonTotal > 0)
+    ? (assignedTotal - wonTotal)
+    : remaining
 
   return distributeProportional(base, delta)
 })

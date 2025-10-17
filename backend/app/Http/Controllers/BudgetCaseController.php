@@ -9,6 +9,71 @@ use Illuminate\Support\Facades\DB;
 
 class BudgetCaseController extends Controller
 {
+    public function index(Request $request)
+    {
+        $v = $request->validate([
+            'client_profit_center_id' => ['nullable','integer','min:1'],
+            'client_group_number'     => ['nullable','integer'],
+            'profit_center_code'      => ['nullable','integer'],
+            'fiscal_year'             => ['required','integer','min:1900'],
+        ]);
+
+        // resolve CPC id
+        $cpcId = $v['client_profit_center_id'] ?? null;
+        if (!$cpcId) {
+            if (!isset($v['client_group_number'], $v['profit_center_code'])) {
+                return response()->json(['message' => 'Missing identifiers.'], 422);
+            }
+            $cpcId = DB::table('client_profit_centers')
+                ->where('client_group_number', (int)$v['client_group_number'])
+                ->where('profit_center_code', (int)$v['profit_center_code'])
+                ->value('id');
+            if (!$cpcId) {
+                // No CPC mapping -> no hay caso
+                return response()->json(['data' => null]);
+            }
+        }
+
+        $case = BudgetCase::query()
+            ->where('client_profit_center_id', (int)$cpcId)
+            ->where('fiscal_year', (int)$v['fiscal_year'])
+            ->first();
+
+        return response()->json([
+            'data' => $case ?: null,
+        ]);
+    }
+
+    /**
+     * GET /api/budget-cases/exists?fiscal_year=2026&cpc_ids=1,2,3
+     * Returns: { exists: [1,3] }
+     */
+    public function exists(Request $request)
+    {
+        $v = $request->validate([
+            'fiscal_year' => ['required','integer','min:1900'],
+            'cpc_ids'     => ['required','string'], // comma-separated
+        ]);
+
+        $ids = collect(explode(',', $v['cpc_ids']))
+            ->map(fn($x) => (int)$x)
+            ->filter(fn($x) => $x > 0)
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return response()->json(['exists' => []]);
+        }
+
+        $found = BudgetCase::query()
+            ->whereIn('client_profit_center_id', $ids)
+            ->where('fiscal_year', (int)$v['fiscal_year'])
+            ->pluck('client_profit_center_id')
+            ->map(fn($x) => (int)$x)
+            ->values();
+
+        return response()->json(['exists' => $found]);
+    }
+    
     public function store(Request $request)
     {
         $data = $request->validate([

@@ -137,48 +137,45 @@
 						v-tooltip.top="'Einstellungen · Benutzerverwaltung'"
 					/>
 
-					<!-- USER MENU -->
-					<Menu ref="userMenu" :model="userItems" popup>
-						<template #item="{ item, props }">
-							<div v-if="item.type === 'header'" class="user-menu-header glass-gray">
-								<div class="name-line">
-									<span class="first">{{ firstName }}</span>
-									<span class="last">{{ lastName || '—' }}</span>
-								</div>
-								<div class="role-line">
-									<em>{{ displayRole }}</em>
-								</div>
-								<div class="email-line">{{ auth.user?.email }}</div>
-							</div>
+					<!-- USER PANEL (OverlayPanel) -->
+<OverlayPanel ref="userPanel" :dismissable="true" :showCloseIcon="false" class="user-panel glass">
+  <div class="user-menu-header glass-gray">
+    <div class="name-line">
+      <span class="first">{{ firstName }}</span>
+      <span class="last">{{ lastName || '—' }}</span>
+    </div>
+    <div class="role-line"><em>{{ displayRole }}</em></div>
+    <div class="email-line">{{ auth.user?.email }}</div>
+  </div>
 
-							<div v-else-if="item.separator" class="p-menu-separator"></div>
+  <div class="user-menu-body">
+    <!-- Selector de tema: 🌞🌙 / 🌞 / 🌙 -->
+    <ThemeSwitcher />
 
-							<a
-								v-else-if="!item.danger"
-								v-bind="props.action"
-								class="user-menu-item glass-mid"
-							>
-								<i :class="['fas', item.icon]"></i>
-								<span class="ml-2">{{ item.label }}</span>
-							</a>
+    <Divider class="my-2" />
 
-							<a
-								v-else
-								v-bind="props.action"
-								class="user-menu-item glass-dark logout-item"
-								@click.prevent="onLogout"
-							>
-								<i class="pi pi-sign-out danger-icon"></i>
-								<span class="ml-2">{{ item.label }}</span>
-							</a>
-						</template>
-					</Menu>
-					<Button
-						icon="fas fa-user-circle"
-						class="nav-icon-button"
-						@click="userMenu.toggle($event)"
-						v-tooltip.top="'Benutzermenü'"
-					/>
+    <Button
+      label="Profil bearbeiten"
+      icon="pi pi-pen-to-square"
+      class="p-button-text w-full justify-content-start"
+      @click="goto('/profile')"
+    />
+    <Button
+      label="Abmelden"
+      icon="pi pi-sign-out"
+      class="p-button-text p-button-danger w-full justify-content-start"
+      @click="onLogout"
+    />
+  </div>
+</OverlayPanel>
+
+<!-- Trigger -->
+<Button
+  icon="fas fa-user-circle"
+  class="nav-icon-button"
+  @click="openUserPanel($event)"
+  v-tooltip.top="'Benutzermenü'"
+/>
 				</div>
 			</header>
 
@@ -192,12 +189,14 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Menu from 'primevue/menu'
+import OverlayPanel from 'primevue/overlaypanel'
+import Divider from 'primevue/divider'
 import Button from 'primevue/button'
 import Tooltip from 'primevue/tooltip'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import { useAuthStore } from '@/stores/auth'
+import ThemeSwitcher from '../ThemeSwitcher.vue'
 
 defineExpose({ directives: { tooltip: Tooltip } })
 
@@ -206,9 +205,9 @@ const router = useRouter()
 const auth = useAuthStore()
 
 /* Refs */
-const salesMenu = ref()
+// const salesMenu = ref()
 const reportsMenu = ref()
-const userMenu = ref()
+// const userMenu = ref()
 
 /* Roles */
 const roleId = computed(() => Number(auth.roleId ?? auth.role_id ?? auth.user?.role_id ?? 0))
@@ -257,21 +256,21 @@ const displayRole = computed(() => {
 })
 
 /* Menús */
-const salesItems = [
-	{ label: 'Forecasts', icon: 'pi pi-chart-line', command: () => router.push('/forecasts') },
-	{ label: 'Budget Cases', icon: 'pi pi-briefcase', command: () => router.push('/budget-cases') },
-	{ label: 'Abweichungen', icon: 'pi pi-sliders-h', command: () => router.push('/deviations') },
-	{
-		label: 'Verkaufschancen',
-		icon: 'pi pi-percentage',
-		command: () => router.push('/extra-quotas'),
-	},
-	{
-		label: 'Aktionspläne',
-		icon: 'pi pi-list-check',
-		command: () => router.push('/action-plans'),
-	},
-]
+// const salesItems = [
+// 	{ label: 'Forecasts', icon: 'pi pi-chart-line', command: () => router.push('/forecasts') },
+// 	{ label: 'Budget Cases', icon: 'pi pi-briefcase', command: () => router.push('/budget-cases') },
+// 	{ label: 'Abweichungen', icon: 'pi pi-sliders-h', command: () => router.push('/deviations') },
+// 	{
+// 		label: 'Verkaufschancen',
+// 		icon: 'pi pi-percentage',
+// 		command: () => router.push('/extra-quotas'),
+// 	},
+// 	{
+// 		label: 'Aktionspläne',
+// 		icon: 'pi pi-list-check',
+// 		command: () => router.push('/action-plans'),
+// 	},
+// ]
 const reportsItems = [
 	{
 		label: 'Profitcenter-Bericht',
@@ -285,17 +284,9 @@ const reportsItems = [
 	},
 ]
 
-/* User menu */
-const userItems = computed(() => [
-	{ type: 'header' },
-	{ separator: true },
-	{
-		label: 'Profil bearbeiten',
-		icon: 'pi pi-pen-to-square',
-		command: () => router.push('/profile'),
-	},
-	{ label: 'Abmelden', danger: true },
-])
+const userPanel = ref(null)
+function openUserPanel(e){ userPanel.value?.toggle(e) }
+function goto(path){ userPanel.value?.hide(); router.push(path) }
 
 /* Deviations badge para sales_rep */
 const deviationsCount = ref(0)
@@ -538,5 +529,21 @@ function onLogout() {
 .p-component {
 	font-size: 1rem;
 	font-weight: 300;
+}
+
+.user-panel {
+	padding: 0;
+	border-radius: 12px;
+}
+.user-menu-body {
+	padding: 10px 12px;
+	min-width: 260px;
+}
+.user-menu-body :deep(.p-buttongroup) {
+	width: 100%;
+	justify-content: space-between;
+}
+.user-menu-body :deep(.p-button) {
+	padding: 0.5rem 0.6rem;
 }
 </style>

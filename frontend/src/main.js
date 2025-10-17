@@ -1,26 +1,30 @@
-import './assets/css/main.css';
+// src/main.js
+import './assets/css/main.css'
+import './assets/css/theme.css' // glassmorphism vars (light/dark)
 
-import '@primevue/themes/lara'; // 🎨 Tema Lara (por defecto)
-import 'primeicons/primeicons.css'; // Iconos
-import 'primeflex/primeflex.css'; // Utilidades de grid y spacing
-import '@fortawesome/fontawesome-free/css/all.min.css'
+import '@primevue/themes/lara'
+import 'primeicons/primeicons.css'
 import 'primeflex/primeflex.css'
+import '@fortawesome/fontawesome-free/css/all.min.css'
 
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import { createPersistedState } from 'pinia-plugin-persistedstate'
 
+import App from './App.vue'
+import router from './router'
+import setupPrimeVue from './plugins/primevue'
+import { initTheme } from './composables/useTheme'
 
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import { createPersistedState } from 'pinia-plugin-persistedstate';
+const app = createApp(App)
+const pinia = createPinia()
+pinia.use(createPersistedState)
 
-import App from './App.vue';
-import router from './router';
-import setupPrimeVue from './plugins/primevue';
+setupPrimeVue(app)
 
-const app = createApp(App);
-const pinia = createPinia();
-pinia.use(createPersistedState);
+// init theme (auto/light/dark) before mount
+initTheme()
 
-setupPrimeVue(app);
-app.use(pinia);
-app.use(router);
-app.mount('#app');
+app.use(pinia)
+app.use(router)
+app.mount('#app')

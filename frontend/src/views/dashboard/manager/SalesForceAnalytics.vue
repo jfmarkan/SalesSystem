@@ -492,8 +492,8 @@ async function loadUnitsForDeviations() {
 
 /* ========= CHART (MiniDeviationChart) ========= */
 const chartLoading = ref(false)
-const chartMonths = ref(null) // null → barras; array → líneas
-const chartSales = ref([]) // valores numéricos
+const chartMonths = ref(null)
+const chartSales = ref([])
 const chartBudget = ref([])
 const chartForecast = ref([])
 
@@ -546,7 +546,7 @@ async function loadDeviationChart(row) {
 			chartMonths.value = null
 			chartSales.value = [last(salesArr)]
 			chartBudget.value = [last(budArr)]
-			chartForecast.value = [] // no se usa en barras
+			chartForecast.value = []
 		}
 	} catch {
 		resetChart()

@@ -77,7 +77,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('budget-cases')->group(function () {
         Route::post('/',         [BudgetCaseController::class, 'store']);     // save/update
-        Route::get('/',          [BudgetCaseController::class, 'show']);      // fetch one by clientPC+FY (query params)
+        Route::get('/',          [BudgetCaseController::class, 'index']);
+        Route::get('/exists', [BudgetCaseController::class, 'exists']);
         Route::post('/simulate', [BudgetCaseSimulatorController::class, 'simulate']);
         Route::post('/sales-ytd',[BudgetCaseSimulatorController::class, 'salesYtd']);
     });
