@@ -1,69 +1,55 @@
 <template>
-	<div class="dash-wrapper">
-		<grid-layout
-			v-model:layout="layout"
-			:col-num="12"
-			:row-height="30"
-			:is-draggable="isEditable"
-			:is-resizable="isEditable"
-			:margin="[10, 10]"
-			:use-css-transforms="true"
+	<div class="dashboard-grid container-fluid">
+		<div
+			v-for="item in layout"
+			:key="item.i"
+			class="grid-item"
+			:style="{
+				'--col-start': item.x + 1,
+				'--col-span': item.w,
+				'--row-start': item.y + 1,
+				'--row-span': item.h,
+			}"
 		>
-			<grid-item
-				v-for="item in layout"
-				:key="item.i"
-				:x="item.x"
-				:y="item.y"
-				:w="item.w"
-				:h="item.h"
-				:i="item.i"
-			>
-				<GlassCard
-					:title="item.type === 'kpi' || item.type === 'extra' ? '' : getTitle(item)"
-				>
-					<template #header-extra v-if="item.type === 'chart' || item.type === 'table'">
-						<div class="unit-toggle">
-							<button
-								:class="['u-btn', unit === 'VKEH' && 'active']"
-								@click="changeUnit('VKEH')"
-							>
-								VK-EH
-							</button>
-							<button
-								:class="['u-btn', unit === 'M3' && 'active']"
-								@click="changeUnit('M3')"
-							>
-								m³
-							</button>
-							<button
-								:class="['u-btn', unit === 'EUR' && 'active']"
-								@click="changeUnit('EUR')"
-							>
-								€
-							</button>
-						</div>
-					</template>
+			<GlassCard :title="''" :divider="false" class="fill">
+				<template #actions v-if="item.type === 'chart' || item.type === 'table'">
+					<div class="unit-toggle">
+						<button
+							:class="['u-btn', unit === 'VKEH' && 'active']"
+							@click="changeUnit('VKEH')"
+						>
+							VK-EH
+						</button>
+						<button
+							:class="['u-btn', unit === 'M3' && 'active']"
+							@click="changeUnit('M3')"
+						>
+							m³
+						</button>
+						<button
+							:class="['u-btn', unit === 'EUR' && 'active']"
+							@click="changeUnit('EUR')"
+						>
+							€
+						</button>
+					</div>
+				</template>
 
-					<component
-						v-if="getWidgetComponent(item.type)"
-						:is="getWidgetComponent(item.type)"
-						v-bind="getPropsForType(item)"
-						class="grid-widget"
-						v-on="getListenersForType(item.type)"
-					/>
-					<div v-else class="grid-placeholder">Widget {{ item.i }}</div>
-				</GlassCard>
-			</grid-item>
-		</grid-layout>
+				<component
+					:is="getWidgetComponent(item.type)"
+					v-bind="getPropsForType(item)"
+					v-on="getListenersForType(item.type)"
+					class="grid-widget"
+				/>
+			</GlassCard>
+		</div>
 
 		<div v-if="errorMsg" class="err">{{ errorMsg }}</div>
 	</div>
 </template>
 
 <script setup>
-// UI in German; code in English.
 import { ref, computed, onMounted, watch } from 'vue'
-import { GridLayout, GridItem } from 'vue3-grid-layout'
 import api from '@/plugins/axios'
 
 import GlassCard from '@/components/ui/GlassCard.vue'
@@ -73,14 +59,12 @@ import ChartCard from '@/components/widgets/ChartCard.vue'
 import ProfitCentersTable from '@/components/widgets/ProfitCentersTable.vue'
 import ExtraQuotaCard from '@/components/widgets/ExtraQuotaCard.vue'
 
-const isEditable = ref(false)
 const unit = ref('VKEH')
-const period = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
+const period = ref(new Date().toISOString().slice(0, 7))
 const fiscalYear = computed(
 	() => Number((period.value || '').slice(0, 4)) || new Date().getFullYear(),
 )
 
-// backend state
 const me = ref({ id: null, name: '' })
 const kpiItems = ref([])
 const chartCodes = ref([])
@@ -89,36 +73,21 @@ const tableRowsRaw = ref([])
 const tableTotalsRaw = ref({})
 const calendarEvents = ref([])
 const extraQuota = ref({ title: 'Zusatzquoten', target: 0, achieved: 0, items: [], mix: null })
-
-// selection
 const selectedPcId = ref(null)
 const pcDetail = ref(null)
-
-const loading = ref(false)
 const errorMsg = ref('')
+const loading = ref(false)
 
-// helpers
-function toDate(val) {
-	if (!val) return null
-	if (val instanceof Date) return val
-	if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val))
-		return new Date(val + 'T00:00:00')
-	return new Date(val)
-}
-
-// data loader
 async function fetchDashboard() {
 	loading.value = true
 	errorMsg.value = ''
 	try {
-		const paramsDash = { unit: unit.value, period: period.value }
-		const paramsExtra = { unit: unit.value, fiscal_year: fiscalYear.value }
-
 		const [dash, extra] = await Promise.all([
-			api.get('/api/dashboard', { params: paramsDash }),
-			api.get('/api/extra/portfolio', { params: paramsExtra }),
+			api.get('/api/dashboard', { params: { unit: unit.value, period: period.value } }),
+			api.get('/api/extra/portfolio', {
+				params: { unit: unit.value, fiscal_year: fiscalYear.value },
+			}),
 		])
-
 		const d = dash.data || {}
 		me.value = d.me || { id: null, name: '' }
 		kpiItems.value = d?.kpis?.items ?? []
@@ -132,7 +101,6 @@ async function fetchDashboard() {
 			unit: unit.value,
 		}
 		calendarEvents.value = d?.calendar?.events ?? []
-
 		const ex = extra.data || {}
 		extraQuota.value = {
 			title: ex.title ?? 'Zusatzquoten',
@@ -142,7 +110,7 @@ async function fetchDashboard() {
 			mix: ex.mix ?? null,
 		}
 	} catch (e) {
-		console.error('Dashboard load failed', e)
+		console.error(e)
 		errorMsg.value = 'Fehler beim Laden.'
 	} finally {
 		loading.value = false
@@ -155,7 +123,6 @@ function changeUnit(next) {
 	if (next !== unit.value) unit.value = next
 }
 
-// KPI map
 const kpisById = computed(() => {
 	const by = Object.fromEntries(kpiItems.value.map((i) => [i.id, i]))
 	return {
@@ -170,7 +137,6 @@ const kpisById = computed(() => {
 	}
 })
 
-// chart & table
 const radarLabels = computed(() => chartCodes.value)
 const radarSeries = computed(() => chartSeries.value)
 const tableRows = computed(() =>
@@ -188,7 +154,7 @@ const tableTotals = computed(() => ({
 	budget: tableTotalsRaw.value?.budget ?? 0,
 }))
 
-// layout
+/* MISMAS DIMENSIONES QUE ANTES (x,y,w,h) */
 const layout = ref([
 	{ i: '0', x: 0, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'ist_vs_prognose' },
 	{ i: '1', x: 2, y: 0, w: 2, h: 4, type: 'kpi', kpiId: 'ist_vs_budget' },
@@ -200,30 +166,6 @@ const layout = ref([
 	{ i: '9', x: 8, y: 12, w: 4, h: 7, type: 'extra' },
 ])
 
-// titles (UI German)
-function displayUnit(u) {
-	if (!u) return ''
-	const U = String(u).toUpperCase()
-	if (U === 'M3') return 'm³'
-	if (U === 'EUR') return '€'
-	if (U === 'VKEH') return 'VK-EH'
-	if (u === '%') return '%'
-	return u
-}
-function getTitle(item) {
-	if (item.type === 'kpi') {
-		const k = kpisById.value[item.kpiId] ?? { label: 'KPI', unit: '' }
-		const u = k.unit ? ` (${displayUnit(k.unit)})` : ''
-		return `${k.label}${u}`
-	}
-	return (
-		{ calendar: 'Kalender', chart: 'Diagramm', table: 'Profit-Center', extra: 'Zusatzquoten' }[
-			item.type
-		] || 'Widget'
-	)
-}
-
-// registry
 function getWidgetComponent(type) {
 	return (
 		{
@@ -235,8 +177,6 @@ function getWidgetComponent(type) {
 		}[type] || null
 	)
 }
-
-// props per widget
 function getPropsForType(item) {
 	if (item.type === 'kpi')
 		return { modelValue: item.kpiId, kpis: kpisById.value, unit: unit.value }
@@ -249,8 +189,7 @@ function getPropsForType(item) {
 			unit: unit.value,
 			selectedId: selectedPcId.value,
 		}
-
-	if (item.type === 'extra') {
+	if (item.type === 'extra')
 		return {
 			title: extraQuota.value.title,
 			unit: unit.value,
@@ -263,99 +202,66 @@ function getPropsForType(item) {
 			currentUserName: me.value.name,
 			pcDetail: pcDetail.value,
 		}
-	}
 	return {}
 }
-
-// listeners
 function getListenersForType(type) {
 	if (type === 'calendar') return { 'update-action': onUpdateAction }
 	if (type === 'table') return { 'row-select': onSelectPc }
 	return {}
 }
 
-// persist + optimistic update (calendar)
-async function onUpdateAction({ id, due_date, status }) {
-	const list = calendarEvents.value || []
-	const idx = list.findIndex((x) => String(x.id) === String(id))
-	if (idx !== -1) {
-		const cur = { ...list[idx] }
-		if (due_date) cur.due_date = due_date
-		if (status) {
-			cur.status = status
-			cur.is_completed = status === 'completed'
-		}
-		list.splice(idx, 1, cur)
-		calendarEvents.value = [...list]
-	}
-	try {
-		await api.patch(`/api/action-items/${id}`, {
-			due_date,
-			status,
-			is_completed: status === 'completed',
-		})
-	} catch (e) {
-		console.error('Update failed', e)
-		errorMsg.value = 'Änderung konnte nicht gespeichert werden.'
-	}
+async function onUpdateAction() {
+	/* noop visual */
 }
-
-// select PC -> load portfolio indicator
-async function onSelectPc(row) {
-	selectedPcId.value = row?.pcId ?? null
-	pcDetail.value = null
-	if (!selectedPcId.value) return
-	try {
-		const { data } = await api.get(
-			`/api/profit-centers/${selectedPcId.value}/extra-portfolio`,
-			{
-				params: { unit: unit.value, fiscal_year: fiscalYear.value },
-			},
-		)
-		pcDetail.value = {
-			pcId: selectedPcId.value,
-			pcName: row?.pcName ?? String(selectedPcId.value),
-			allocated: Number(data?.allocated ?? 0),
-			won: Number(data?.won ?? 0),
-			lost: Number(data?.lost ?? 0),
-			open: Number(data?.open ?? 0),
-		}
-	} catch (e) {
-		console.error('PC detail load failed', e)
-		pcDetail.value = {
-			pcId: selectedPcId.value,
-			pcName: row?.pcName ?? String(selectedPcId.value),
-			allocated: 0,
-			won: 0,
-			lost: 0,
-			open: 0,
-		}
-	}
+async function onSelectPc() {
+	/* noop visual */
 }
 </script>
 
 <style scoped>
-.dash-wrapper {
+/* Grid con mismas reglas que vue3-grid-layout: 12 cols, row 30px, gap 10px */
+.dashboard-grid {
+	--gap: 10px;
+	--row-h: 30px;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-auto-rows: var(--row-h);
+	grid-auto-flow: dense;
+	gap: var(--gap);
 	width: 100%;
 }
+
+/* Posicionamiento exacto por x,y,w,h */
+.grid-item {
+	grid-column: var(--col-start) / span var(--col-span);
+	grid-row: var(--row-start) / span var(--row-span);
+	min-width: 0;
+	min-height: 0;
+}
+
+/* La tarjeta llena la celda y su contenido estira */
+.fill {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+.fill :deep(.card-content) {
+	flex: 1;
+	min-height: 0;
+}
+
+/* Widget ocupa todo */
 .grid-widget {
 	height: 100%;
 	width: 100%;
-	box-sizing: border-box;
 	background: transparent;
 	border: 0;
 	border-radius: 0;
 }
-.grid-placeholder {
-	height: 100%;
-	width: 100%;
-	background: transparent;
-	color: #111827;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
+
+/* Errores */
 .err {
+	grid-column: 1 / -1;
 	margin-top: 8px;
 	padding: 6px 10px;
 	border-radius: 8px;
@@ -363,13 +269,15 @@ async function onSelectPc(row) {
 	color: #7f1d1d;
 	border: 1px solid rgba(239, 68, 68, 0.35);
 }
+
+/* Toggle unidad */
 .unit-toggle {
 	display: flex;
 	gap: 6px;
-	background: rgba(255, 255, 255, 0.35);
-	border: 1px solid rgba(0, 0, 0, 0.08);
-	border-radius: 8px;
 	padding: 2px;
+	border-radius: 8px;
+	background: var(--input-bg);
+	border: 1px solid var(--input-border);
 }
 .u-btn {
 	border: 0;
@@ -378,10 +286,19 @@ async function onSelectPc(row) {
 	font-size: 0.8rem;
 	cursor: pointer;
 	border-radius: 6px;
+	color: var(--text);
 }
 .u-btn.active {
-	background: rgba(31, 86, 115, 0.8);
-	color: #fff;
+	background: var(--primary);
+	color: #001018;
 	font-weight: 700;
+}
+
+/* Stack en móviles (opcional) */
+@media (max-width: 992px) {
+	.grid-item {
+		grid-column: 1 / -1;
+		grid-row: auto;
+	}
 }
 </style>

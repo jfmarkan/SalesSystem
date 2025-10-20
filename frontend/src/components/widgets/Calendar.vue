@@ -1,5 +1,5 @@
 <template>
-	<div class="cal glass">
+	<div class="cal ">
 		<!-- Kopf -->
 		<div class="cal-head">
 			<button class="btn" @click="prevMonth" aria-label="Voriger Monat">

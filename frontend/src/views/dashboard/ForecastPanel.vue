@@ -26,144 +26,166 @@
 			</div>
 		</Dialog>
 
-		<GridLayout
-			:layout="layout"
-			:col-num="12"
-			:row-height="8"
-			:is-draggable="false"
-			:is-resizable="false"
-			:margin="[10, 10]"
-			:use-css-transforms="true"
-		>
-			<GridItem
-				v-for="item in layout"
-				:key="item.i"
-				:i="item.i"
-				:x="item.x"
-				:y="item.y"
-				:w="item.w"
-				:h="item.h"
-			>
-				<GlassCard
-					:class="{ 'no-strip': item.type === 'title' || item.type === 'table' }"
-					:title="cardTitle(item)"
-				>
-					<!-- Filtros -->
-					<div v-if="item.type === 'filters'" class="h-full p-3">
-						<ForecastFilters
-							:mode="mode"
-							:primary-options="primaryOptions"
-							:primary-id="primaryId"
-							:secondary-options="secondaryOptions"
-							:secondary-id="secondaryId"
-							@update:mode="onMode"
-							@update:primary-id="onPrimary"
-							@update:secondary-id="onSecondary"
-							@next="handleNext"
-						/>
-						<div class="mt-3 text-500 text-sm" v-if="loading">Lädt…</div>
-					</div>
+		<!-- Loader global bajo navbar -->
+		<div v-if="loadingAll" class="page-loader glass">
+			<ProgressSpinner style="width: 48px; height: 48px" strokeWidth="4" />
+			<div class="loader-text">Lädt Daten…</div>
+		</div>
 
-					<!-- Título + acciones -->
-					<div
-						v-else-if="item.type === 'title'"
-						class="h-full p-3 flex align-items-center justify-content-between"
-					>
-						<ForecastTitle
-							v-if="hasSelection"
-							:client="selectedClienteName"
-							:kunde="selectedClienteName"
-							:pc="selectedPCName"
-						/>
-						<div v-if="hasSelection" class="flex gap-2">
-							<Button
-								label="Speichern"
-								icon="pi pi-save"
-								:disabled="changedCount === 0"
-								@click="saveForecast"
+		<div class="container-fluid">
+			<!-- Row 1: filtros + título/acciones -->
+			<div class="row">
+				<div class="span-12 md-span-3 lg-span-3 xl-span-3">
+					<GlassCard title="Filter" class="h-filters">
+						<div class="p-3">
+							<ForecastFilters
+								:mode="mode"
+								:primary-options="primaryOptions"
+								:primary-id="primaryId"
+								:secondary-options="secondaryOptions"
+								:secondary-id="secondaryId"
+								@update:mode="onMode"
+								@update:primary-id="onPrimary"
+								@update:secondary-id="onSecondary"
+								@next="handleNext"
 							/>
+							<div class="mt-3 text-muted text-sm" v-if="loading">Lädt…</div>
 						</div>
-					</div>
+					</GlassCard>
+				</div>
 
-					<!-- Chart principal -->
-					<div v-else-if="item.type === 'chart'" class="h-full">
-						<LineChartSmart
-							v-if="hasSelection"
-							type="cumulative"
-							:client-id="currentClientId"
-							:profit-center-id="currentPcId"
-							api-prefix="/api"
-							:auto-fetch="false"
-							:cum-data="liveCumData"
-							:busy="loading"
-						/>
-					</div>
-
-					<!-- Chart versiones -->
-					<div v-else-if="item.type === 'chart-versions'" class="h-full">
-						<LineChartSmart
-							v-if="hasSelection"
-							type="versions"
-							:client-id="currentClientId"
-							:profit-center-id="currentPcId"
-							api-prefix="/api"
-							:auto-fetch="true"
-						/>
-					</div>
-
-					<!-- Tabla -->
-					<div v-else-if="item.type === 'table'" class="h-full flex flex-column">
-						<template v-if="hasSelection">
-							<div
-								class="nav-bar flex align-items-center justify-content-end gap-2 mb-2"
-							>
-								<Button
-									icon="pi pi-angle-left"
-									size="small"
-									outlined
-									@click="shiftViewport(-1)"
-									:disabled="viewportStart <= 0"
+				<div class="span-12 md-span-9 lg-span-9 xl-span-9">
+					<GlassCard :title="''" class="no-strip h-title">
+						<div class="p-3 flex items-center justify-between h-100">
+							<template v-if="hasSelection">
+								<ForecastTitle
+									:client="selectedClienteName"
+									:kunde="selectedClienteName"
+									:pc="selectedPCName"
 								/>
-								<span class="range-label">{{ rangeLabelDE }}</span>
-								<Button
-									icon="pi pi-angle-right"
-									size="small"
-									outlined
-									@click="shiftViewport(+1)"
-									:disabled="viewportStart >= maxViewportStart"
+								<div class="flex gap-2">
+									<Button
+										label="Speichern"
+										icon="pi pi-save"
+										:disabled="changedCount === 0 || loadingAll"
+										@click="saveForecast"
+									/>
+								</div>
+							</template>
+							<template v-else>
+								<div class="placeholder-title text-muted">
+									Kunde / Profit-Center nicht ausgewählt
+								</div>
+							</template>
+						</div>
+					</GlassCard>
+				</div>
+			</div>
+
+			<!-- Row 2: main chart + versions -->
+			<div class="row mt-16">
+				<div class="span-12 lg-span-8 xl-span-8">
+					<GlassCard :title="cardTitle({ type: 'chart' })" class="no-strip h-chart-main">
+						<div class="card-body-fit">
+							<template v-if="hasSelection && !loadingAll">
+								<LineChartSmart
+									type="cumulative"
+									:client-id="currentClientId"
+									:profit-center-id="currentPcId"
+									api-prefix="/api"
+									:auto-fetch="false"
+									:cum-data="liveCumData"
 								/>
+							</template>
+							<div v-else class="card-placeholder">
+								Kunde / Profit-Center nicht ausgewählt
 							</div>
+						</div>
+					</GlassCard>
+				</div>
 
-							<ForecastTable
-								ref="tableRef"
-								:months="months"
-								:ventas="sales"
-								:budget="budget"
-								:forecast="forecast"
-								:viewport-start="viewportStart"
-								:viewport-size="12"
-								:is-editable-ym="isEditableYM"
-								@edit-forecast="
-									({ index, value }) => {
-										const n = Number(String(value).replace(',', '.'))
-										forecast[index] = isNaN(n) ? 0 : n
-									}
-								"
-							/>
-						</template>
-					</div>
-				</GlassCard>
-			</GridItem>
-		</GridLayout>
+				<div class="span-12 lg-span-4 xl-span-4">
+					<GlassCard
+						:title="cardTitle({ type: 'chart-versions' })"
+						class="no-strip h-chart-side"
+					>
+						<div class="card-body-fit">
+							<template v-if="hasSelection && !loadingAll">
+								<LineChartSmart
+									type="versions"
+									:client-id="currentClientId"
+									:profit-center-id="currentPcId"
+									api-prefix="/api"
+									:auto-fetch="true"
+								/>
+							</template>
+							<div v-else class="card-placeholder">
+								Kunde / Profit-Center nicht ausgewählt
+							</div>
+						</div>
+					</GlassCard>
+				</div>
+			</div>
+
+			<!-- Row 3: table -->
+			<div class="row mt-16">
+				<div class="span-12">
+					<GlassCard :title="''" class="no-strip h-table">
+						<div class="h-100 p-3 flex flex-column">
+							<template v-if="hasSelection && !loadingAll">
+								<div class="nav-bar flex items-center justify-end gap-8 mb-2">
+									<Button
+										icon="pi pi-angle-left"
+										size="small"
+										outlined
+										@click="shiftViewport(-1)"
+										:disabled="viewportStart <= 0"
+									/>
+									<span class="range-label">{{ rangeLabelDE }}</span>
+									<Button
+										icon="pi pi-angle-right"
+										size="small"
+										outlined
+										@click="shiftViewport(+1)"
+										:disabled="viewportStart >= maxViewportStart"
+									/>
+								</div>
+
+								<ForecastTable
+									ref="tableRef"
+									:months="months"
+									:ventas="sales"
+									:budget="budget"
+									:forecast="forecast"
+									:viewport-start="viewportStart"
+									:viewport-size="12"
+									:is-editable-ym="isEditableYM"
+									@edit-forecast="
+										({ index, value }) => {
+											const n = Number(String(value).replace(',', '.'))
+											forecast[index] = isNaN(n) ? 0 : n
+										}
+									"
+								/>
+							</template>
+
+							<div v-else class="card-placeholder">
+								Kunde / Profit-Center nicht ausgewählt
+							</div>
+						</div>
+					</GlassCard>
+				</div>
+			</div>
+		</div>
 	</div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { GridLayout, GridItem } from 'vue3-grid-layout'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Toast from 'primevue/toast'
+import ProgressSpinner from 'primevue/progressspinner'
 import { useToast } from 'primevue/usetoast'
 
 import api from '@/plugins/axios'
@@ -177,14 +199,14 @@ import LineChartSmart from '@/components/charts/LineChartSmart.vue'
 const toast = useToast()
 const API = '/api'
 
-/* ---------- Fiscal helpers (FY = Apr..Mar) ---------- */
-function fyOf(date = new Date()) {
-	const y = date.getFullYear()
-	return date.getMonth() + 1 >= 4 ? y : y - 1
+/* Fiscal utils */
+function fyOf(d = new Date()) {
+	const y = d.getFullYear()
+	return d.getMonth() + 1 >= 4 ? y : y - 1
 }
-function genFrom(startYear, startMonth1Based, count) {
-	const out = []
-	const base = new Date(startYear, startMonth1Based - 1, 1)
+function genFrom(y, m, count) {
+	const out = [],
+		base = new Date(y, m - 1, 1)
 	for (let i = 0; i < count; i++) {
 		const d = new Date(base.getFullYear(), base.getMonth() + i, 1)
 		out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -194,8 +216,7 @@ function genFrom(startYear, startMonth1Based, count) {
 function computeTableMonthsFiscal(now = new Date()) {
 	const m = now.getMonth() + 1,
 		fy = fyOf(now)
-	const extended = m >= 10 || m <= 3
-	return genFrom(fy, 4, extended ? 18 : 12)
+	return genFrom(fy, 4, m >= 10 || m <= 3 ? 18 : 12)
 }
 function computeInitialViewportStart(now = new Date()) {
 	const m = now.getMonth() + 1
@@ -204,14 +225,13 @@ function computeInitialViewportStart(now = new Date()) {
 	return 0
 }
 function fmtMonthShortDE(ym) {
-	const [y, m] = ym.split('-').map((n) => parseInt(n, 10))
+	const [y, m] = ym.split('-').map(Number)
 	const map = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 	return `${map[m - 1]} ${String(y).slice(2)}`
 }
-/* Para títulos: Diagramm (WJ 2025/26), Versionen (Okt 25) */
 function fyTitleSpan(now = new Date()) {
-	const fy = fyOf(now)
-	const nextYY = String(fy + 1).slice(2)
+	const fy = fyOf(now),
+		nextYY = String(fy + 1).slice(2)
 	return `${fy}/${nextYY}`
 }
 function monthTitleDE(d = new Date()) {
@@ -221,15 +241,17 @@ function monthTitleDE(d = new Date()) {
 	return `${map[m - 1]} ${String(y).slice(2)}`
 }
 
-/* ---- Filters + options ---- */
+/* Filters + options */
 const clients = ref([]),
 	profitCenters = ref([]),
 	mapClientToPC = ref({}),
 	mapPCToClient = ref({})
-const mode = ref('') // '' | 'client' | 'pc'
+const mode = ref('') // ''|'client'|'pc'
 const primaryId = ref(null)
 const secondaryId = ref(null)
-const loading = ref(false)
+
+const loading = ref(false) // small text hint
+const loadingAll = ref(false) // overlay loader
 
 function normalizeMode(v) {
 	const s = (v ?? '').toString().toLowerCase().trim()
@@ -274,7 +296,10 @@ const secondaryOptions = computed(() => {
 	}
 })
 
-/* Titles (selection) */
+/* Selection */
+const hasSelection = computed(
+	() => !!mode.value && primaryId.value != null && secondaryId.value != null,
+)
 const selectedClienteName = computed(() => {
 	const id = mode.value === 'client' ? primaryId.value : secondaryId.value
 	const c = clients.value.find((x) => x.id === id)
@@ -286,19 +311,14 @@ const selectedPCName = computed(() => {
 	return p ? `${p.code} — ${p.name}` : ''
 })
 
-/* Selection guard */
-const hasSelection = computed(
-	() => !!mode.value && primaryId.value != null && secondaryId.value != null,
-)
-
-/* Series (tabla) */
+/* Series */
 const months = ref(computeTableMonthsFiscal())
 const sales = ref(Array(months.value.length).fill(0))
 const budget = ref(Array(months.value.length).fill(0))
 const forecast = ref(Array(months.value.length).fill(0))
 const orders = ref(Array(months.value.length).fill(0))
 
-/* Viewport (12 visibles exactos) */
+/* Viewport 12 */
 const viewportStart = ref(computeInitialViewportStart())
 const viewportSize = 12
 const maxViewportStart = computed(() => Math.max(0, months.value.length - viewportSize))
@@ -316,14 +336,14 @@ const rangeLabelDE = computed(() => {
 	return s && e ? `${fmtMonthShortDE(s)} - ${fmtMonthShortDE(e)}` : ''
 })
 
-/* Baseline + diffs */
+/* Baseline + changed */
 const originalForecast = ref(forecast.value.slice())
 function isClose(a, b, eps = 1e-6) {
 	return Math.abs(Number(a || 0) - Number(b || 0)) <= eps
 }
 const changedIndices = computed(() => {
-	const len = months.value?.length || 0
-	const out = []
+	const len = months.value?.length || 0,
+		out = []
 	for (let i = 0; i < len; i++) {
 		const ym = months.value?.[i]
 		if (!isEditableYM(ym)) continue
@@ -332,13 +352,11 @@ const changedIndices = computed(() => {
 	return out
 })
 const changedCount = computed(() => changedIndices.value.length)
-
-/* Edit rule: next month editable until the 15th inclusive */
 function isEditableYM(ym) {
 	if (!ym) return false
-	const now = new Date()
-	const cur = new Date(now.getFullYear(), now.getMonth(), 1)
-	const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+	const now = new Date(),
+		cur = new Date(now.getFullYear(), now.getMonth(), 1),
+		next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 	const [yS, mS] = String(ym).split('-')
 	const y = +yS,
 		m = +mS
@@ -371,66 +389,54 @@ async function loadMaster() {
 	}
 }
 
-/* API: tabla 12/18 */
+/* API series table */
 async function loadSeriesTable() {
 	if (!hasSelection.value) return
-	loading.value = true
-	try {
-		await ensureCsrf()
-		const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
-		const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
-		const { data } = await api.get(API + '/forecast/series-table', {
-			params: { clientId, profitCenterId },
-		})
-
-		months.value = Array.isArray(data.months) ? data.months : computeTableMonthsFiscal()
-		sales.value = (data.sales ?? []).map(Number).slice(0, months.value.length)
-		budget.value = (data.budget ?? []).map(Number).slice(0, months.value.length)
-		forecast.value = (data.forecast ?? []).map(Number).slice(0, months.value.length)
-		orders.value = (data.orders ?? []).map(Number).slice(0, months.value.length)
-
-		viewportStart.value = Math.min(
-			computeInitialViewportStart(),
-			Math.max(0, months.value.length - viewportSize),
-		)
-		originalForecast.value = forecast.value.slice()
-
-		await loadCurrentMonthVersions()
-		await nextTick()
-		tableRef.value?.scrollToIndex?.(viewportStart.value)
-	} finally {
-		loading.value = false
-	}
+	await ensureCsrf()
+	const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
+	const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
+	const { data } = await api.get(API + '/forecast/series-table', {
+		params: { clientId, profitCenterId },
+	})
+	months.value = Array.isArray(data.months) ? data.months : computeTableMonthsFiscal()
+	sales.value = (data.sales ?? []).map(Number).slice(0, months.value.length)
+	budget.value = (data.budget ?? []).map(Number).slice(0, months.value.length)
+	forecast.value = (data.forecast ?? []).map(Number).slice(0, months.value.length)
+	orders.value = (data.orders ?? []).map(Number).slice(0, months.value.length)
+	viewportStart.value = Math.min(
+		computeInitialViewportStart(),
+		Math.max(0, months.value.length - viewportSize),
+	)
+	originalForecast.value = forecast.value.slice()
+	await loadCurrentMonthVersions()
+	await nextTick()
+	tableRef.value?.scrollToIndex?.(viewportStart.value)
 }
 
-/* API: gráfico FY (usa /forecast/series existente) */
+/* API chart FY */
 const chartCumData = ref(null)
 async function loadSeriesChart() {
 	if (!hasSelection.value) {
 		chartCumData.value = null
 		return
 	}
-	try {
-		await ensureCsrf()
-		const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
-		const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
-		const { data } = await api.get(API + '/forecast/series', {
-			params: { clientId, profitCenterId },
-		})
-		chartCumData.value = {
-			months: data.months || [],
-			sales_cum: data.sales_cum || [],
-			budget_cum: data.budget_cum || [],
-			forecast_cum: data.forecast_cum || [],
-			budget_fy_line: data.budget_fy_line || [],
-		}
-	} catch {
-		chartCumData.value = null
+	await ensureCsrf()
+	const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
+	const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
+	const { data } = await api.get(API + '/forecast/series', {
+		params: { clientId, profitCenterId },
+	})
+	chartCumData.value = {
+		months: data.months || [],
+		sales_cum: data.sales_cum || [],
+		budget_cum: data.budget_cum || [],
+		forecast_cum: data.forecast_cum || [],
+		budget_fy_line: data.budget_fy_line || [],
 	}
 }
 const liveCumData = computed(() => chartCumData.value)
 
-/* Versiones (lateral) */
+/* Versions */
 const versionHistory = ref(null)
 async function loadCurrentMonthVersions() {
 	if (!hasSelection.value) return
@@ -443,7 +449,7 @@ async function loadCurrentMonthVersions() {
 	versionHistory.value = res.data
 }
 
-/* Guardar (12/18) */
+/* Save */
 async function saveForecast() {
 	if (!hasSelection.value) return
 	if (changedCount.value === 0) {
@@ -474,6 +480,7 @@ async function saveForecast() {
 			detail: `${saved} Änderung${saved === 1 ? '' : 'en'} gespeichert`,
 			life: 2200,
 		})
+		loadingAll.value = true
 		await Promise.all([loadSeriesTable(), loadSeriesChart()])
 	} catch {
 		toast.add({
@@ -482,10 +489,12 @@ async function saveForecast() {
 			detail: 'Speichern fehlgeschlagen',
 			life: 2500,
 		})
+	} finally {
+		loadingAll.value = false
 	}
 }
 
-/* Guarded filter changes */
+/* Guarded changes */
 const confirmVisible = ref(false)
 const pendingChange = ref(null)
 function applyChange(kind, value) {
@@ -514,9 +523,7 @@ async function saveAndApply() {
 		await saveForecast()
 	} finally {
 		confirmVisible.value = false
-		if (pendingChange.value) {
-			applyChange(pendingChange.value.kind, pendingChange.value.value)
-		}
+		if (pendingChange.value) applyChange(pendingChange.value.kind, pendingChange.value.value)
 		pendingChange.value = null
 	}
 }
@@ -525,37 +532,33 @@ function discardAndApply() {
 		forecast.value[i] = Number(originalForecast.value[i] ?? 0)
 	}
 	confirmVisible.value = false
-	if (pendingChange.value) {
-		applyChange(pendingChange.value.kind, pendingChange.value.value)
-	}
+	if (pendingChange.value) applyChange(pendingChange.value.kind, pendingChange.value.value)
 	pendingChange.value = null
 }
 
 /* Utils */
 function clearSeries() {
-	const mlist = computeTableMonthsFiscal()
-	months.value = mlist
-	sales.value = Array(mlist.length).fill(0)
-	budget.value = Array(mlist.length).fill(0)
-	forecast.value = Array(mlist.length).fill(0)
-	orders.value = Array(mlist.length).fill(0)
+	const m = computeTableMonthsFiscal()
+	months.value = m
+	sales.value = Array(m.length).fill(0)
+	budget.value = Array(m.length).fill(0)
+	forecast.value = Array(m.length).fill(0)
+	orders.value = Array(m.length).fill(0)
 	originalForecast.value = forecast.value.slice()
 	viewportStart.value = Math.min(
 		computeInitialViewportStart(),
-		Math.max(0, mlist.length - viewportSize),
+		Math.max(0, m.length - viewportSize),
 	)
 }
 
-/* Títulos por tarjeta (usa prop :title) */
+/* Titles */
 function cardTitle(item) {
-	if (item.type === 'filters') return 'Filter'
 	if (item.type === 'chart') return `Diagramm (WJ ${fyTitleSpan()})`
 	if (item.type === 'chart-versions') return `Versionen (${monthTitleDE()})`
-	if (item.type === 'title' || item.type === 'table') return '' // sin header
 	return ''
 }
 
-/* Next (secondary) */
+/* Next button */
 function handleNext() {
 	const list = secondaryOptions.value
 	if (!list?.length) return
@@ -564,49 +567,130 @@ function handleNext() {
 	guardedChange('secondary', list[n].value)
 }
 
-/* Reactividad */
-watch(secondaryId, async () => {
-	await Promise.all([loadSeriesTable(), loadSeriesChart()])
+/* Reactive load on completed selection */
+watch([mode, primaryId, secondaryId], async () => {
+	loading.value = false
+	if (!hasSelection.value) return
+	loadingAll.value = true
+	try {
+		await Promise.all([loadSeriesTable(), loadSeriesChart()])
+	} finally {
+		loadingAll.value = false
+	}
 })
 
-/* Mount */
 onMounted(() => {
 	loadMaster()
 })
 
-/* Grid */
-const layout = ref([
-	{ i: 'filters', x: 0, y: 0, w: 2, h: 47, static: true, type: 'filters' },
-	{ i: 'title', x: 2, y: 0, w: 10, h: 4, static: true, type: 'title' },
-	{ i: 'chart-main', x: 2, y: 4, w: 7, h: 26, static: true, type: 'chart' },
-	{ i: 'chart-versions', x: 9, y: 4, w: 3, h: 26, static: true, type: 'chart-versions' },
-	{ i: 'table', x: 2, y: 30, w: 10, h: 17, static: true, type: 'table' },
-])
-
-/* IDs para charts */
+/* IDs */
 const currentClientId = computed(() =>
 	mode.value === 'client' ? primaryId.value : secondaryId.value,
 )
 const currentPcId = computed(() => (mode.value === 'client' ? secondaryId.value : primaryId.value))
 
-/* Ref tabla para scroll programático */
+/* Table ref */
 const tableRef = ref(null)
 </script>
 
 <style scoped>
 .forecast-wrapper {
-	height: 100vh;
-	width: 100%;
-	overflow: hidden;
+	position: relative;
+	min-height: calc(100vh - var(--navbar-h));
+	padding-bottom: 24px;
 }
 
-/* ocultar header en title/table */
+/* Heights responsivas */
+.h-filters {
+	min-height: 320px;
+}
+.h-title {
+	min-height: 72px;
+}
+.h-chart-main {
+	min-height: 440px;
+}
+.h-chart-side {
+	min-height: 440px;
+}
+.h-table {
+	min-height: 460px;
+}
+
+@media (max-width: 767.98px) {
+	.h-filters {
+		min-height: 280px;
+	}
+	.h-chart-main {
+		min-height: 360px;
+	}
+	.h-chart-side {
+		min-height: 320px;
+	}
+	.h-table {
+		min-height: 520px;
+	}
+}
+@media (min-width: 1200px) {
+	.h-chart-main {
+		min-height: 520px;
+	}
+	.h-chart-side {
+		min-height: 520px;
+	}
+	.h-table {
+		min-height: 520px;
+	}
+}
+
+/* Make chart areas fill cards */
+.card-body-fit {
+	height: 100%;
+	width: 100%;
+	display: grid;
+}
+.card-body-fit > * {
+	min-height: 0;
+	min-width: 0;
+}
+
+/* Hide card header when no-strip */
 .no-strip :deep(.card-header),
 .no-strip :deep(.glass-title),
 .no-strip :deep(.p-card-header) {
 	display: none !important;
 }
 
+/* Loader global */
+.page-loader {
+	position: fixed;
+	inset: var(--navbar-h) 0 0 0;
+	z-index: 999;
+	display: grid;
+	place-items: center;
+	gap: 12px;
+	background: color-mix(in oklab, var(--bg) 40%, transparent);
+	backdrop-filter: saturate(var(--glass-sat)) blur(6px);
+	-webkit-backdrop-filter: saturate(var(--glass-sat)) blur(6px);
+}
+.loader-text {
+	font-size: 0.95rem;
+	color: var(--text);
+	opacity: 0.85;
+}
+
+/* Placeholder */
+.card-placeholder {
+	min-height: 180px;
+	display: grid;
+	place-items: center;
+	color: var(--muted);
+	border: 1px dashed var(--border);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--surface) 65%, transparent);
+}
+
+/* Table navbar */
 .nav-bar {
 	padding: 2px 6px;
 }

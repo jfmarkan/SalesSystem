@@ -1,10 +1,7 @@
-// src/main.js
+// usa Lara, sin primeflex. Tu theme y main siguen primero.
+import './assets/css/theme.css'
 import './assets/css/main.css'
-import './assets/css/theme.css' // glassmorphism vars (light/dark)
 
-import '@primevue/themes/lara'
-import 'primeicons/primeicons.css'
-import 'primeflex/primeflex.css'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
 import { createApp } from 'vue'
@@ -22,7 +19,7 @@ pinia.use(createPersistedState)
 
 setupPrimeVue(app)
 
-// init theme (auto/light/dark) before mount
+// asegura tema antes de montar (login y navbar lo heredan)
 initTheme()
 
 app.use(pinia)
