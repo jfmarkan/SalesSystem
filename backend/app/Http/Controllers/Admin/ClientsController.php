@@ -7,6 +7,36 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ClientsController extends Controller {
+    public function summary()
+    {
+        $total   = DB::table('clients')->count();
+        $active  = DB::table('clients')->whereNull('deleted_at')->count();
+        $deleted = DB::table('clients')->whereNotNull('deleted_at')->count();
+
+        $byClass = DB::table('clients')
+            ->select('classification_id', DB::raw('COUNT(*) AS c'))
+            ->groupBy('classification_id')
+            ->get();
+
+        $pcCounts = DB::table('client_profit_centers')
+            ->select('client_group_number', DB::raw('COUNT(*) AS pcs'))
+            ->groupBy('client_group_number')
+            ->pluck('pcs', 'client_group_number');
+
+        $recent = DB::table('clients')
+            ->orderByDesc('updated_at')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'total' => $total,
+            'active' => $active,
+            'deleted' => $deleted,
+            'by_classification' => $byClass,
+            'pc_counts' => $pcCounts,
+            'recent' => $recent,
+        ]);
+    }
     public function index() {
         $clients = DB::table('clients as c')
             ->leftJoin('classifications as cl','cl.id','=','c.classification_id')

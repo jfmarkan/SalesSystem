@@ -22,6 +22,16 @@ use App\Http\Controllers\DeviationDetectController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ActionItemController;
 
+use App\Http\Controllers\Admin\UsersController as UserAdminController;
+use App\Http\Controllers\Admin\SessionAdminController as SessionAdminController;
+use App\Http\Controllers\Admin\ClientsController as ClientAdminController;
+use App\Http\Controllers\Admin\ProfitCentersController as ProfitCenterAdminController;
+use App\Http\Controllers\Admin\ToolsController as ToolsAdminController;
+use App\Http\Controllers\Admin\KpiController;
+use App\Http\Controllers\Admin\ProgressController;
+use App\Http\Controllers\Admin\ClientStatsController;
+
+
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
 Route::post('/resend-otp', [OtpController::class, 'resend']);
 
@@ -126,5 +136,44 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/clients/{cgn}/profit-centers', [ExtraQuotaController::class, 'clientProfitCenters'])->whereNumber('cgn');
         Route::get      ('/clients/exists-in-pc', [ExtraQuotaController::class, 'clientExistsInPc']);
         Route::post     ('/forecast/merge',       [ExtraQuotaController::class, 'mergeForecast']);
+    });
+
+    Route::prefix('settings')->group(function () {
+
+        // Users
+        Route::get('/users', [UserAdminController::class, 'index']);
+        Route::post('/users', [UserAdminController::class, 'store']);
+        Route::post('/users/{id}/block', [UserAdminController::class, 'block']);
+        Route::post('/users/{id}/unblock', [UserAdminController::class, 'unblock']);
+        Route::post('/users/{id}/kick', [UserAdminController::class, 'kick']);
+
+        // Sessions / online
+        Route::get('/sessions/online', [SessionAdminController::class, 'online']);
+        Route::delete('/sessions/by-user/{id}', [SessionAdminController::class, 'destroyByUser']);
+
+        // Clients
+        Route::get('/clients/summary', [ClientAdminController::class, 'summary']);
+        Route::get('/clients/{clientGroup}/pcs', [ClientAdminController::class, 'pcs']);
+        Route::put('/clients/{clientGroup}', [ClientAdminController::class, 'update']);
+        Route::post('/clients/{clientGroup}/pcs', [ClientAdminController::class, 'setPcs']);
+        Route::post('/clients/{clientGroup}/assign-user', [ClientAdminController::class, 'assignUser']);
+        Route::post('/clients/{clientGroup}/block', [ClientAdminController::class, 'block']);
+        Route::delete('/clients/{clientGroup}', [ClientAdminController::class, 'destroy']);
+
+        // Profit centers
+        Route::get('/profit-centers/summary', [ProfitCenterAdminController::class, 'summary']);
+        Route::put('/profit-centers/{code}', [ProfitCenterAdminController::class, 'update']);
+        Route::put('/profit-centers/{code}/conversion', [ProfitCenterAdminController::class, 'updateConversion']);
+        Route::put('/profit-centers/{code}/seasonality', [ProfitCenterAdminController::class, 'updateSeasonality']);
+
+        // Tools / flags
+        Route::post('/tools/rebuild-sales', [ToolsAdminController::class, 'rebuildSales']);
+        Route::post('/tools/generate-budget', [ToolsAdminController::class, 'generateBudget']);
+        Route::post('/flags/budget-season', [ToolsAdminController::class, 'setBudgetSeason']);
+
+        // KPIs and Progress
+        Route::get('/kpis/summary', [KpiController::class, 'index']);
+        Route::get('/progress/summary', [ProgressController::class, 'index']);
+        Route::get('/clients/{clientGroup}/stats', [ClientStatsController::class, 'show']); 
     });
 });

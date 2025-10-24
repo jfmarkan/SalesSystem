@@ -128,8 +128,7 @@
 </template>
 
 <script setup>
-// All comments in English
-
+/* ===== IMPORTS ===== */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Toast from 'primevue/toast'
@@ -144,71 +143,110 @@ import GlassCard from '@/components/ui/GlassCard.vue'
 import LineChartSmart from '@/components/charts/LineChartSmart.vue'
 import BudgetCasePanel from '@/components/elements/BudgetCaseItem.vue'
 
-const toast = useToast()
-const route = useRoute()
-const router = useRouter()
+/* ===== LOG ===== */
+const log = (...a) => console.log('[BudgetCases]', ...a)
+const warn = (...a) => console.warn('[BudgetCases]', ...a)
+const err = (...a) => console.error('[BudgetCases]', ...a)
 
-/* ---------------------------------------------------
-   Master data & assignment mapping (CPC id per pair)
----------------------------------------------------- */
+/* ===== MASTER DATA ===== */
 const clients = ref([])
 const profitCenters = ref([])
-const mapClientToPC = ref({})
-const mapPCToClient = ref({})
 const clientById = ref({})
 const pcById = ref({})
 
-const cpcByPair = ref({}) // key: "clientId-pcId" -> client_profit_center_id (number)
+// assignments del usuario: [{clientId, pcId, cpcId}]
+const assignments = ref([])
+
+// visibilidad (derivada de assignments)
+const mapClientToPC = ref({})   // clientId -> [pcId]
+const mapPCToClient = ref({})   // pcId -> [clientId]
+
+// mapa rápido clientId-pcId -> cpcId
+const cpcByPair = ref({})
 const pairKey = (cId, pId) => `${Number(cId)}-${Number(pId)}`
-function registerCpcPair(cId, pId, cpcIdRaw) {
-  const id = Number(cpcIdRaw)
-  if (Number.isFinite(id) && id > 0) {
-    cpcByPair.value = { ...cpcByPair.value, [pairKey(cId, pId)]: id }
-  }
+
+/* ===== HELPERS ===== */
+function arr(x) {
+  // Soporta: [], {data:[]}, {data:{data:[]}}, {items:[]}, {data:{items:[]}}.
+  if (Array.isArray(x)) return x
+  if (Array.isArray(x?.data)) return x.data
+  if (Array.isArray(x?.data?.data)) return x.data.data
+  if (Array.isArray(x?.items)) return x.items
+  if (Array.isArray(x?.data?.items)) return x.data.items
+  return []
 }
 
-async function loadMaster() {
-  await ensureCsrf()
-  const [resC, resP, resM] = await Promise.all([
-    api.get('/api/me/clients'),
-    api.get('/api/me/profit-centers'),
-    api.get('/api/me/assignments'),
-  ])
-  clients.value = Array.isArray(resC.data) ? resC.data : []
-  profitCenters.value = Array.isArray(resP.data) ? resP.data : []
-  mapClientToPC.value = resM.data?.clientToPc || {}
-  mapPCToClient.value = resM.data?.pcToClient || {}
-
-  clientById.value = Object.fromEntries(clients.value.map(c => [c.id, c]))
-  pcById.value = Object.fromEntries(profitCenters.value.map(p => [p.id, p]))
-
-  const m = resM.data || {}
-  if (m.cpcByPair && typeof m.cpcByPair === 'object') {
-    const cleaned = {}
-    for (const [k, v] of Object.entries(m.cpcByPair)) {
-      const n = Number(v); if (Number.isFinite(n) && n > 0) cleaned[k] = n
-    }
-    cpcByPair.value = cleaned
-  } else if (Array.isArray(m.pairs)) {
-    for (const row of m.pairs) {
-      registerCpcPair(row.clientId, row.profitCenterId, row.cpcId ?? row.client_profit_center_id)
-    }
-  }
-}
-
-/* ---------------------------------------------------
-   Filters / selection + URL persistence
----------------------------------------------------- */
+/* ===== FILTERS / SELECTION ===== */
 const mode = ref('') // 'client' | 'pc'
 const primaryId = ref(null)
 const secondaryId = ref(null)
 const loading = ref(false)
-const suspendGuard = ref(false) // avoid save/discard modal during initial restore
+const suspendGuard = ref(false)
 
+/* ===== FY ===== */
+function budgetYearByToday() {
+  const d = new Date(), m = d.getMonth() + 1, y = d.getFullYear()
+  const fy = (m >= 4 && m <= 12) ? y + 1 : y
+  log('budgetYearByToday() →', fy)
+  return fy
+}
+const budgetFiscalYear = ref(budgetYearByToday())
+
+/* ===== LOAD MASTER ===== */
+async function loadMaster() {
+  log('loadMaster()')
+  await ensureCsrf()
+  const fy = budgetFiscalYear.value
+  const [resC, resP, resA] = await Promise.all([
+    api.get('/api/me/clients', { withCredentials: true }),
+    api.get('/api/me/profit-centers', { withCredentials: true }),
+    api.get('/api/me/assignments', { params: { fiscal_year: fy }, withCredentials: true }),
+  ])
+
+  log('GET /me/clients →', resC.status)
+  log('GET /me/profit-centers →', resP.status)
+  log('GET /me/assignments →', resA.status)
+  log('assignments payload shape:', Object.keys(resA.data || {}))
+
+  clients.value = arr(resC.data)
+  profitCenters.value = arr(resP.data)
+  clientById.value = Object.fromEntries(clients.value.map(c => [Number(c.id), c]))
+  pcById.value     = Object.fromEntries(profitCenters.value.map(p => [Number(p.id), p]))
+
+  const aRaw = arr(resA.data)
+  log('assignments len=', aRaw.length, 'sample=', aRaw[0] ?? null)
+
+  assignments.value = aRaw.map(r => ({
+    clientId: Number(r.client_id ?? r.clientId ?? r.client_group_id ?? r.client_group_number),
+    pcId:     Number(r.profit_center_id ?? r.profitCenterId ?? r.pc_id),
+    cpcId:    Number(r.client_profit_center_id ?? r.cpcId ?? r.cpc_id ?? r.id),
+  })).filter(x => Number.isFinite(x.clientId) && Number.isFinite(x.pcId) && Number.isFinite(x.cpcId))
+
+  // visibilidad
+  const c2p = {}, p2c = {}
+  for (const r of assignments.value) {
+    if (!Array.isArray(c2p[r.clientId])) c2p[r.clientId] = []
+    if (!Array.isArray(p2c[r.pcId]))     p2c[r.pcId]     = []
+    if (!c2p[r.clientId].includes(r.pcId)) c2p[r.clientId].push(r.pcId)
+    if (!p2c[r.pcId].includes(r.clientId)) p2c[r.pcId].push(r.clientId)
+  }
+  mapClientToPC.value = c2p
+  mapPCToClient.value = p2c
+
+  // mapa cpc
+  const map = {}
+  for (const r of assignments.value) map[pairKey(r.clientId, r.pcId)] = r.cpcId
+  cpcByPair.value = map
+
+  log('loaded summary → clients', clients.value.length, 'pcs', profitCenters.value.length, 'assignments', assignments.value.length)
+  if (!assignments.value.length) warn('assignments vacío. Revisa params fiscal_year y cookies.')
+}
+
+/* ===== MODE/ROUTING ===== */
 function normalizeMode(v) {
   const s = String(v || '').toLowerCase().trim()
-  if (['client', 'cliente', 'kunde'].includes(s)) return 'client'
-  if (['pc', 'profit', 'profitcenter', 'profit center'].includes(s)) return 'pc'
+  if (['client','cliente','kunde'].includes(s)) return 'client'
+  if (['pc','profit','profitcenter','profit center'].includes(s)) return 'pc'
   return ''
 }
 const hasSelection = computed(() => !!mode.value && primaryId.value != null && secondaryId.value != null)
@@ -224,221 +262,162 @@ function syncRouteQuery() {
   if (mode.value) q.mode = mode.value; else delete q.mode
   if (primaryId.value != null) q.primaryId = String(primaryId.value); else delete q.primaryId
   if (secondaryId.value != null) q.secondaryId = String(secondaryId.value); else delete q.secondaryId
+  log('router.replace query →', q)
   router.replace({ query: q })
 }
+const route = useRoute()
+const router = useRouter()
 async function restoreSelectionFromRoute() {
+  log('restoreSelectionFromRoute() →', route.query)
   const m = normalizeMode(route.query.mode)
   const p = route.query.primaryId != null ? Number(route.query.primaryId) : null
   const s = route.query.secondaryId != null ? Number(route.query.secondaryId) : null
-
   suspendGuard.value = true
   try {
     if (m) mode.value = m
     if (p != null) primaryId.value = p
     if (s != null) secondaryId.value = s
+    log('restored →', { mode: mode.value, primaryId: primaryId.value, secondaryId: secondaryId.value, hasSelection: hasSelection.value })
     if (hasSelection.value) {
       await refreshCaseFlagsForSecondary()
       await Promise.all([loadSeries(), loadBudgetCasePrefill()])
     }
-  } finally {
-    suspendGuard.value = false
-  }
+  } finally { suspendGuard.value = false }
 }
-watch([mode, primaryId, secondaryId], () => syncRouteQuery())
+watch([mode, primaryId, secondaryId], () => { log('watch mode/ids →', { mode: mode.value, primaryId: primaryId.value, secondaryId: secondaryId.value }); syncRouteQuery() })
 
-/* ---------------------------------------------------
-   Fiscal year rule
-   Jan–Mar = same year, Apr–Dec = next year
----------------------------------------------------- */
-function budgetYearByToday() {
-  const d = new Date(), m = d.getMonth() + 1, y = d.getFullYear()
-  return (m >= 4 && m <= 12) ? y + 1 : y
-}
-const budgetFiscalYear = ref(budgetYearByToday())
-
-/* ---------------------------------------------------
-   Current selection helpers
----------------------------------------------------- */
-function toNumberSafe(...vals) {
-  for (const v of vals) { const n = Number(v); if (Number.isFinite(n)) return n }
-  return null
-}
+/* ===== CURRENT SELECTION ===== */
 const currentClientId = computed(() => mode.value === 'client' ? primaryId.value : secondaryId.value)
 const currentPcId     = computed(() => mode.value === 'client' ? secondaryId.value : primaryId.value)
 
-const currentCGN = computed(() => {
-  const c = clientById.value[currentClientId.value]
-  const v = toNumberSafe(c?.client_group_number, c?.group_number, c?.clientGroupNumber, c?.client_group)
-  if (Number.isFinite(v)) return v
-  const fb = Number(mode.value === 'client' ? primaryId.value : secondaryId.value)
-  return Number.isFinite(fb) ? fb : null
-})
-const currentPCC = computed(() => {
-  const p = pcById.value[currentPcId.value]
-  const v = toNumberSafe(p?.profit_center_code, p?.code, p?.profitCenterCode)
-  if (Number.isFinite(v)) return v
-  const fb = Number(mode.value === 'client' ? secondaryId.value : primaryId.value)
-  return Number.isFinite(fb) ? fb : null
-})
-const cgnForChild = computed(() => Number.isFinite(Number(currentCGN.value)) ? Number(currentCGN.value) : null)
-const pccForChild = computed(() => Number.isFinite(Number(currentPCC.value)) ? Number(currentPCC.value) : null)
-
-/* ---------------------------------------------------
-   CPC id resolution and ready flags (✓)
----------------------------------------------------- */
+/* ===== RESOLVER CPC DESDE ASSIGNMENTS ===== */
 function cpcIdFor(clientId, pcId) {
-  const id = cpcByPair.value[pairKey(clientId, pcId)]
-  const n = Number(id)
-  return Number.isFinite(n) && n > 0 ? n : null
+  const cid = Number(clientId), pid = Number(pcId)
+  const hit = assignments.value.find(a => a.clientId === cid && a.pcId === pid)
+  const id = hit ? hit.cpcId : null
+  log('cpcIdFor', { cid, pid, id })
+  return id
 }
 
-const hasCaseCpcSet = ref(new Set()) // Set<number>, reactive via reassignment
-function addReadyCpc(id) {
-  const n = Number(id)
-  if (!Number.isFinite(n) || n <= 0) return
-  const next = new Set(hasCaseCpcSet.value)
-  next.add(n)
-  hasCaseCpcSet.value = next
-}
-
-/* Batch exists check (prefer fast endpoint; fallback to per-id GET) */
-async function refreshCaseFlagsForSecondary() {
-  hasCaseCpcSet.value = new Set()
-  if (!mode.value || primaryId.value == null) return
-
-  // Build list of CPC ids for visible secondaries
-  let cpcIds = []
-  if (mode.value === 'client') {
-    const pcIds = mapClientToPC.value[primaryId.value] || []
-    cpcIds = pcIds.map(pid => cpcIdFor(primaryId.value, pid)).filter(id => Number.isFinite(id) && id > 0)
-  } else {
-    const clIds = mapPCToClient.value[primaryId.value] || []
-    cpcIds = clIds.map(cid => cpcIdFor(cid, primaryId.value)).filter(id => Number.isFinite(id) && id > 0)
+/* ===== OPCIONES SECUNDARIAS ===== */
+const secondaryOptions = computed(() => {
+  if (!mode.value || primaryId.value == null) {
+    log('secondaryOptions → empty by no selection')
+    return []
   }
+  if (mode.value === 'pc') {
+    const pid = Number(primaryId.value)
+    const clientIds = [...new Set(assignments.value.filter(a => a.pcId === pid).map(a => a.clientId))]
+    const out = clientIds.map(id => ({ label: clientById.value[id]?.name || String(id), value: id }))
+    log('secondaryOptions pc→clients pid=', pid, 'count=', out.length)
+    return out
+  } else {
+    const cid = Number(primaryId.value)
+    const pcIds = [...new Set(assignments.value.filter(a => a.clientId === cid).map(a => a.pcId))]
+    const out = pcIds.map(id => {
+      const p = pcById.value[id]
+      return { label: `${p?.code ?? p?.profit_center_code ?? ''} — ${p?.name ?? id}`, value: id }
+    })
+    log('secondaryOptions client→pcs cid=', cid, 'count=', out.length)
+    return out
+  }
+})
+
+/* ===== FLAGS DE EXISTENCIA ===== */
+const hasCaseCpcSet = ref(new Set())
+async function refreshCaseFlagsForSecondary() {
+  log('refreshCaseFlagsForSecondary() start')
+  hasCaseCpcSet.value = new Set()
+  if (!mode.value || primaryId.value == null) { log('skip: no mode/primary'); return }
+
+  let items = []
+  if (mode.value === 'pc') {
+    const pid = Number(primaryId.value)
+    items = assignments.value.filter(a => a.pcId === pid)
+  } else {
+    const cid = Number(primaryId.value)
+    items = assignments.value.filter(a => a.clientId === cid)
+  }
+  if (!items.length) { log('skip exists: no items'); return }
+
+  const cpcIds = items.map(i => i.cpcId).filter(n => Number.isFinite(n) && n > 0)
+  log('exists for cpc_ids:', cpcIds.length, cpcIds.slice(0, 10))
   if (!cpcIds.length) return
 
   try {
     await ensureCsrf()
-    const params = { fiscal_year: budgetFiscalYear.value, cpc_ids: cpcIds.join(',') }
-    const { data } = await api.get('/api/budget-cases/exists', { params })
+    const { data } = await api.get('/api/budget-cases/exists', {
+      params: { fiscal_year: budgetFiscalYear.value, cpc_ids: cpcIds.join(',') },
+      withCredentials: true
+    })
     const exists = Array.isArray(data?.exists) ? data.exists.map(Number).filter(Number.isFinite) : []
     hasCaseCpcSet.value = new Set(exists)
-  } catch {
-    const found = new Set()
-    await Promise.all(
-      cpcIds.map(id =>
-        api.get('/api/budget-cases', { params: { client_profit_center_id: id, fiscal_year: budgetFiscalYear.value } })
-          .then(({ data }) => { if (data?.data) found.add(id) })
-          .catch(() => {})
-      )
-    )
-    hasCaseCpcSet.value = found
+    log('exists size', exists.length)
+  } catch (e) {
+    err('exists ERROR', e?.response?.status, e?.message, e?.response?.data)
   }
 }
 
-/* Prefill form by CPC id; fallback to CGN/PCC if CPC map is missing */
-const prefillFromDb = ref({ best_case: null, worst_case: null })
-const savedBest = ref(0)
-const savedWorst = ref(0)
-async function loadBudgetCasePrefill() {
-  prefillFromDb.value = { best_case: null, worst_case: null }
-  savedBest.value = 0
-  savedWorst.value = 0
-  if (!hasSelection.value) return
-
-  const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
-  try {
-    await ensureCsrf()
-    if (Number.isFinite(cpcId) && cpcId > 0) {
-      const { data } = await api.get('/api/budget-cases', {
-        params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value }
-      })
-      if (data?.data) {
-        const b = Number(data.data.best_case) || 0
-        const w = Number(data.data.worst_case) || 0
-        prefillFromDb.value = { best_case: b, worst_case: w }
-        savedBest.value = b
-        savedWorst.value = w
-        addReadyCpc(cpcId)
-      } else {
-        // no record -> keep saved as 0,0
-        prefillFromDb.value = { best_case: null, worst_case: null }
-      }
-    } else {
-      // Fallback by CGN/PCC
-      const cgn = Number(cgnForChild.value), pcc = Number(pccForChild.value)
-      if (Number.isFinite(cgn) && Number.isFinite(pcc)) {
-        const { data } = await api.get('/api/budget-cases', {
-          params: { client_group_number: cgn, profit_center_code: pcc, fiscal_year: budgetFiscalYear.value }
-        })
-        if (data?.data) {
-          const b = Number(data.data.best_case) || 0
-          const w = Number(data.data.worst_case) || 0
-          prefillFromDb.value = { best_case: b, worst_case: w }
-          savedBest.value = b
-          savedWorst.value = w
-        }
-      }
-    }
-  } catch { /* silent */ }
-  // ensure not dirty after prefill init
-  budgetDirty.value = false
-  await nextTick()
-  budgetDirty.value = false
-}
-
-/* Current selection ✓ badge */
-const hasCaseForSelection = computed(() => {
-  if (!hasSelection.value) return false
-  const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
-  return Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
-})
-
-/* ---------------------------------------------------
-   Secondary options + visual decoration (🟢 / ⚪)
----------------------------------------------------- */
-const secondaryOptions = computed(() => {
-  if (!mode.value || primaryId.value == null) return []
-  if (mode.value === 'client') {
-    const ids = mapClientToPC.value[primaryId.value] || []
-    return ids.map(id => {
-      const p = pcById.value[id]; if (!p) return null
-      return { label: `${p.code} — ${p.name}`, value: p.id }
-    }).filter(Boolean)
-  } else {
-    const ids = mapPCToClient.value[primaryId.value] || []
-    return ids.map(id => {
-      const c = clientById.value[id]; if (!c) return null
-      return { label: c.name, value: c.id }
-    }).filter(Boolean)
-  }
-})
-
+/* ===== DECORACIÓN LISTA ===== */
 const decoratedSecondaryOptions = computed(() => {
   const list = secondaryOptions.value
   if (!list.length || !mode.value) return list
-  return list.map(opt => {
-    const clientId = mode.value === 'client' ? primaryId.value : opt.value
-    const pcId     = mode.value === 'client' ? opt.value     : primaryId.value
+  const out = list.map(opt => {
+    const clientId = mode.value === 'pc' ? opt.value : primaryId.value
+    const pcId     = mode.value === 'pc' ? primaryId.value : opt.value
     const cpcId    = cpcIdFor(clientId, pcId)
     const ready    = Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
     return { ...opt, label: (ready ? '🟢 ' : '⚪ ') + opt.label, ready }
   })
+  log('decoratedSecondaryOptions count=', out.length)
+  return out
 })
 
-/* ---------------------------------------------------
-   Series (chart/table)
----------------------------------------------------- */
-function genMonths(n) {
-  const out = [], base = new Date(); base.setDate(1)
-  for (let i = 0; i < n; i++) {
-    const d = new Date(base.getFullYear(), base.getMonth() + i, 1)
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return out
-}
-function fillZeros(n) { return Array(n).fill(0) }
+/* ===== PREFILL ===== */
+const prefillFromDb = ref({ best_case: null, worst_case: null })
 
+async function loadBudgetCasePrefill() {
+  log('loadBudgetCasePrefill()')
+  prefillFromDb.value = { best_case: null, worst_case: null }
+  savedBest.value = 0; savedWorst.value = 0
+  if (!hasSelection.value) { log('skip: no selection'); return }
+  const cid = Number(currentClientId.value)
+  const pid = Number(currentPcId.value)
+  const cpcId = cpcIdFor(cid, pid)
+  log('prefill params', { cpcId, fy: budgetFiscalYear.value })
+  if (!Number.isFinite(cpcId) || cpcId <= 0) return
+  try {
+    await ensureCsrf()
+    const { data } = await api.get('/api/budget-cases', {
+      params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value },
+      withCredentials: true
+    })
+    log('prefill resp keys', Object.keys(data || {}))
+    if (data?.data) {
+      const b = Number(data.data.best_case) || 0
+      const w = Number(data.data.worst_case) || 0
+      prefillFromDb.value = { best_case: b, worst_case: w }
+      savedBest.value = b; savedWorst.value = w
+      log('prefill found', b, w)
+    }
+  } catch (e) {
+    err('prefill ERROR', e?.response?.status, e?.message, e?.response?.data)
+  }
+  await nextTick(); budgetDirty.value = false
+}
+
+/* ===== BADGE HEADER ===== */
+const hasCaseForSelection = computed(() => {
+  if (!hasSelection.value) return false
+  const cid = Number(currentClientId.value)
+  const pid = Number(currentPcId.value)
+  const cpcId = cpcIdFor(cid, pid)
+  return Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
+})
+
+/* ===== SERIES (chart/table) ===== */
+function genMonths(n){ const out=[],base=new Date(); base.setDate(1); for(let i=0;i<n;i++){const d=new Date(base.getFullYear(), base.getMonth()+i,1); out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)} return out }
+function fillZeros(n){ return Array(n).fill(0) }
 const months = ref(genMonths(18))
 const sales = ref(fillZeros(18))
 const budget = ref(fillZeros(18))
@@ -447,149 +426,96 @@ const orders = ref(fillZeros(18))
 const originalForecast = ref(fillZeros(12))
 
 async function loadSeries() {
-  if (!hasSelection.value) return
+  log('loadSeries()')
+  if (!hasSelection.value) { log('skip: no selection'); return }
   loading.value = true
   try {
     await ensureCsrf()
     const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
     const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
-    const { data } = await api.get('/api/forecast/series', { params: { clientId, profitCenterId } })
+    log('GET /forecast/series params', { clientId, profitCenterId })
+    const { data } = await api.get('/api/forecast/series', { params: { clientId, profitCenterId }, withCredentials: true })
     months.value   = Array.isArray(data.months)   && data.months.length   ? data.months   : genMonths(18)
     sales.value    = Array.isArray(data.sales)    && data.sales.length    ? data.sales    : fillZeros(18)
     budget.value   = Array.isArray(data.budget)   && data.budget.length   ? data.budget   : fillZeros(18)
     forecast.value = Array.isArray(data.forecast) && data.forecast.length ? data.forecast : fillZeros(18)
     orders.value   = Array.isArray(data.orders)   && data.orders.length   ? data.orders   : fillZeros(18)
     originalForecast.value = Array.isArray(data.forecast) ? data.forecast.slice(0, 12) : fillZeros(12)
-  } finally {
-    loading.value = false
-  }
+    log('series set', { months: months.value.length })
+  } catch(e){
+    err('series ERROR', e?.response?.status, e?.message, e?.response?.data)
+  } finally { loading.value = false }
 }
 
-/* ---------------------------------------------------
-   Chart data + overlays
----------------------------------------------------- */
-function cumulateToLen(arr, len) {
-  const out = []; let s = 0
-  for (let i = 0; i < len; i++) { s += Number(arr?.[i] ?? 0); out.push(s) }
-  return out
-}
-const overlayBest = ref([])   // cumulative best
-const overlayWorst = ref([])  // cumulative worst
-
-function toCum(arr) { const out = []; let s = 0; for (let i = 0; i < arr.length; i++) { s += Number(arr[i] || 0); out.push(s) } return out }
-function onSimulated(payload) {
+/* ===== CHART OVERLAYS ===== */
+function cumulateToLen(arr,len){ const out=[]; let s=0; for(let i=0;i<len;i++){ s+=Number(arr?.[i]??0); out.push(s) } return out }
+const overlayBest = ref([]), overlayWorst = ref([])
+function toCum(arr){ const out=[]; let s=0; for(let i=0;i<arr.length;i++){ s+=Number(arr[i]||0); out.push(s) } return out }
+function onSimulated(payload){
   const t = Array.isArray(payload?.seriesTarget) ? payload.seriesTarget : []
-  const bestC = toCum(t.map(x => Number(x?.best || 0)))
-  const worstC = toCum(t.map(x => Number(x?.worst || 0)))
+  const bestC = toCum(t.map(x=>Number(x?.best||0)))
+  const worstC= toCum(t.map(x=>Number(x?.worst||0)))
   const len = months.value?.length || 0
   const dest = Math.min(12, len), start = Math.max(0, len - dest)
   const B = Array(len).fill(0), W = Array(len).fill(0)
-  for (let i = 0; i < dest; i++) { B[start + i] = bestC[i] ?? 0; W[start + i] = worstC[i] ?? 0 }
-  overlayBest.value = B; overlayWorst.value = W
+  for (let i=0;i<dest;i++){ B[start+i]=bestC[i]??0; W[start+i]=worstC[i]??0 }
+  overlayBest.value=B; overlayWorst.value=W
 }
-const liveCumData = computed(() => {
-  if (!hasSelection.value) return null
-  const len = months.value?.length || 0
-  const salesCum    = cumulateToLen(sales.value, len)
-  const budgetCum   = cumulateToLen(budget.value, len)
-  const forecastCum = cumulateToLen(forecast.value, len)
-  const fy = budgetCum.length ? Number(budgetCum[budgetCum.length - 1] || 0) : 0
-  return {
-    months: months.value || [],
-    sales_cum: salesCum,
-    budget_cum: budgetCum,
-    forecast_cum: forecastCum,
-    budget_fy_line: Array(len).fill(fy),
-  }
-})
-const cumDataForChart = computed(() => {
-  const base = liveCumData.value; if (!base) return null
-  const out = { ...base }
-  if (overlayBest.value.length === base.months.length) out.overlay_best = overlayBest.value
-  if (overlayWorst.value.length === base.months.length) out.overlay_worst = overlayWorst.value
-  return out
-})
 
-/* ---------------------------------------------------
-   Save budget case (CPC id preferred, CGN/PCC fallback)
-   + robust dirty detection (no false modals)
----------------------------------------------------- */
+/* ===== SAVE ===== */
+const toast = useToast()
 const bcRef = ref(null)
 const budgetDirty = ref(false)
 const confirmVisible = ref(false)
 const pendingChange = ref(null)
 const hasUnsaved = computed(() => !!budgetDirty.value)
-
 const bestLatest = ref(0)
 const worstLatest = ref(0)
-const round4 = (n) => Math.round((Number(n) || 0) * 10000) / 10000
-
+const savedBest = ref(0)
+const savedWorst = ref(0)
+const round4 = n => Math.round((Number(n)||0)*10000)/10000
 function onChildValues({ best_case, worst_case }) {
-  const b = Number(best_case) || 0
-  const w = Number(worst_case) || 0
-  bestLatest.value = b
-  worstLatest.value = w
-  // Dirty only if values differ from last saved snapshot
-  budgetDirty.value = (round4(b) !== round4(savedBest.value)) || (round4(w) !== round4(savedWorst.value))
+  const b=Number(best_case)||0, w=Number(worst_case)||0
+  bestLatest.value=b; worstLatest.value=w
+  budgetDirty.value = (round4(b)!==round4(savedBest.value)) || (round4(w)!==round4(savedWorst.value))
 }
-function sanitize(v, fb = 0) { const n = Number(v); return Number.isFinite(n) ? n : (Number(fb) || 0) }
+function sanitize(v, fb=0){ const n=Number(v); return Number.isFinite(n)?n:(Number(fb)||0) }
 
 async function saveBudgetCase() {
   if (!bcRef.value) return
-
-  const clientId = currentClientId.value
-  const pcId     = currentPcId.value
-  const cpcId    = cpcIdFor(clientId, pcId)
-  const cgn      = Number(cgnForChild.value)
-  const pcc      = Number(pccForChild.value)
-
+  const cid = Number(currentClientId.value)
+  const pid = Number(currentPcId.value)
+  const cpcId = cpcIdFor(cid, pid)
   const fromChild = bcRef.value.getValues?.()
   const best  = sanitize(fromChild?.best_case, bestLatest.value)
   const worst = sanitize(fromChild?.worst_case, worstLatest.value)
-
   try {
     await ensureCsrf()
-    const payload = {
-      fiscal_year: budgetFiscalYear.value,
-      best_case: best,
-      worst_case: worst,
+    const payload = { fiscal_year: budgetFiscalYear.value, best_case: best, worst_case: worst }
+    if (Number.isFinite(cpcId) && cpcId > 0) payload.client_profit_center_id = cpcId
+    else {
+      toast.add({ severity:'warn', summary:'Hinweis', detail:'client_profit_center_id fehlt', life: 2500 })
+      return
     }
-
-    if (Number.isFinite(cpcId) && cpcId > 0) {
-      payload.client_profit_center_id = cpcId
-    } else {
-      if (!Number.isFinite(cgn) || !Number.isFinite(pcc)) {
-        toast.add({ severity: 'warn', summary: 'Hinweis', detail: 'Zuordnung (CGN/PCC) fehlt', life: 2500 })
-        return
-      }
-      payload.client_group_number = cgn
-      payload.profit_center_code  = pcc
-    }
-
     const { data } = await api.post('/api/budget-cases', payload, { withCredentials: true })
-
-    const savedCpcId = Number(data?.data?.client_profit_center_id)
+    const savedCpcId = Number(data?.data?.client_profit_center_id) || cpcId
     if (Number.isFinite(savedCpcId) && savedCpcId > 0) {
-      registerCpcPair(clientId, pcId, savedCpcId)
-      addReadyCpc(savedCpcId)
+      cpcByPair.value[pairKey(cid, pid)] = savedCpcId
+      hasCaseCpcSet.value.add(savedCpcId)
     }
-
-    // Update snapshot to new saved values -> no dirty
-    savedBest.value  = best
-    savedWorst.value = worst
+    savedBest.value = best; savedWorst.value = worst
     budgetDirty.value = false
     bcRef.value?.markSaved?.()
-    toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Budget Case gespeichert', life: 2200 })
+    toast.add({ severity:'success', summary:'Gespeichert', detail:'Budget Case gespeichert', life: 2000 })
+    await refreshCaseFlagsForSecondary()
   } catch (e) {
     const msg = e?.response?.data?.message || e?.message || 'Speichern fehlgeschlagen'
-    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 3000 })
+    toast.add({ severity:'error', summary:'Fehler', detail: msg, life: 3000 })
     throw e
   }
 }
 
-/* ---------------------------------------------------
-   Guarded changes & navigation (no false prompts)
----------------------------------------------------- */
+/* ===== NAV GUARD Y NEXT ===== */
 function clearAll() {
   months.value = genMonths(18)
   sales.value = fillZeros(18)
@@ -604,26 +530,20 @@ function clearAll() {
   budgetDirty.value = false
   bcRef.value?.hardReset?.()
 }
-
 async function applyChange(kind, value) {
   if (kind === 'mode') {
-    mode.value = value; primaryId.value = null; secondaryId.value = null; clearAll()
+    mode.value = value; primaryId.value=null; secondaryId.value=null; clearAll()
   } else if (kind === 'primary') {
-    primaryId.value = value; secondaryId.value = null; clearAll(); await refreshCaseFlagsForSecondary()
+    primaryId.value = value; secondaryId.value=null; clearAll(); await refreshCaseFlagsForSecondary()
   } else if (kind === 'secondary') {
     secondaryId.value = value; clearAll()
   }
   await Promise.all([loadSeries(), loadBudgetCasePrefill()])
 }
-
 function guardedChange(kind, value) {
   if (suspendGuard.value) { applyChange(kind, value); return }
-  if (hasUnsaved.value) {
-    pendingChange.value = { kind, value }
-    confirmVisible.value = true
-  } else {
-    applyChange(kind, value)
-  }
+  if (hasUnsaved.value) { pendingChange.value = { kind, value }; confirmVisible.value = true }
+  else { applyChange(kind, value) }
 }
 async function saveAndApply() {
   try { if (hasUnsaved.value) await saveBudgetCase() }
@@ -648,21 +568,17 @@ function handleNext() {
   guardedChange('secondary', list[n].value)
 }
 
-/* ---------------------------------------------------
-   Watches / lifecycle
----------------------------------------------------- */
+/* ===== WATCHES / LIFECYCLE ===== */
 watch([mode, primaryId], () => { if (primaryId.value != null) refreshCaseFlagsForSecondary() })
 watch(secondaryId, () => { loadSeries(); loadBudgetCasePrefill() })
 
 onMounted(async () => {
   budgetFiscalYear.value = budgetYearByToday()
   await loadMaster()
-  await restoreSelectionFromRoute() // restore selection from URL so content doesn't vanish when returning
+  await restoreSelectionFromRoute()
 })
 
-/* ---------------------------------------------------
-   Header labels
----------------------------------------------------- */
+/* ===== HEADER LABELS ===== */
 const selectedClientName = computed(() => {
   if (mode.value === 'client') return clientById.value[primaryId.value]?.name || ''
   return clientById.value[secondaryId.value]?.name || ''
@@ -678,24 +594,20 @@ const selectedPCName = computed(() => {
 <style scoped>
 /* Design tokens (light/dark) */
 :root {
-  --bg: #f6f7f9;
   --surface: #ffffff;
   --text: #111827;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --ok-bg: #e8f7ee;
   --ok-text: #0e7a3e;
   --ok-border: #b6e2c8;
   --shadow: 0 8px 24px rgba(0,0,0,0.06);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1020;
     --surface: #12182a;
     --text: #e5e7eb;
     --muted: #9aa3b2;
     --border: #1f2937;
-    --ok-bg: #0e2a1b;
     --ok-text: #8ce0ae;
     --ok-border: #1f5a3b;
     --shadow: 0 10px 28px rgba(0,0,0,0.35);

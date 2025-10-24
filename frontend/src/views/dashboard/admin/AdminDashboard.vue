@@ -1,429 +1,478 @@
-<script setup>
-import { onMounted, ref, computed } from 'vue'
-import { useAdmin } from '@/stores/admin'
-import { useTheme } from '@/composables/useTheme'
-
-// PrimeVue components (unstyled)
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Dropdown from 'primevue/dropdown'
-import Dialog from 'primevue/dialog'
-import Calendar from 'primevue/calendar'
-
-const adm = useAdmin()
-const { theme, toggle } = useTheme()
-
-const tab = ref('overview')
-const fy = ref(new Date().getFullYear())
-const nextFy = computed(() => new Date().getFullYear() + 1)
-
-const formClient = ref({ client_group_number: 0, client_name: '', classification_id: 1 })
-const formUser = ref({ first_name: '', last_name: '', username: '', email: '', password: '', role_id: 1, disabled: false })
-const rel = ref({ client_group_number: 0, profit_center_code: 0 })
-const salesFrom = ref(new Date())
-
-const showNewClient = ref(false)
-const showNewUser = ref(false)
-
-onMounted(async () => {
-  if (!adm.loaded) await adm.loadAll()
-  await adm.loadLogs()
-  await adm.loadBudgetCases(fy.value)
-})
-
-const clientsSorted = computed(() => [...adm.clients].sort((a, b) => a.client_name.localeCompare(b.client_name, 'de')))
-const usersSorted = computed(() => [...adm.users].sort((a, b) => a.username.localeCompare(b.username, 'de')))
-const pcsOptions = computed(() => adm.profitCenters.map(p => ({ label: `${p.profit_center_code} — ${p.profit_center_name}`, value: p.profit_center_code })))
-const clientsOptions = computed(() => clientsSorted.value.map(c => ({ label: c.client_name, value: c.client_group_number })))
-
-</script>
-
 <template>
-  <div class="container">
-    <!-- Navbar -->
-    <div class="navbar card">
-      <div class="flex items-center gap-12">
-        <div class="brand">
-          <img :src="logoSrc" alt="logo" />
-          <strong>Admin</strong>
-        </div>
-        <div class="spacer"></div>
-        <div class="tabs">
-          <button :class="['tab',{active:tab==='overview'}]" @click="tab='overview'">Übersicht</button>
-          <button :class="['tab',{active:tab==='clients'}]" @click="tab='clients'">Kunden</button>
-          <button :class="['tab',{active:tab==='users'}]" @click="tab='users'">Benutzer</button>
-          <button :class="['tab',{active:tab==='profit'}]" @click="tab='profit'">Profit Center</button>
-          <button :class="['tab',{active:tab==='budget'}]" @click="tab='budget'">Budget</button>
-          <button :class="['tab',{active:tab==='logs'}]" @click="tab='logs'">Protokoll</button>
-          <button :class="['tab',{active:tab==='tools'}]" @click="tab='tools'">Tools</button>
-        </div>
-        <div class="spacer"></div>
-        <label class="switch">
-          <input type="checkbox" :checked="theme==='dark'" @change="toggle" />
-          <span>{{ theme==='dark' ? 'Dark' : 'Light' }}</span>
-        </label>
-      </div>
-    </div>
+	<div class="container-fluid admin-home">
+		<!-- Tres paneles -->
+		<div class="row mt-16">
+			<div class="span-12 md-span-4 xl-span-3">
+				<div class="glass card h-full no-strip">
+					<UsersCompactList
+						:users="users"
+						:onlineMap="onlineMap"
+						@create="openCreateUser"
+						@block="onBlockUser"
+						@kick="onKickUser"
+						@edit="onEditUser"
+					/>
+				</div>
+			</div>
 
-    <!-- Flags -->
-    <div class="card">
-      <div class="flex items-center gap-12">
-        <label class="switch">
-          <input type="checkbox" :checked="adm.flags.maintenance" @change="adm.setMaintenance($event.target.checked)" />
-          <span>Wartungsmodus</span>
-        </label>
-        <label class="switch">
-          <input type="checkbox" :checked="adm.flags.budget_period_active" @change="adm.setBudgetPeriod($event.target.checked)" />
-          <span>Budgetperiode aktiv</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Overview -->
-    <div v-if="tab==='overview'" class="row mt-12">
-      <div class="card span-12 md-span-6 xl-span-4">
-        <div class="card-header"><h3 class="card-title">Status</h3></div>
-        <ul class="m-0">
-          <li>Kunden: <strong>{{ adm.clients.length }}</strong></li>
-          <li>Benutzer: <strong>{{ adm.users.length }}</strong> (online: {{ adm.users.filter(u=>u.online).length }})</li>
-          <li>Profit Center: <strong>{{ adm.profitCenters.length }}</strong></li>
-        </ul>
-      </div>
-      <div class="card span-12 md-span-6 xl-span-8">
-        <div class="card-header"><h3 class="card-title">Schnellaktionen</h3></div>
-        <div class="flex gap-12">
-          <Button label="Neuer Kunde" @click="showNewClient=true" />
-          <Button label="Neuer Benutzer" @click="showNewUser=true" />
-          <Button label="Kunden öffnen" @click="tab='clients'" />
-          <Button label="Logs öffnen" @click="tab='logs'" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Clients -->
-    <div v-if="tab==='clients'" class="card mt-12">
-      <div class="card-header">
-        <h3 class="card-title">Kunden</h3>
-        <Button label="Neu" @click="showNewClient=true" />
-      </div>
-
-      <div class="row">
-        <div class="span-12">
-          <table class="table">
-            <thead>
-              <tr><th>Code</th><th>Name</th><th>Klassifikation</th><th>PCs</th><th>Benutzer</th><th class="text-right">Aktionen</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in clientsSorted" :key="c.client_group_number">
-                <td>{{ c.client_group_number }}</td>
-                <td>{{ c.client_name }}</td>
-                <td>{{ c.classification || c.classification_id }}</td>
-                <td>{{ c.cpc_count }}</td>
-                <td>{{ c.user_count }}</td>
-                <td class="text-right">
-                  <Button label="Details" @click="adm.loadClient(c.client_group_number)" />
-                  <Button label="Löschen" severity="danger" @click="adm.deleteClient(c.client_group_number)" />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-if="adm.clientDetail" class="span-12 mt-12">
-          <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">Details: {{ adm.clientDetail.client.client_name }}</h3>
+			<div class="span-12 md-span-4 xl-span-6">
+                <div class="glass card h-full no-strip">
+                    <ClientsMiniList
+                    :items="clientsPageItems"
+                    :total="clientsTotal"
+                    :page="clientsPage"
+                    :perPage="clientsPerPage"
+                    :query="clientsQuery"
+                    @update:page="v => { clientsPage = v; loadClientsPaged() }"
+                    @update:perPage="v => { clientsPerPage = v; clientsPage = 1; loadClientsPaged() }"
+                    @update:query="v => { clientsQuery = v; clientsPage = 1; loadClientsPaged() }"
+                    @create="goto('/admin/clients')"
+                    @view="openClientQuick"
+                    @edit="() => goto('/admin/clients')"
+                    @delete="onDeleteClient"
+                    />
+                </div>
             </div>
-            <table class="table">
-              <thead><tr><th>Relation-ID</th><th>PC-Code</th><th>Name</th><th>Aktion</th></tr></thead>
-              <tbody>
-                <tr v-for="r in adm.clientDetail.profit_centers" :key="r.id">
-                  <td>{{ r.id }}</td>
-                  <td>{{ r.profit_center_code }}</td>
-                  <td>{{ r.profit_center_name }}</td>
-                  <td><Button label="Löschen" severity="danger" @click="adm.unlinkClientPC(r.id).then(()=>adm.loadClient(adm.clientDetail.client.client_group_number))" /></td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="flex gap-12 mt-12">
-              <Dropdown class="input" :options="clientsOptions" optionLabel="label" optionValue="value" v-model="rel.client_group_number" placeholder="Kunde wählen…" />
-              <Dropdown class="input" :options="pcsOptions" optionLabel="label" optionValue="value" v-model="rel.profit_center_code" placeholder="Profit Center wählen…" />
-              <Button label="Relation erstellen" severity="success" :disabled="!rel.client_group_number || !rel.profit_center_code"
-                      @click="adm.linkClientPC(rel).then(()=>{adm.loadClient(adm.clientDetail.client.client_group_number); rel.client_group_number=0; rel.profit_center_code=0;})" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Users -->
-    <div v-if="tab==='users'" class="card mt-12">
-      <div class="card-header">
-        <h3 class="card-title">Benutzer</h3>
-        <Button label="Neu" @click="showNewUser=true" />
-      </div>
-      <table class="table">
-        <thead><tr><th>Benutzername</th><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th class="text-right">Aktionen</th></tr></thead>
-        <tbody>
-          <tr v-for="u in usersSorted" :key="u.id">
-            <td>{{ u.username }}</td>
-            <td>{{ u.first_name }} {{ u.last_name }}</td>
-            <td>{{ u.email }}</td>
-            <td>{{ u.role || u.role_id }}</td>
-            <td><span class="badge" :class="u.disabled ? 'blocked':'ok'">{{ u.disabled ? 'Gesperrt' : (u.online ? 'Online' : 'Offline') }}</span></td>
-            <td class="text-right">
-              <Button label="Sitzung beenden" @click="adm.kickUser(u.id)" />
-              <Button :label="u.disabled ? 'Freigeben':'Sperren'" severity="warning" @click="adm.updateUser(u.id, { disabled: !u.disabled })" />
-              <Button label="Löschen" severity="danger" @click="adm.deleteUser(u.id)" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+			<div class="span-12 md-span-4 xl-span-3">
+				<div class="glass card h-full no-strip">
+					<ProfitCentersMiniList
+						:items="pcsShort"
+						:total="pcsTotal"
+						:counts="pcClientCounts"
+						@create="goto('/admin/profit-centers')"
+						@view="(p) => goto('/admin/profit-centers')"
+						@edit="(p) => goto('/admin/profit-centers')"
+					/>
+				</div>
+			</div>
+		</div>
 
-    <!-- Profit Centers -->
-    <div v-if="tab==='profit'" class="card mt-12">
-      <div class="card-header"><h3 class="card-title">Profit Center</h3></div>
-      <table class="table">
-        <thead><tr><th>Code</th><th>Name</th></tr></thead>
-        <tbody>
-          <tr v-for="p in adm.profitCenters" :key="p.profit_center_code">
-            <td>{{ p.profit_center_code }}</td>
-            <td>{{ p.profit_center_name }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Budget -->
-    <div v-if="tab==='budget'" class="row mt-12">
-      <div class="card span-12 xl-span-8">
-        <div class="card-header">
-          <h3 class="card-title">Budgetfälle {{ fy }}</h3>
-          <div class="flex items-center gap-12">
-            <InputText type="number" v-model.number="fy" style="width:140px" />
-            <Button label="Neu laden" @click="adm.loadBudgetCases(fy)" />
-          </div>
-        </div>
-        <table class="table">
-          <thead><tr><th>CPC</th><th>Best Case</th><th>Worst Case</th></tr></thead>
-          <tbody>
-            <tr v-for="b in adm.budgetCases" :key="b.id || (b.client_profit_center_id+'-'+b.fiscal_year)">
-              <td>{{ b.client_profit_center_id }}</td>
-              <td><InputText type="number" :value="b.best_case" @change="adm.upsertBudgetCase({ client_profit_center_id: b.client_profit_center_id, fiscal_year: fy, best_case: +$event.target.value, worst_case: b.worst_case || 0 })" /></td>
-              <td><InputText type="number" :value="b.worst_case" @change="adm.upsertBudgetCase({ client_profit_center_id: b.client_profit_center_id, fiscal_year: fy, best_case: b.best_case || 0, worst_case: +$event.target.value })" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="card span-12 xl-span-4">
-        <h3 class="card-title m-0">Nächstes Geschäftsjahr</h3>
-        <p class="text-muted">FY: {{ nextFy }}</p>
-        <Button label="Budget-Struktur erstellen" severity="success" @click="adm.createNextYearBudgets(nextFy)" />
-        <hr class="div" />
-        <Button label="Best/Worst Übersicht (Konsole)" @click="adm.clientsBestWorst(fy).then(r=>console.log('clients best/worst', r))" />
-      </div>
-    </div>
-
-    <!-- Logs -->
-    <div v-if="tab==='logs'" class="card mt-12">
-      <div class="card-header">
-        <h3 class="card-title">Protokoll</h3>
-        <Button label="Testeintrag" @click="adm.addLog({ level:'INFO', message:'Test', context:{ by:'admin-ui' } })" />
-      </div>
-      <table class="table">
-        <thead><tr><th>ID</th><th>Level</th><th>Nachricht</th><th>Datum</th></tr></thead>
-        <tbody>
-          <tr v-for="e in adm.logs" :key="e.id">
-            <td>{{ e.id }}</td>
-            <td>{{ e.event }}</td>
-            <td>{{ e.description }}</td>
-            <td>{{ new Date(e.created_at).toLocaleString('de-DE') }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Tools -->
-    <div v-if="tab==='tools'" class="card mt-12">
-      <h3 class="card-title m-0">Tools</h3>
-      <div class="flex gap-12 mt-12">
-        <label style="min-width:240px">
-          <span class="text-muted" style="display:block;margin-bottom:6px">Startdatum</span>
-          <Calendar v-model="salesFrom" dateFormat="yy-mm-dd" showIcon :touchUI="true" />
-        </label>
-        <Button label="Verkäufe neu aufbauen" :disabled="!salesFrom" @click="adm.rebuildSales(new Date(salesFrom).toISOString().slice(0,10))" />
-      </div>
-    </div>
-
-    <!-- Dialog: Neuer Kunde -->
-    <Dialog v-model:visible="showNewClient" modal :draggable="false">
-      <template #header><h3 class="card-title m-0">Neuer Kunde</h3></template>
-      <div class="row">
-        <label class="span-12 md-span-6"><span class="text-muted">Code</span><InputText type="number" v-model.number="formClient.client_group_number" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Name</span><InputText v-model="formClient.client_name" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Klassifikation-ID</span><InputText type="number" v-model.number="formClient.classification_id" /></label>
-      </div>
-      <template #footer>
-        <Button label="Abbrechen" link @click="showNewClient=false" />
-        <Button label="Erstellen" severity="success" @click="adm.createClient(formClient).then(()=>{ showNewClient=false; formClient={ client_group_number:0, client_name:'', classification_id:1 } })" />
-      </template>
-    </Dialog>
-
-    <!-- Dialog: Neuer Benutzer -->
-    <Dialog v-model:visible="showNewUser" modal :draggable="false">
-      <template #header><h3 class="card-title m-0">Neuer Benutzer</h3></template>
-      <div class="row">
-        <label class="span-12 md-span-6"><span class="text-muted">Vorname</span><InputText v-model="formUser.first_name" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Nachname</span><InputText v-model="formUser.last_name" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Benutzername</span><InputText v-model="formUser.username" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">E-Mail</span><InputText v-model="formUser.email" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Passwort</span><InputText type="password" v-model="formUser.password" /></label>
-        <label class="span-12 md-span-6"><span class="text-muted">Rollen-ID</span><InputText type="number" v-model.number="formUser.role_id" /></label>
-        <label class="span-12 md-span-6 flex items-center gap-12"><span class="text-muted">Gesperrt</span><input type="checkbox" v-model="formUser.disabled" /></label>
-      </div>
-      <template #footer>
-        <Button label="Abbrechen" link @click="showNewUser=false" />
-        <Button label="Erstellen" severity="success" @click="adm.createUser(formUser).then(()=>{ showNewUser=false; formUser={ first_name:'',last_name:'',username:'',email:'',password:'',role_id:1,disabled:false } })" />
-      </template>
-    </Dialog>
-  </div>
+		<!-- Create user -->
+		<Dialog
+			v-model:visible="createUserVisible"
+			header="Neuer Benutzer"
+			:modal="true"
+			:style="{ width: '560px' }"
+		>
+			<div class="row">
+				<div class="span-12 md-span-6">
+					<FloatLabel
+						><InputText id="fn" v-model="newUser.first_name" class="input" /><label
+							for="fn"
+							>Vorname</label
+						></FloatLabel
+					>
+				</div>
+				<div class="span-12 md-span-6">
+					<FloatLabel
+						><InputText id="ln" v-model="newUser.last_name" class="input" /><label
+							for="ln"
+							>Nachname</label
+						></FloatLabel
+					>
+				</div>
+				<div class="span-12 md-span-6">
+					<FloatLabel
+						><InputText id="un" v-model="newUser.username" class="input" /><label
+							for="un"
+							>Benutzername</label
+						></FloatLabel
+					>
+				</div>
+				<div class="span-12 md-span-6">
+					<FloatLabel
+						><InputText id="em" v-model="newUser.email" class="input" /><label for="em"
+							>E-Mail</label
+						></FloatLabel
+					>
+				</div>
+				<div class="span-12 md-span-6">
+					<FloatLabel
+						><Password
+							id="pw"
+							v-model="newUser.password"
+							toggleMask
+							:feedback="false"
+							class="w-100"
+						/><label for="pw">Passwort</label></FloatLabel
+					>
+				</div>
+				<div class="span-12 md-span-6">
+					<Dropdown
+						v-model="newUser.role_id"
+						:options="roles"
+						optionLabel="label"
+						optionValue="value"
+						placeholder="Rolle"
+						class="w-100"
+					/>
+				</div>
+			</div>
+			<template #footer>
+				<Button label="Abbrechen" severity="secondary" @click="createUserVisible = false" />
+				<Button label="Erstellen" icon="pi pi-check" @click="onCreateUser" />
+			</template>
+		</Dialog>
+        <ClientQuickView
+  v-model="clientQuickVisible"
+  :client="clientQuick"
+  :pcs="clientQuickPcs"
+  :loading="clientQuickLoading"
+  @edit="() => { clientQuickVisible=false; goto('/admin/clients') }"
+/>
+	</div>
 </template>
 
+<script setup>
+import { ref, onMounted } from 'vue'
+import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
+import Dropdown from 'primevue/dropdown'
+import InputText from 'primevue/inputtext'
+import FloatLabel from 'primevue/floatlabel'
+import Password from 'primevue/password'
+import { useToast } from 'primevue/usetoast'
+import { useRouter } from 'vue-router'
+
+import ClientQuickView from '@/components/admin/ClientQuickView.vue'
+import UsersCompactList from '@/components/admin/UsersCompactList.vue'
+import ClientsMiniList from '@/components/admin/ClientsMiniList.vue'
+import ProfitCentersMiniList from '@/components/admin/ProfitCentersMiniList.vue'
+import { useAdminApi } from '@/composables/useAdminApi'
+
+const toast = useToast()
+const router = useRouter()
+const clientsPage = ref(1)
+const clientsPerPage = ref(20)
+const clientsQuery = ref('')
+const clientsPageItems = ref([])
+
+// cache para fallback client-side si el backend no pagina
+const _clientsCache = ref([])
+
+const {
+  // Admin API
+  getUsers,                // GET /api/settings/users
+  getSessionsOnline,       // GET /api/settings/sessions/online
+  getClients,              // GET /api/extra-quota/clients
+  getProfitCenters,        // GET /api/analytics/pc/list
+  getClientsSummary,       // GET /api/settings/clients/summary
+  getPcsSummary,           // GET /api/settings/profit-centers/summary
+  getKpis,                 // GET /api/settings/kpis/summary
+  getProgress,             // GET /api/settings/progress/summary
+  // acciones
+  createUser,              // POST /api/settings/users
+  blockUser,               // POST /api/settings/users/{id}/block
+  kickUser,                // POST /api/settings/users/{id}/kick
+  deleteClient             // DELETE /api/settings/clients/{clientGroup}
+} = useAdminApi()
+
+/* ---------- state ---------- */
+const loading = ref(false)
+const errorMsg = ref('')
+
+const users = ref([])
+const onlineMap = ref({})
+
+const clients = ref([])
+const profitCenters = ref([])
+
+const clientsSummaryState = ref({ total: 0, active: 0, blocked: 0, pc_counts: {} })
+const pcsSummaryState     = ref({ total: 0, active: 0, archived: 0, clients_per_pc: {} })
+
+const kpisState = ref(null)
+const progressState = ref(null)
+
+const clientsTotal = ref(0)
+const pcsTotal     = ref(0)
+
+const clientsShort = ref([])
+const pcsShort     = ref([])
+const pcClientCounts = ref({})
+
+/* ---------- utils ---------- */
+function fyOf(d = new Date()) {
+  const y = d.getFullYear(), m = d.getMonth() + 1
+  return m >= 4 ? y : y - 1 // FY Apr–Mar
+}
+const activeFy = ref(fyOf())
+
+function takeArray(res) {
+  const d = res?.data ?? res
+  if (Array.isArray(d)) return d
+  if (!d || typeof d !== 'object') return []
+  for (const k of ['items','list','rows','clients','profit_centers','pcs','data']) {
+    if (Array.isArray(d[k])) return d[k]
+  }
+  return []
+}
+
+/* ---------- nav ---------- */
+function goto(path) {
+  router.push(path)
+}
+
+/* ---------- acciones usuarios ---------- */
+const createUserVisible = ref(false)
+const newUser = ref({
+  first_name: '', last_name: '', username: '',
+  email: '', password: '', role_id: 4
+})
+const roles = [
+  { label: 'Superadmin', value: 1 },
+  { label: 'Admin', value: 2 },
+  { label: 'Manager', value: 3 },
+  { label: 'Sales Rep', value: 4 }
+]
+
+function openCreateUser() { createUserVisible.value = true }
+
+async function onCreateUser() {
+  try {
+    await createUser({ ...newUser.value })
+    toast.add({ severity: 'success', summary: 'Erstellt', detail: 'Benutzer erstellt', life: 1600 })
+    createUserVisible.value = false
+    await loadUsers()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Konnte nicht erstellen', life: 2200 })
+  }
+}
+
+async function onBlockUser(u) {
+  try {
+    await blockUser(u.id)
+    toast.add({ severity: 'warn', summary: 'Blockiert', detail: u.username, life: 1500 })
+    await loadUsers()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Blockieren fehlgeschlagen', life: 2200 })
+  }
+}
+
+async function onKickUser(u) {
+  try {
+    await kickUser(u.id)
+    toast.add({ severity: 'info', summary: 'Abgemeldet', detail: u.username, life: 1500 })
+    await loadUsers()
+  } catch {
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Aktion fehlgeschlagen', life: 2200 })
+  }
+}
+
+async function onEditUser() { goto('/admin/users') }
+
+/* ---------- acciones clientes ---------- */
+async function onDeleteClient(c) {
+  try {
+    await deleteClient(c.client_group_number)
+    toast.add({ severity: 'success', summary: 'Gelöscht', detail: c.client_name, life: 1500 })
+    await loadClientsAndPcs() // refresca listas
+  } catch {
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Löschen fehlgeschlagen', life: 2200 })
+  }
+}
+
+/* ---------- loaders ---------- */
+async function loadUsers() {
+  const [uRes, omRes] = await Promise.all([ getUsers(), getSessionsOnline() ])
+  users.value = uRes?.data ?? []
+  onlineMap.value = omRes?.data ?? {}
+}
+
+async function loadClientsAndPcs() {
+  const [rC, rPC, rCS, rPS] = await Promise.allSettled([
+    getClients(),
+    getProfitCenters(),
+    getClientsSummary(),
+    getPcsSummary()
+  ])
+
+  // clients
+  if (rC.status === 'fulfilled') {
+    const list = takeArray(rC.value)
+    clients.value = list
+    clientsShort.value = list.slice(0, 50)
+    clientsTotal.value = list.length
+  }
+  if (rCS.status === 'fulfilled' && rCS.value?.data) {
+    clientsSummaryState.value = rCS.value.data
+    if (!clientsTotal.value) clientsTotal.value = Number(rCS.value.data?.total ?? 0)
+  }
+
+  // profit centers
+  if (rPC.status === 'fulfilled') {
+    const list = takeArray(rPC.value)
+    profitCenters.value = list
+    pcsShort.value = list.slice(0, 50)
+    pcsTotal.value = list.length
+  }
+  if (rPS.status === 'fulfilled' && rPS.value?.data) {
+    pcsSummaryState.value = rPS.value.data
+    pcClientCounts.value = rPS.value.data?.clients_per_pc || {}
+    if (!pcsTotal.value) pcsTotal.value = Number(rPS.value.data?.total ?? 0)
+  }
+}
+
+async function loadKpisAndProgress() {
+  const [rK, rPr] = await Promise.allSettled([
+    getKpis(),
+    getProgress(activeFy.value)
+  ])
+  if (rK.status === 'fulfilled')  kpisState.value = rK.value?.data ?? null
+  if (rPr.status === 'fulfilled') progressState.value = rPr.value?.data ?? null
+}
+
+async function load() {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    await loadUsers()
+    await Promise.all([
+      loadClientsAndPcs(),
+      loadKpisAndProgress()
+    ])
+  } catch (e) {
+    errorMsg.value = 'Fehler beim Laden'
+  } finally {
+    loading.value = false
+  }
+}
+
+function parseClientsResponse(res) {
+  const d = res?.data ?? res
+  if (Array.isArray(d)) {
+    return { items: d, total: d.length, serverPaged: false }
+  }
+  if (d && typeof d === 'object') {
+    // formatos comunes: { data:[], meta:{total:...} } o { items:[], total:... }
+    const items = Array.isArray(d.data) ? d.data
+                : Array.isArray(d.items) ? d.items
+                : Array.isArray(d.clients) ? d.clients
+                : []
+    const total = Number(d?.meta?.total ?? d?.total ?? items.length) || items.length
+    const serverPaged = !!(d?.meta?.total || d?.total)
+    return { items, total, serverPaged }
+  }
+  return { items: [], total: 0, serverPaged: false }
+}
+
+async function loadClientsPaged() {
+  // intento server-side pagination
+  try {
+    const res = await getClients({
+      page: clientsPage.value,
+      per_page: clientsPerPage.value,
+      q: clientsQuery.value || undefined
+    })
+    const { items, total, serverPaged } = parseClientsResponse(res)
+    if (serverPaged) {
+      clientsPageItems.value = items
+      clientsTotal.value = total
+      return
+    }
+    // fallback: cache + paginado local
+    if (!_clientsCache.value.length) _clientsCache.value = items
+    const list = clientsQuery.value
+      ? _clientsCache.value.filter(c =>
+          String(c.client_name).toLowerCase().includes(clientsQuery.value.toLowerCase()) ||
+          String(c.client_group_number).includes(clientsQuery.value))
+      : _clientsCache.value
+    clientsTotal.value = list.length
+    const start = (clientsPage.value - 1) * clientsPerPage.value
+    clientsPageItems.value = list.slice(start, start + clientsPerPage.value)
+  } catch {
+    clientsPageItems.value = []
+    clientsTotal.value = 0
+  }
+}
+
+// quick view
+const clientQuickVisible = ref(false)
+const clientQuick = ref(null)
+const clientQuickPcs = ref([])
+const clientQuickLoading = ref(false)
+
+async function openClientQuick(c) {
+  clientQuick.value = c
+  clientQuickPcs.value = []
+  clientQuickLoading.value = true
+  clientQuickVisible.value = true
+  try {
+    // usa tu ruta ya definida: /api/settings/clients/{clientGroup}/pcs
+    const res = await getClientPcs(c.client_group_number)
+    const d = res?.data ?? res
+    clientQuickPcs.value = Array.isArray(d) ? d
+      : (Array.isArray(d?.items) ? d.items
+      : (Array.isArray(d?.pcs) ? d.pcs : []))
+  } catch {
+    clientQuickPcs.value = []
+  } finally {
+    clientQuickLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await load()        // lo que ya tenés para users, kpis, etc.
+  await loadClientsPaged()
+})
+</script>
+
 <style scoped>
-.admin {
+/* Schnellaktionen */
+.sa-card {
+	padding: 14px;
+}
+.sa-title {
+	font-weight: 800;
+	margin-bottom: 10px;
+}
+.sa-grid {
 	display: grid;
-	gap: 16px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
 }
-.row {
+.chip {
 	display: flex;
-	gap: 8px;
 	align-items: center;
-	flex-wrap: wrap;
-}
-.row.space {
-	justify-content: space-between;
-}
-.card {
-	background: #111827;
-	border: 1px solid #1f2937;
-	border-radius: 12px;
-	padding: 12px;
-}
-.tabs {
-	display: flex;
-	gap: 6px;
-}
-.tab {
-	padding: 8px 10px;
-	border-radius: 8px;
-	border: 1px solid #1f2937;
-	background: #1f2937;
-	color: #e5e7eb;
-}
-.tab.active {
-	background: #253044;
-}
-.table {
-	width: 100%;
-	border-collapse: collapse;
-}
-.table th,
-.table td {
-	border-bottom: 1px solid #1f2937;
-	padding: 8px;
-	text-align: left;
-}
-.btn {
-	padding: 8px 10px;
-	border-radius: 8px;
-	border: 1px solid #1f2937;
-	background: #1f2937;
-	color: #e5e7eb;
+	gap: 10px;
+	padding: 14px;
+	border-radius: 14px;
+	color: #fff;
+	border: 0;
 	cursor: pointer;
+	font-weight: 700;
+	letter-spacing: 0.2px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+	transition:
+		transform 0.08s ease,
+		box-shadow 0.2s ease;
 }
-.btn:hover {
-	background: #253044;
+.chip i {
+	font-size: 1.2rem;
 }
-.btn.primary {
-	background: #0b5;
-	border-color: #0a4;
-	color: #041;
+.chip:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
-.btn.warn {
-	background: #3a2;
-	border-color: #2a1;
-	color: #041;
+.chip-benutzer {
+	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
 }
-.btn.danger {
-	background: #7a1e1e;
-	border-color: #8b1d1d;
-	color: #fee2e2;
+:root:not(.dark) .chip-kunden {
+	background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
 }
-.btn.ghost {
-	background: transparent;
+:root.dark .chip-kunden {
+	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
 }
-.input {
-	width: 100%;
-	padding: 8px;
-	border-radius: 8px;
-	border: 1px solid #1f2937;
-	background: #0b1020;
-	color: #e5e7eb;
+.chip-pc {
+	background: linear-gradient(60deg, #6fba82, #07b39b, #1098ad, #5073b8);
 }
-.switch {
-	display: inline-flex;
-	gap: 6px;
-	align-items: center;
+
+/* Cards */
+.no-strip {
+	padding-top: 10px;
 }
-.badge {
-	padding: 2px 8px;
-	border-radius: 999px;
-	font-size: 12px;
-	border: 1px solid #1f2937;
-}
-.badge.ok {
-	background: #0f2a1b;
-	color: #a7f3d0;
-	border-color: #064e3b;
-}
-.badge.blocked {
-	background: #3b0f10;
-	color: #fca5a5;
-	border-color: #7f1d1d;
-}
-.grid {
-	display: grid;
-	gap: 12px;
-}
-.grid.two {
-	grid-template-columns: 1fr 1fr;
-}
-.modal {
-	position: fixed;
-	inset: 0;
-	background: rgba(0, 0, 0, 0.6);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 20px;
-}
-.modal .box {
-	width: 100%;
-	max-width: 640px;
-}
-.actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: 12px;
-}
-.inner {
-	background: #0f172a;
-}
-.lbl {
-	display: block;
-	font-size: 12px;
-	color: #9ca3af;
+.h-full {
+	height: 100%;
+	min-height: 360px;
 }
 </style>

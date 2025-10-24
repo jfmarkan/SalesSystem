@@ -133,6 +133,26 @@ const routes = [
                     requiresAuth: true
                 }
             },
+            {
+            path: '/admin',
+            component: AdminDashboard,
+            meta: { requiresAuth: true }
+            },
+// {
+//   path: '/admin/users',
+//   component: () => import('@/views/admin/users/UsersIndex.vue'),
+//   meta: { requiresAuth: true }
+// },
+// {
+//   path: '/admin/clients',
+//   component: () => import('@/views/admin/clients/ClientsIndex.vue'), // opcional futuro
+//   meta: { requiresAuth: true }
+// },
+// {
+//   path: '/admin/profit-centers',
+//   component: () => import('@/views/admin/profit-centers/ProfitCentersIndex.vue'), // opcional futuro
+//   meta: { requiresAuth: true }
+// }
         ],
         meta: { requiresAuth: true },
     },
