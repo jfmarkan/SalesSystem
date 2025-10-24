@@ -1,6 +1,7 @@
 // usa Lara, sin primeflex. Tu theme y main siguen primero.
 import './assets/css/theme.css'
 import './assets/css/main.css'
+import './assets/css/fonts.css'
 
 import '@fortawesome/fontawesome-free/css/all.min.css'
 
@@ -16,6 +17,7 @@ import { initTheme } from './composables/useTheme'
 const app = createApp(App)
 const pinia = createPinia()
 pinia.use(createPersistedState)
+
 
 setupPrimeVue(app)
 

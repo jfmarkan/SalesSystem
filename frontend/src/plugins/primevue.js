@@ -1,9 +1,9 @@
-// PrimeVue con tema Lara. OverlayPanel -> Popover.
+// PrimeVue con tema Aura. OverlayPanel -> Popover.
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 import Tooltip from 'primevue/tooltip'
-import Lara from '@primevue/themes/lara'
+import Aura from '@primevue/themes/aura'
 
 import 'primeicons/primeicons.css'
 
@@ -79,7 +79,7 @@ export default function setupPrimeVue(app) {
   app.use(PrimeVue, {
     ripple: true,
     theme: {
-      preset: Lara,
+      preset: Aura,
       options: { darkModeSelector: 'html.dark', cssLayer: false }
     }
   })

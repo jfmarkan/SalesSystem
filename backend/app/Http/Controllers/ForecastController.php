@@ -64,37 +64,48 @@ class ForecastController extends Controller
     }
 
     // GET /api/me/assignments → { clientToPc: { [clientId]: [pcId...] }, pcToClient: { [pcId]: [clientId...] } }
-    public function getAssignments(Request $request)
-    {
-        $user = $request->user();
-        if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
+// GET /api/me/assignments → { clientToPc: {...}, pcToClient: {...}, cpcIds: [...] }
+public function getAssignments(Request $request)
+{
+    $user = $request->user();
+    if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
 
-        $assignments = Assignment::with(['clientProfitCenter:id,client_group_number,profit_center_code'])
-            ->where('user_id', $user->id)
-            ->get(['id','client_profit_center_id','team_id','user_id']);
+    $assignments = Assignment::with(['clientProfitCenter:id,client_group_number,profit_center_code'])
+        ->where('user_id', $user->id)
+        ->get(['id','client_profit_center_id','team_id','user_id']);
 
-        $clientToPc = [];
-        $pcToClient = [];
+    $clientToPc = [];
+    $pcToClient = [];
+    $cpcIds = []; // ✅ AGREGAR ESTO
 
-        foreach ($assignments as $a) {
-            $cpc = $a->clientProfitCenter;
-            if (!$cpc) continue;
+    foreach ($assignments as $a) {
+        $cpc = $a->clientProfitCenter;
+        if (!$cpc) continue;
 
-            $clientId = (int) $cpc->client_group_number;
-            $pcId     = (int) $cpc->profit_center_code;
+        $clientId = (int) $cpc->client_group_number;
+        $pcId     = (int) $cpc->profit_center_code;
+        $cpcId    = (int) $a->client_profit_center_id; // ✅ EL ID REAL
 
-            $clientToPc[$clientId][] = $pcId;
-            $pcToClient[$pcId][]     = $clientId;
-        }
+        $clientToPc[$clientId][] = $pcId;
+        $pcToClient[$pcId][]     = $clientId;
 
-        $clientToPc = array_map(fn($arr) => array_values(array_unique($arr)), $clientToPc);
-        $pcToClient = array_map(fn($arr) => array_values(array_unique($arr)), $pcToClient);
-
-        return response()->json([
-            'clientToPc' => $clientToPc,
-            'pcToClient' => $pcToClient,
-        ]);
+        // ✅ AGREGAR EL MAPEO REAL
+        $cpcIds[] = [
+            'client_id' => $clientId,
+            'profit_center_id' => $pcId,
+            'client_profit_center_id' => $cpcId
+        ];
     }
+
+    $clientToPc = array_map(fn($arr) => array_values(array_unique($arr)), $clientToPc);
+    $pcToClient = array_map(fn($arr) => array_values(array_unique($arr)), $pcToClient);
+
+    return response()->json([
+        'clientToPc' => $clientToPc,
+        'pcToClient' => $pcToClient,
+        'cpcIds' => $cpcIds, // ✅ DEVOLVER LOS CPC IDs REALES
+    ]);
+}
 
     // ========================= SERIES (WITH FORMULAS) =========================
     // GET /api/forecast/series?clientId=&profitCenterId=

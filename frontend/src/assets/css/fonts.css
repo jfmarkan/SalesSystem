@@ -1,0 +1,49 @@
+/* Inter Variable: peso 100–900, italic incluido */
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap');
+
+/* Base tipográfica de la app: PrimeVue hereda de aquí */
+html {
+  /* Prime (docs) trabajan con 14px base; ajusta si quieres 16px */
+  font-size: 14px;
+}
+
+:root {
+  /* Altura del navbar (NAPPAR). Cambia aquí y todo se recalcula. */
+  --navbar-h: 56px;
+
+  /* Stack con fallback del sitio */
+  --app-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+              Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+              "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--app-font);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mínimo padding global de contenido */
+.app-content {
+  /* 0.5–0.75rem auto en mobile-first */
+  padding: clamp(0.5rem, 1.6vw, 0.75rem);
+}
+
+/* Contenido que siempre ocupa 100% de alto menos el navbar */
+.app-fill {
+  min-height: calc(100dvh - var(--navbar-h));
+}
+
+/* Safe areas móviles */
+@supports (padding: max(0px)) {
+  .app-content {
+    padding-left: max(clamp(0.5rem, 1.6vw, 0.75rem), env(safe-area-inset-left));
+    padding-right: max(clamp(0.5rem, 1.6vw, 0.75rem), env(safe-area-inset-right));
+    padding-bottom: max(clamp(0.5rem, 1.6vw, 0.75rem), env(safe-area-inset-bottom));
+  }
+}

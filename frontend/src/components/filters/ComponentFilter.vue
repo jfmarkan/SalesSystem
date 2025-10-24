@@ -54,7 +54,11 @@ const sid = computed({
         {{ m==='client' ? 'Profit Center des Kunden' : 'Kunden im Profit Center' }}
       </label>
       <Listbox class="w-full" v-model="sid" :options="secondaryOptions" optionLabel="label" optionValue="value"
-               listStyle="max-height: 50vh" :disabled="!m || pid==null" />
+               listStyle="max-height: 50vh" :disabled="!m || pid==null">
+			    <template #option="{ option }">
+      <span v-html="option.label"></span>
+    </template>
+	  </Listbox>
     </div>
 
     <Button class="w-full" label="Weiter" icon="pi pi-arrow-right" @click="$emit('next')" :disabled="!sid" />
