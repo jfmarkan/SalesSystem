@@ -46,7 +46,6 @@ import Menu from 'primevue/menu'
 import Menubar from 'primevue/menubar'
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
-import OverlayPanel from 'primevue/overlaypanel' // legacy, no registrar
 import Popover from 'primevue/popover' // reemplazo v4
 import Panel from 'primevue/panel'
 import Password from 'primevue/password'
@@ -124,7 +123,6 @@ export default function setupPrimeVue(app) {
   app.component('Menubar', Menubar)
   app.component('Message', Message)
   app.component('MultiSelect', MultiSelect)
-  // NO registrar OverlayPanel
   app.component('Popover', Popover)
   app.component('Panel', Panel)
   app.component('Password', Password)

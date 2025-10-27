@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\ToolsController as ToolsAdminController;
 use App\Http\Controllers\Admin\KpiController;
 use App\Http\Controllers\Admin\ProgressController;
 use App\Http\Controllers\Admin\ClientStatsController;
+use App\Http\Controllers\BudgetGenerationController;
 
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
@@ -39,7 +40,7 @@ Route::get('/deviations/detect', [DeviationDetectController::class, 'detect']);
 Route::get('/erp/auto-sales-update', [ErpImportController::class, 'auto']);
 
 Route::middleware('auth:sanctum')->group(function () {
-
+    Route::post('/budgets/generate', [BudgetGenerationController::class, 'generate']);
     Route::post('/erp/manual-sales-import', [ErpImportController::class, 'manual']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -174,6 +175,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // KPIs and Progress
         Route::get('/kpis/summary', [KpiController::class, 'index']);
         Route::get('/progress/summary', [ProgressController::class, 'index']);
-        Route::get('/clients/{clientGroup}/stats', [ClientStatsController::class, 'show']); 
+        Route::get('/clients/{clientGroup}/stats', [ClientStatsController::class, 'show']);
     });
 });
