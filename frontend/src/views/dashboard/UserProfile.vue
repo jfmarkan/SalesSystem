@@ -323,16 +323,9 @@ onMounted(loadDetails)
   width:100%;
   max-width:1200px;
   margin:0 auto;
-}
-
-/* Glass */
-.glass{
-  background: rgba(255,255,255,0.4);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 14px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.12);
-  overflow: hidden;
+  --loader-dot-green:#05A46F;
+  --loader-dot-red:#B01513;
+  --loader-dot-blue:#54849A;
 }
 
 /* 12-col grid: ID(3), CONTACT(9), PWD(3 debajo de ID) */
@@ -407,10 +400,6 @@ onMounted(loadDetails)
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
   flex-direction:column; gap:10px; pointer-events:none;
 }
-.dots{ display:flex; gap:10px; align-items:center; justify-content:center; }
-.dot{ width:10px; height:10px; border-radius:50%; opacity:.9; animation:bounce 1s infinite ease-in-out; box-shadow:0 2px 6px rgba(0,0,0,.25); }
-.dot.g{ background:#05A46F; animation-delay:0s; } .dot.r{ background:#B01513; animation-delay:.15s; } .dot.b{ background:#54849A; animation-delay:.30s; }
-@keyframes bounce{ 0%,80%,100%{ transform:translateY(0) scale(1); opacity:.8 } 40%{ transform:translateY(-8px) scale(1.05); opacity:1 } }
 
 /* Prime width fix */
 :deep(.p-inputtext), :deep(.p-dropdown){ width:100%; }

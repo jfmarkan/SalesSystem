@@ -278,62 +278,10 @@ function goBack(e) {
 	gap: 8px;
 	min-width: 0;
 }
-.back-link {
-	color: #10b981;
-	font-weight: 300;
-	text-decoration: none;
-	letter-spacing: 0.1px;
-}
-.back-link:hover {
-	text-decoration: underline;
-}
-.vbar {
-	width: 2px;
-	height: 16px;
-	background: #0f172a;
-	opacity: 0.85;
-	border-radius: 1px;
-}
-@media (prefers-color-scheme: dark) {
-	.vbar {
-		background: #fff;
-		opacity: 0.9;
-	}
-}
-.crumb {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-weight: 700;
-}
-.c1 {
-	color: #64748b;
-}
-.c2 {
-	color: #0f172a;
-}
-.sep {
-	color: #64748b;
-}
-@media (prefers-color-scheme: dark) {
-	.c1 {
-		color: #94a3b8;
-	}
-	.c2 {
-		color: #e5e7eb;
-	}
-	.sep {
-		color: #94a3b8;
-	}
-}
-
 .ctrls {
-	display: flex;
-	gap: 8px;
-	align-items: center;
+        display: flex;
+        gap: 8px;
+        align-items: center;
 }
 .lbl {
 	color: #64748b;

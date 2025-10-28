@@ -1,6 +1,6 @@
 <!-- src/views/admin/clients/ClientsIndex.vue -->
 <template>
-	<div class="container-fluid clients-index">
+        <div class="container-fluid admin-index clients-index">
 		<div class="row">
 			<!-- Lista izquierda -->
 			<div class="span-12 md-span-4 xl-span-3">
@@ -243,46 +243,9 @@ onMounted(load)
 </script>
 
 <style scoped>
-.clients-index {
-	margin-top: calc(var(--navbar-h) + 12px);
-}
-.list {
-	max-height: calc(100vh - var(--navbar-h) - 120px);
-	overflow: auto;
-	padding: 0 6px 8px;
-}
-.item {
-	padding: 8px;
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	background: color-mix(in oklab, var(--surface) 88%, transparent);
-	cursor: pointer;
-	margin-bottom: 8px;
-}
-.item.active {
-	border-color: var(--primary);
-	box-shadow: var(--ring);
-}
-.line1 {
-	font-weight: 700;
-}
-.line2 {
-	font-size: 0.85rem;
-	color: var(--muted);
-}
-
-.placeholder {
-	min-height: 240px;
-	display: grid;
-	place-items: center;
-	color: var(--muted);
-}
-.editor {
-	padding: 10px;
-}
 .pcs-title {
-	font-weight: 700;
-	margin-bottom: 6px;
+        font-weight: 700;
+        margin-bottom: 6px;
 }
 .pcs-grid {
 	display: grid;
@@ -295,16 +258,11 @@ onMounted(load)
 	}
 }
 .pc-check {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	border: 1px solid var(--border);
-	padding: 8px;
-	border-radius: 10px;
-}
-.actions {
-	margin-top: 12px;
-	display: flex;
-	gap: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--border);
+        padding: 8px;
+        border-radius: 10px;
 }
 </style>
