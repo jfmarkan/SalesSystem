@@ -1,7 +1,7 @@
 // usa Lara, sin primeflex. Tu theme y main siguen primero.
-import './assets/css/theme.css'
-import './assets/css/main.css'
-import './assets/css/fonts.css'
+import './resources/scss/theme.scss'
+import './resources/scss/main.scss'
+import './resources/scss/fonts.scss'
 
 import '@fortawesome/fontawesome-free/css/all.min.css'
 

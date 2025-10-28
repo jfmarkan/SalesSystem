@@ -1,7 +1,7 @@
 <template>
 	<div class="dashboard-bg">
 		<div class="dashboard-layout">
-			<header class="navbar glass">
+			<header ref="navbarEl" class="navbar glass">
 				<div class="brand">
 					<img :src="logoSrc" alt="Logo" class="logo" />
 				</div>
@@ -198,7 +198,7 @@ import { ensureCsrf } from '@/plugins/csrf'
 import { useAuthStore } from '@/stores/auth'
 import ThemeSwitcher from '../ThemeSwitcher.vue'
 
-/* Logo por tema */
+/* theme logo */
 const isDark = ref(document.documentElement.classList.contains('dark'))
 let _mo
 onMounted(() => {
@@ -219,7 +219,6 @@ const logoSrc = computed(() =>
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-
 const reportsMenu = ref()
 const userPanel = ref(null)
 
@@ -241,7 +240,6 @@ const isSalesRep = computed(
 		roleId.value === 4 ||
 		rolesList.value.some((r) => ['sales_rep', 'employee', 'empleado'].includes(r)),
 )
-
 const isActive = (path) => route.path.startsWith(path)
 
 const firstName = computed(
@@ -313,6 +311,20 @@ onBeforeUnmount(() => {
 function onLogout() {
 	if (typeof auth.logout === 'function') auth.logout().then(() => router.push('/login'))
 }
+
+/* altura real de navbar -> --navbar-h */
+const navbarEl = ref(null)
+let _ro
+onMounted(() => {
+	const setH = () => {
+		const h = navbarEl.value?.offsetHeight ?? 64
+		document.documentElement.style.setProperty('--navbar-h', `${h}px`)
+	}
+	setH()
+	_ro = new ResizeObserver(setH)
+	if (navbarEl.value) _ro.observe(navbarEl.value)
+})
+onBeforeUnmount(() => _ro?.disconnect())
 </script>
 
 <style scoped>
@@ -337,14 +349,21 @@ function onLogout() {
 	align-items: center;
 	gap: 0.25rem;
 }
+
+/* mismo margen abajo que a los costados */
 .dashboard-content {
 	flex: 1;
-	padding: 0 1rem;
-	margin-top: var(--navbar-h);
+	padding: 0 var(--page-x, 1rem) var(--page-x, 1rem);
+	margin-top: var(--navbar-h, 64px);
+	min-height: calc(100vh - var(--navbar-h, 64px));
+	overflow: hidden; /* el scroll lo maneja la view */
 	z-index: 2;
-	min-height: calc(100vh - var(--navbar-h));
 }
 
+/* seguridad overflow horizontal global */
+:global(html, body) {
+	overflow-x: hidden;
+}
 .name-line {
 	display: flex;
 	gap: 8px;

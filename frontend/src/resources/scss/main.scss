@@ -5,7 +5,10 @@
 /* Globals */
 :root {
 	--navbar-h: 60px;
+	--glass-blur: 10px; /* blur global del vidrio (pedido) */
 }
+
+/* Scrollbar reserva */
 html {
 	scrollbar-gutter: stable both-edges;
 }
@@ -13,9 +16,7 @@ html {
 /* Base */
 html,
 body {
-	font-family:
-		'Inter',
-		sans-serif;
+	font-family: 'Inter', sans-serif;
 	font-weight: normal;
 	margin: 0;
 	padding: 0;
@@ -90,7 +91,7 @@ body {
 	left: 0;
 	right: 0;
 	z-index: 1000;
-	isolation: isolate; /* el blur/halo no sangra fuera */
+	isolation: isolate;
 	height: var(--navbar-h);
 	display: flex;
 	align-items: center;
@@ -114,7 +115,7 @@ body {
 	flex: 1 1 auto;
 }
 
-/* Botones de navbar sin bordes ni fondo */
+/* Botones navbar */
 .nav-icon-button {
 	position: relative;
 	background: transparent !important;
@@ -122,7 +123,7 @@ body {
 	box-shadow: none !important;
 	color: var(--text) !important;
 	padding: 0.4rem;
-	border-radius: 8px; /* solo para hit-area, no se ve */
+	border-radius: 8px;
 	overflow: visible;
 	transition: color 0.25s ease;
 }
@@ -132,15 +133,11 @@ body {
 	border: none !important;
 	box-shadow: none !important;
 }
-
-/* Contenido del botón por encima del halo */
 .nav-icon-button .p-button-icon,
 .nav-icon-button .p-button-label {
 	position: relative;
 	z-index: 1;
 }
-
-/* ACTIVO: círculo desenfocado detrás del icono (iluminado desde atrás) */
 .nav-icon-button.is-active {
 	background: transparent !important;
 	border: none !important;
@@ -152,22 +149,19 @@ body {
 	left: 50%;
 	top: 50%;
 	width: 42px;
-	height: 42px; /* tamaño del halo */
+	height: 42px;
 	transform: translate(-50%, -50%);
 	border-radius: 9999px;
 	pointer-events: none;
 	z-index: 0;
-
-	background: var(--nav-active-grad); /* definido en theme.css */
-	filter: blur(10px); /* desenfoque y “luz” */
-	opacity: 0.65; /* ajusta 0.20–0.45 */
-
-	/* bordes suaves, sin bloque sólido */
+	background: var(--nav-active-grad);
+	filter: blur(10px);
+	opacity: 0.65;
 	-webkit-mask: radial-gradient(circle at center, #000 55%, transparent 80%);
 	mask: radial-gradient(circle at center, #000 55%, transparent 80%);
 }
 
-/* Badges en iconos */
+/* Badges */
 .nav-item-wrap {
 	position: relative;
 }
@@ -189,7 +183,7 @@ body {
 	box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
 }
 
-/* Popover del usuario */
+/* Popover usuario */
 .user-panel {
 	padding: 0;
 	border-radius: 12px;
@@ -205,7 +199,7 @@ body {
 	min-width: 260px;
 }
 
-/* 12-col grid helpers */
+/* 12-col grid */
 .row {
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -526,8 +520,7 @@ textarea.input {
 	line-height: 1.4;
 }
 
-
-/* Modal */
+/* MODAL GENÉRICO (no PrimeVue) */
 .modal {
 	position: fixed;
 	inset: 0;
@@ -555,24 +548,26 @@ textarea.input {
 	font-weight: 200;
 }
 
-/* Prime Dialog */
-.p-dialog {
-	backdrop-filter: blur(10px);
-	background: var(--surface);
-	border-radius: 12px;
+/* PRIME DIALOG -> vidrio centralizado por clase .glass-dialog */
+.glass-dialog.p-dialog {
+	background: transparent !important;
+	border-radius: 16px;
+	overflow: hidden;
+	border: 1px solid var(--glass-border-color);
+	box-shadow: 0 20px 60px var(--glass-shadow-color);
 	font-family: inherit;
-	border: 1px solid var(--border);
 }
-.p-dialog .p-dialog-header {
-	padding: 10px 14px;
-	border-bottom: 1px solid var(--border);
+.glass-dialog .p-dialog-header,
+.glass-dialog .p-dialog-content,
+.glass-dialog .p-dialog-footer {
+	background: var(--glass-bg-color) !important; /* color viene de theme.css */
+	-webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+	backdrop-filter: blur(var(--glass-blur)) !important;
 }
-.p-dialog .p-dialog-content {
-	padding: 14px;
-}
-.p-dialog .p-dialog-footer {
-	padding: 10px 14px;
-	border-top: 1px solid var(--border);
+.p-dialog-mask {
+	background: var(--modal-backdrop-color) !important; /* viene de theme.css */
+	-webkit-backdrop-filter: blur(2px) !important;
+	backdrop-filter: blur(2px) !important;
 }
 
 /* Prime Menu */

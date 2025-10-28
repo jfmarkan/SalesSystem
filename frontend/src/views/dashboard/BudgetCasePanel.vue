@@ -1,60 +1,65 @@
 <template>
-	<div class="forecast-page">
-		<Toast />
+	<Toast />
 
-		<!-- Confirm dialog -->
-		<Dialog v-model:visible="confirmVisible" :modal="true" :draggable="false" :dismissableMask="true"
-			header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
-			<p class="mb-3 text-muted-90">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
-			<template #footer>
-				<div class="dialog-actions">
-					<Button label="Abbrechen" severity="secondary" text
-						@click="confirmVisible = false; pendingChange = null" />
-					<Button label="Verwerfen" severity="danger" text @click="discardAndApply" />
-					<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
-				</div>
-			</template>
-		</Dialog>
-
-		<!-- COLUMNA IZQUIERDA - FILTROS (2/12 columnas, altura completa) -->
-		<aside class="sidebar glass">
-			<ForecastFilters :mode="mode" :primary-options="primaryOptions" :primary-id="primaryId"
-				:secondary-options="secondaryOptionsWithDots" :secondary-id="secondaryId"
-				@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
-				@update:primary-id="(v) => guardedChange('primary', v)"
-				@update:secondary-id="(v) => guardedChange('secondary', v)" @next="handleNext" />
-
-			<!-- Leyenda con Prime Icons -->
-			<div class="legend">
-				<span class="legend-item">
-					<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
-					Vorhanden
-				</span>
-				<span class="legend-item">
-					<i class="pi pi-circle legend-icon legend-icon-pending"></i>
-					Fehlt
-				</span>
+	<!-- Confirm dialog -->
+	<Dialog v-model:visible="confirmVisible" :modal="true" :draggable="false" :dismissableMask="true"
+		header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
+		<p class="mb-3 text-muted-90">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
+		<template #footer>
+			<div class="dialog-actions flex justify-content-end gap-2">
+				<Button label="Abbrechen" severity="secondary" text
+					@click="confirmVisible = false; pendingChange = null" />
+				<Button label="Verwerfen" severity="danger" text @click="discardAndApply" />
+				<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
 			</div>
+		</template>
+	</Dialog>
 
-			<div class="note" v-if="loading">Lädt…</div>
+	<!-- Main Forecast Layout -->
+	<div class="forecast-grid container-fluid">
+		<!-- Sidebar / Filters -->
+		<aside class="filters-col">
+			<div class="filters-card glass">
+				<div class="filters-inner">
+					<div class="selector-host">
+						<ForecastFilters
+							:mode="mode"
+							:primary-options="primaryOptions"
+							:primary-id="primaryId"
+							:secondary-options="secondaryOptionsWithDots"
+							:secondary-id="secondaryId"
+							@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
+							@update:primary-id="(v) => guardedChange('primary', v)"
+							@update:secondary-id="(v) => guardedChange('secondary', v)"
+							@next="handleNext"
+							class="ff-host"
+						/>
+						<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
+					</div>
+					<div class="legend mt-4">
+						<span class="legend-item">
+							<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
+							Vorhanden
+						</span>
+						<span class="legend-item">
+							<i class="pi pi-circle legend-icon legend-icon-pending"></i>
+							Fehlt
+						</span>
+					</div>
+				</div>
+			</div>
 		</aside>
 
-		<!-- COLUMNA DERECHA - CONTENIDO (10/12 columnas) -->
-		<div class="main-content">
-
-			<!-- FILA 1 - TÍTULO (altura automática) -->
-			<header class="topbar glass">
-				<div class="title-side">
-					<div class="title">
-						<span class="eyebrow">Forecast</span>
-						<span v-if="hasSelection" class="main-title">
-							<ForecastTitle :client="selectedClientName" :kunde="selectedClientName"
-								:pc="selectedPCName" />
-						</span>
-						<span v-else class="main-title muted">Bitte Kunde und Profit Center wählen</span>
+		<!-- Main content area -->
+		<main class="content-col">
+			<header class="topbar glass topbar--compact">
+				<div class="title-left">
+					<div class="eyebrow">Budget Case</div>
+					<div class="title-line">
+						<strong class="kunde">{{ selectedClientName || 'Kunde' }}</strong>
+						<span class="sep" aria-hidden="true"></span>
+						<span class="pc">{{ selectedPCName || '(PC)' }}</span>
 					</div>
-					<Badge v-if="hasSelection && hasCaseForSelection" value="✓ Budget Case" severity="success"
-						size="small" class="ml-1" />
 				</div>
 				<div class="actions">
 					<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty" :outlined="!budgetDirty"
@@ -62,44 +67,67 @@
 				</div>
 			</header>
 
-			<!-- FILA 2 - DIAGRAMA Y CASO (altura flexible, proporción 80/20) -->
-			<div class="middle-row">
-				<!-- DIAGRAMA (80%) -->
-				<div class="chart-container">
-					<h3 class="section-title">Diagramm</h3>
-					<div class="panel">
-						<LineChartSmart v-if="hasSelection" type="cumulative" :client-id="currentClientId"
-							:profit-center-id="currentPcId" api-prefix="/api" :auto-fetch="false"
-							:cum-data="cumDataForChart" :busy="loading" />
-						<div v-else class="empty">Keine Auswahl</div>
+			<!-- Central Charts Row -->
+			<div class="charts-row">
+				<div class="chart-card glass">
+					<div class="chart-pad">
+						<h3 class="section-title">Diagramm</h3>
+						<div class="chart-body">
+							<LineChartSmart
+								v-if="hasSelection"
+								type="cumulative"
+								:client-id="currentClientId"
+								:profit-center-id="currentPcId"
+								api-prefix="/api"
+								:auto-fetch="false"
+								:cum-data="cumDataForChart"
+								:busy="loading"
+							/>
+							<div v-else class="empty">Keine Auswahl</div>
+						</div>
 					</div>
 				</div>
 
-				<!-- CASO (20%) -->
-				<div class="case-container">
-					<h3 class="section-title">Budget-Fall</h3>
-					<div class="panel">
-						<BudgetCasePanel v-if="hasSelection" :key="`${currentClientId}-${currentPcId}`" ref="bcRef"
-							:client-group-number="cgnForChild" :profit-center-code="pccForChild" :disabled="false"
-							:prefill="prefillFromDb" @dirty-change="(v) => budgetDirty = !!v"
-							@values-change="onChildValues" @simulated="onSimulated" />
-						<div v-else class="empty">Keine Auswahl</div>
+				<div class="chart-card glass">
+					<div class="chart-pad">
+						<h3 class="section-title">Budget-Fall</h3>
+						<div class="chart-body">
+							<BudgetCasePanel
+								v-if="hasSelection"
+								:key="`${currentClientId}-${currentPcId}`"
+								ref="bcRef"
+								:client-group-number="cgnForChild"
+								:profit-center-code="pccForChild"
+								:disabled="false"
+								:prefill="prefillFromDb"
+								@dirty-change="(v) => budgetDirty = !!v"
+								@values-change="onChildValues"
+								@simulated="onSimulated"
+							/>
+							<div v-else class="empty">Keine Auswahl</div>
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- FILA 3 - TABLA (altura automática) -->
-			<div class="table-container blocked">
-				<h3 class="section-title">Tabelle</h3>
-				<div class="panel">
-					<ForecastTable v-if="hasSelection" :months="months" :ventas="sales" :budget="budget"
-						:forecast="forecast" @edit-forecast="() => { }" />
-					<div v-else class="empty">Keine Auswahl</div>
-					<div class="overlay" aria-hidden="true" aria-label="Deaktiviert" title="Deaktiviert"></div>
+			<!-- Table -->
+			<div class="table-card glass">
+				<div class="table-pad">
+					<h3 class="section-title">Tabelle</h3>
+					<div class="panel">
+						<ForecastTable
+							v-if="hasSelection"
+							:months="months"
+							:ventas="sales"
+							:budget="budget"
+							:forecast="forecast"
+							@edit-forecast="() => {}"
+						/>
+						<div v-else class="card-placeholder">Keine Auswahl</div>
+					</div>
 				</div>
 			</div>
-
-		</div>
+		</main>
 	</div>
 </template>
 
@@ -649,271 +677,167 @@ const selectedPCName = computed(() => {
 </script>
 
 <style scoped>
-:root {
-	--bg: var(--p-surface-ground, #f6f7f9);
-	--surface: var(--p-surface-card, #ffffff);
-	--text: var(--p-text-color, #111827);
-	--muted: var(--p-text-muted-color, #6b7280);
-	--border: var(--p-content-border-color, #e5e7eb);
-	--ok-bg: color-mix(in lab, var(--p-green-500) 12%, transparent);
-	--ok-text: var(--p-green-600, #0e7a3e);
-	--ok-border: color-mix(in lab, var(--p-green-500), transparent 60%);
-	--shadow: var(--p-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.06));
+.forecast-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 10px;
+	height: 100vh;
 }
-
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg: var(--p-surface-ground, #0b1020);
-		--surface: var(--p-surface-card, #12182a);
-		--text: var(--p-text-color, #e5e7eb);
-		--muted: var(--p-text-muted-color, #9aa3b2);
-		--border: var(--p-content-border-color, #1f2937);
-		--ok-bg: color-mix(in oklab, var(--p-green-400) 20%, transparent);
-		--ok-text: var(--p-green-300, #8ce0ae);
-		--ok-border: color-mix(in oklab, var(--p-green-400), transparent 60%);
-		--shadow: var(--p-shadow-6, 0 10px 28px rgba(0, 0, 0, 0.35));
+@media (min-width: 768px) {
+	.forecast-grid {
+		grid-template-columns: 2fr 10fr;
 	}
 }
 
-/* GRID ORIGINAL INTACTO */
-.forecast-page {
-	display: grid;
-	grid-template-columns: 2fr 10fr;
-	grid-template-rows: 100vh;
-	gap: 16px;
-	padding: 16px;
-	color: var(--text);
-	box-sizing: border-box;
-	background: var(--bg);
-}
-
-.sidebar {
-	grid-column: 1;
-	grid-row: 1;
+.filters-col {
 	display: flex;
 	flex-direction: column;
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: var(--shadow);
-	padding: 18px;
-	overflow-y: auto;
-	transition: background .2s, border-color .2s, box-shadow .2s;
 }
-
-.main-content {
-	grid-column: 2;
-	grid-row: 1;
-	display: grid;
-	grid-template-rows: auto 1fr auto;
-	gap: 16px;
+.filters-card {
 	height: 100%;
-	min-height: 0;
-}
-
-.topbar {
-	grid-row: 1;
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 14px 18px;
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: var(--shadow);
-	position: sticky;
-	top: 0;
-	z-index: 1;
+	flex-direction: column;
+	padding: 10px;
+	border-radius: 15px;
 }
-
-.title-side {
+.filters-inner {
+	flex: 1;
 	display: flex;
-	align-items: center;
+	flex-direction: column;
 	gap: 12px;
 }
-
-.eyebrow {
-	font-size: 12px;
-	color: var(--muted);
-	text-transform: uppercase;
-	letter-spacing: .06em;
-}
-
-.main-title {
-	font-weight: 600;
-	font-size: 16px;
-}
-
-.muted {
-	color: var(--muted);
-}
-
-.actions {
-	display: flex;
-	gap: 8px;
-}
-
-.middle-row {
-	grid-row: 2;
-	display: grid;
-	grid-template-columns: 8fr 2fr;
-	gap: 16px;
-	min-height: 0;
-}
-
-.chart-container,
-.case-container {
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: var(--shadow);
-	padding: 18px;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	transition: background .2s, border-color .2s, box-shadow .2s;
-}
-
-.table-container {
-	grid-row: 3;
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 16px;
-	box-shadow: var(--shadow);
-	padding: 18px;
-	position: relative;
-	display: flex;
-	flex-direction: column;
-}
-
-.panel {
+.selector-host {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	min-height: 0;
-	background: color-mix(in oklab, var(--surface), transparent 6%);
-	border-radius: 12px;
+	overflow: hidden;
 }
-
-.panel>* {
+.ff-host :deep(.p-listbox) {
+	width: 100%;
 	flex: 1;
-}
-
-.section-title {
-	margin: 0 0 12px 0;
-	font-size: 16px;
-	font-weight: 600;
-	color: var(--text);
-}
-
-.empty {
-	color: var(--muted);
-	font-size: 14px;
-	padding: 8px;
 	display: flex;
-	align-items: center;
-	justify-content: center;
+	flex-direction: column;
+}
+.ff-host :deep(.p-listbox-list-wrapper),
+.ff-host :deep(.p-listbox-list) {
 	flex: 1;
+	overflow-y: auto;
 }
-
-.blocked {
-	position: relative;
-}
-
-.blocked .overlay {
-	position: absolute;
-	inset: 0;
-	cursor: not-allowed;
-	z-index: 2;
-	border-radius: 12px;
-	background: color-mix(in oklab, var(--surface), transparent 70%);
-	backdrop-filter: blur(1px) saturate(1.05);
-}
-
-.dialog-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-}
-
-/* Leyenda */
 .legend {
-	margin-top: 12px;
+	font-size: 13px;
+	margin-top: auto;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	font-size: 13px;
+	gap: 6px;
 }
-
 .legend-item {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	color: var(--text);
 }
-
 .legend-icon {
 	font-size: 12px;
-	flex-shrink: 0;
 }
-
 .legend-icon-done {
 	color: var(--p-green-500, #10b981);
 }
-
 .legend-icon-pending {
 	color: var(--p-surface-500, #9ca3af);
 }
 
-/* Iconos Prime en Listbox */
-:deep(.p-listbox-item i.pi-check-circle) {
-	color: var(--p-green-500, #10b981) !important;
-	margin-right: 8px;
+.content-col {
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	gap: 10px;
+	min-height: 0;
+}
+
+.topbar--compact {
+	min-height: 42px;
+	padding: 4px 20px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.topbar--compact .title-left {
+	display: flex;
+	flex-direction: column;
+}
+.topbar--compact .eyebrow {
 	font-size: 12px;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	margin-bottom: 5px;
+}
+.topbar--compact .title-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.95rem;
+}
+.topbar--compact .kunde {
+	font-weight: 800;
+}
+.topbar--compact .pc {
+	font-weight: 400;
+	opacity: 0.85;
+}
+.topbar--compact .sep {
+	width: 1px;
+	height: 14px;
+	background: color-mix(in oklab, var(--text) 22%, transparent);
 }
 
-:deep(.p-listbox-item i.pi-circle) {
-	color: var(--p-surface-500, #9ca3af) !important;
-	margin-right: 8px;
-	font-size: 12px;
+.charts-row {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 10px;
+	min-height: 0;
+	height: 100%;
 }
-
-@media (prefers-color-scheme: dark) {
-	.legend-icon-pending {
-		color: var(--p-surface-400, #6b7280);
-	}
-
-	:deep(.p-listbox-item i.pi-circle) {
-		color: var(--p-surface-400, #6b7280) !important;
+@media (min-width: 992px) {
+	.charts-row {
+		grid-template-columns: 7fr 3fr;
 	}
 }
-
-@media (max-width: 1200px) {
-	.forecast-page {
-		grid-template-columns: 1fr;
-		grid-template-rows: auto 1fr;
-	}
-
-	.sidebar {
-		grid-column: 1;
-		grid-row: 1;
-		height: auto;
-	}
-
-	.main-content {
-		grid-column: 1;
-		grid-row: 2;
-	}
-
-	.middle-row {
-		grid-template-columns: 1fr;
-		grid-template-rows: 1fr auto;
-	}
+.chart-card {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+.chart-pad {
+	padding: 8px;
+}
+.chart-body {
+	flex: 1;
+	min-height: 0;
+	position: relative;
+}
+.chart-body :deep(svg),
+.chart-body :deep(canvas),
+.chart-body :deep(.recharts-wrapper),
+.chart-body :deep(.echarts-for-react),
+.chart-body :deep(.apexcharts-canvas) {
+	width: 100% !important;
+	height: 100% !important;
+	display: block;
 }
 
-.glass {
-	background: color-mix(in oklab, var(--surface), transparent 6%);
-	border: 1px solid color-mix(in oklab, var(--border), transparent 15%);
-	backdrop-filter: saturate(1.1) blur(6px);
+.table-card {
+	display: block;
+}
+.table-pad {
+	padding: 10px;
+}
+.card-placeholder {
+	min-height: 120px;
+	display: grid;
+	place-items: center;
+	color: var(--muted);
+	border: 1px dashed var(--border);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--surface) 65%, transparent);
 }
 </style>

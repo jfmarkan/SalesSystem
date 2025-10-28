@@ -163,7 +163,7 @@ const layout = ref([
 	{ i: '4', x: 8, y: 0, w: 4, h: 14, type: 'calendar' },
 	{ i: '7', x: 0, y: 4, w: 5, h: 17, type: 'chart' },
 	{ i: '8', x: 5, y: 4, w: 3, h: 17, type: 'table' },
-	{ i: '9', x: 8, y: 12, w: 4, h: 7, type: 'extra' },
+	{ i: '9', x: 8, y: 14, w: 4, h: 7, type: 'extra' },
 ])
 
 function getWidgetComponent(type) {

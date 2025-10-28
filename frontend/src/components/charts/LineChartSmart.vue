@@ -286,14 +286,17 @@ watch([labels, datasets], () => {
       </div>
       <div class="caption">Wird geladen…</div>
     </div>
-    <Line v-else ref="chartRef" :data="{ labels, datasets }" :options="options" />
+    <Line v-else ref="chartRef" :data="{ labels, datasets }" :options="options" class="chart"/>
   </div>
 </template>
 
 
 <style scoped>
 .chart-shell{ width:100%; height:100%; position:relative; }
-
+.chart{
+  width:100% !important;
+  height:80% !important;
+}
 .loader{
   position:absolute; inset:0;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
