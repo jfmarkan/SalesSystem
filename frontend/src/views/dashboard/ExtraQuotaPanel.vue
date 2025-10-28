@@ -1421,59 +1421,6 @@ onMounted(async () => {
 }
 
 /* Loader */
-.local-loader {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    z-index: 50;
-}
-.dots {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    justify-content: center;
-}
-.dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    opacity: 0.9;
-    animation: bounce 1s infinite ease-in-out;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-}
-.dot.g {
-    background: #22c55e;
-    animation-delay: 0s;
-}
-.dot.r {
-    background: #ef4444;
-    animation-delay: 0.15s;
-}
-.dot.b {
-    background: #3b82f6;
-    animation-delay: 0.3s;
-}
-@keyframes bounce {
-    0%,
-    80%,
-    100% {
-        transform: translateY(0) scale(1);
-        opacity: 0.8;
-    }
-    40% {
-        transform: translateY(-8px) scale(1.05);
-        opacity: 1;
-    }
-}
-.caption {
-    font-size: 0.9rem;
-    color: #e5e7eb;
-    opacity: 0.9;
-}
 
 /* Dialog: Glass + dunkle Maske + helle Inhalte */
 .glass-dialog :deep(.p-dialog-header) {

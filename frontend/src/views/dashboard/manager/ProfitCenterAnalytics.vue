@@ -309,48 +309,8 @@ watch(fyStart, adjustDefaultAsOf)
     gap: 0.5rem;
     border-right: 1px solid rgba(0, 0, 0, 0.08);
     padding-right: 0.75rem;
-}
-.back-link {
-    color: #10b981;
-    font-weight: 300;
-    text-decoration: none;
-    letter-spacing: 0.1px;
-}
-.vbar {
-    width: 2px;
-    height: 16px;
-    background: #fff;
-    opacity: 0.9;
-    border-radius: 1px;
-}
-.crumb {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 700;
-}
-.c1 {
-    color: #64748b;
-}
-.c2 {
-    color: #0f172a;
-}
-.sep {
-    color: #64748b;
-}
-@media (prefers-color-scheme: dark) {
-    .c1 {
-        color: #94a3b8;
-    }
-    .c2 {
-        color: #e5e7eb;
-    }
-    .sep {
-        color: #94a3b8;
-    }
+    --vbar-color: #fff;
+    --vbar-color-dark: #fff;
 }
 .hdr-title {
     font-weight: 700;

@@ -1,6 +1,6 @@
 <!-- src/views/admin/profit-centers/ProfitCentersIndex.vue -->
 <template>
-	<div class="container-fluid pcs-index">
+        <div class="container-fluid admin-index pcs-index">
 		<div class="row">
 			<!-- Lista -->
 			<div class="span-12 md-span-4 xl-span-3">
@@ -254,47 +254,10 @@ onMounted(load)
 </script>
 
 <style scoped>
-.pcs-index {
-	margin-top: calc(var(--navbar-h) + 12px);
-}
-.list {
-	max-height: calc(100vh - var(--navbar-h) - 120px);
-	overflow: auto;
-	padding: 0 6px 8px;
-}
-.item {
-	padding: 8px;
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	background: color-mix(in oklab, var(--surface) 88%, transparent);
-	cursor: pointer;
-	margin-bottom: 8px;
-}
-.item.active {
-	border-color: var(--primary);
-	box-shadow: var(--ring);
-}
-.line1 {
-	font-weight: 700;
-}
-.line2 {
-	font-size: 0.85rem;
-	color: var(--muted);
-}
-
-.placeholder {
-	min-height: 240px;
-	display: grid;
-	place-items: center;
-	color: var(--muted);
-}
-.editor {
-	padding: 10px;
-}
 .season-grid {
-	display: grid;
-	grid-template-columns: repeat(6, minmax(0, 1fr));
-	gap: 8px;
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
 }
 @media (max-width: 991.98px) {
 	.season-grid {
@@ -302,12 +265,7 @@ onMounted(load)
 	}
 }
 .s-item label {
-	font-size: 0.8rem;
-	color: var(--muted);
-}
-.actions {
-	margin-top: 12px;
-	display: flex;
-	gap: 10px;
+        font-size: 0.8rem;
+        color: var(--muted);
 }
 </style>

@@ -678,39 +678,12 @@ const selectedPCName = computed(() => {
 
 <style scoped>
 .forecast-grid {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 10px;
-	height: 100vh;
-}
-@media (min-width: 768px) {
-	.forecast-grid {
-		grid-template-columns: 2fr 10fr;
-	}
-}
-
-.filters-col {
-	display: flex;
-	flex-direction: column;
+        --forecast-grid-height: 100vh;
+        --filters-gap: 12px;
 }
 .filters-card {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	padding: 10px;
-	border-radius: 15px;
-}
-.filters-inner {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-.selector-host {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
+        padding: 10px;
+        border-radius: 15px;
 }
 .ff-host :deep(.p-listbox) {
 	width: 100%;
@@ -745,88 +718,8 @@ const selectedPCName = computed(() => {
 	color: var(--p-surface-500, #9ca3af);
 }
 
-.content-col {
-	display: grid;
-	grid-template-rows: auto 1fr auto;
-	gap: 10px;
-	min-height: 0;
-}
-
-.topbar--compact {
-	min-height: 42px;
-	padding: 4px 20px;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-.topbar--compact .title-left {
-	display: flex;
-	flex-direction: column;
-}
-.topbar--compact .eyebrow {
-	font-size: 12px;
-	color: var(--muted);
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	margin-bottom: 5px;
-}
-.topbar--compact .title-line {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 0.95rem;
-}
-.topbar--compact .kunde {
-	font-weight: 800;
-}
-.topbar--compact .pc {
-	font-weight: 400;
-	opacity: 0.85;
-}
-.topbar--compact .sep {
-	width: 1px;
-	height: 14px;
-	background: color-mix(in oklab, var(--text) 22%, transparent);
-}
-
-.charts-row {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 10px;
-	min-height: 0;
-	height: 100%;
-}
-@media (min-width: 992px) {
-	.charts-row {
-		grid-template-columns: 7fr 3fr;
-	}
-}
-.chart-card {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-	min-height: 0;
-}
-.chart-pad {
-	padding: 8px;
-}
-.chart-body {
-	flex: 1;
-	min-height: 0;
-	position: relative;
-}
-.chart-body :deep(svg),
-.chart-body :deep(canvas),
-.chart-body :deep(.recharts-wrapper),
-.chart-body :deep(.echarts-for-react),
-.chart-body :deep(.apexcharts-canvas) {
-	width: 100% !important;
-	height: 100% !important;
-	display: block;
-}
-
 .table-card {
-	display: block;
+        display: block;
 }
 .table-pad {
 	padding: 10px;

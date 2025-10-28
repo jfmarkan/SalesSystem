@@ -584,47 +584,15 @@ const tableRef = ref(null)
 
 <style lang="scss" scoped>
 .forecast-grid {
-	--title-h: 60px;
-	--title-pad-y: 6px;
-	--title-pad-x: 10px;
-}
-
-.forecast-grid {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 10px;
-	height: calc(100vh - var(--navbar-h));
-}
-@media (min-width: 768px) {
-	.forecast-grid {
-		grid-template-columns: 2fr 10fr;
-	}
-}
-
-.filters-col {
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-.filters-card {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-}
-.filters-inner {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 10px;
-	height: 100%;
-	min-height: 0;
-}
-.selector-host {
-	height: 100%;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
+        --title-h: 60px;
+        --title-pad-y: 6px;
+        --title-pad-x: 10px;
+        --forecast-grid-height: calc(100vh - var(--navbar-h));
+        --filters-gap: 10px;
+        --filters-padding: 10px;
+        --content-header-height: var(--title-h);
+        --topbar-title-line-height: 1.1;
+        --chart-pad: 0.5rem 0.25rem;
 }
 .filters-footer {
 	margin-top: auto;
@@ -636,127 +604,11 @@ const tableRef = ref(null)
 .ff-host :deep(.p-button:has(.pi-arrow-right)) {
 	display: none !important;
 }
-.selector-host :deep(.p-dropdown),
-.selector-host :deep(.p-inputtext),
-.selector-host :deep(.p-autocomplete),
-.selector-host :deep(.p-multiselect) {
-	width: 100% !important;
-	display: block;
-}
-.selector-host :deep(.p-listbox) {
-	width: 100%;
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-.selector-host :deep(.p-listbox-list-wrapper) {
-	flex: 1 1 auto;
-	min-height: 0;
-}
-.selector-host :deep(.p-listbox-list) {
-	overflow: auto;
-}
-
-.content-col {
-	display: grid;
-	grid-template-rows: var(--title-h) 1fr auto;
-	gap: 10px;
-	min-height: 0;
-}
-
-.topbar {
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 15px;
-	box-shadow: var(--glass-shadow);
-}
-.topbar--compact {
-	min-height: 42px;
-	padding: 4px 20px;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-}
-.topbar--compact .title-left {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	line-height: 1.1;
-}
-.topbar--compact .eyebrow {
-	font-size: 12px;
-    margin-bottom: 5px;
-	color: var(--muted);
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-}
-.topbar--compact .title-line {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 0.95rem;
-}
-.topbar--compact .kunde {
-	font-weight: 800;
-}
-.topbar--compact .pc {
-	font-weight: 400;
-	opacity: 0.85;
-}
-.topbar--compact .sep {
-	width: 1px;
-	height: 14px;
-	background: color-mix(in oklab, var(--text) 22%, transparent);
-}
-
-/* ======== CHARTS (Responsive con ResizeObserver) ======== */
-.charts-row {
-	display: grid;
-	grid-template-columns: 1fr;
-	gap: 10px;
-	min-height: 0;
-	height: 100%; /* ocupa todo el 1fr de la fila central */
-}
-@media (min-width: 992px) {
-	.charts-row {
-		grid-template-columns: 7fr 3fr;
-	}
-}
-.chart-card {
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	height: 100%; /* que la card estire todo */
-}
 .card-body-fit {
-	display: flex;           /* flex mejor que grid para fill vertical */
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 0;
-}
-.chart-pad {
-	padding: 0.5rem 0.25rem;
-}
-.chart-body {
-	position: relative;
-	flex: 1 1 auto;
-	min-height: 0;
-	width: 100%;
-	overflow: hidden;
-	/* height se asigna inline via :style */
-}
-/* Forzar a libs a respetar contenedor */
-.chart-body :deep(svg),
-.chart-body :deep(canvas),
-.chart-body :deep(.recharts-wrapper),
-.chart-body :deep(.recharts-responsive-container),
-.chart-body :deep(.echarts-for-react),
-.chart-body :deep(.apexcharts-canvas) {
-	width: 100% !important;
-	height: 100% !important;
-	display: block;
+        display: flex;           /* flex mejor que grid para fill vertical */
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
 }
 .chart-empty {
 	width: 100%;
