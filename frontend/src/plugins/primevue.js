@@ -1,13 +1,13 @@
-// PrimeVue con tema Aura. OverlayPanel -> Popover.
+// PrimeVue + Aura con primario negro y modo oscuro por clase
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 import Tooltip from 'primevue/tooltip'
-import Aura from '@primevue/themes/aura'
-
+import { definePreset } from '@primeuix/themes'
+import Aura from '@primeuix/themes/aura'
 import 'primeicons/primeicons.css'
 
-// Componentes
+// Componentes globales (ajusta a lo que realmente uses)
 import Accordion from 'primevue/accordion'
 import AccordionTab from 'primevue/accordiontab'
 import AutoComplete from 'primevue/autocomplete'
@@ -29,7 +29,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
-import Editor from 'primevue/editor'
+import /* !verifica versión */ Editor from 'primevue/editor'
 import Fieldset from 'primevue/fieldset'
 import FileUpload from 'primevue/fileupload'
 import FloatLabel from 'primevue/floatlabel'
@@ -46,7 +46,7 @@ import Menu from 'primevue/menu'
 import Menubar from 'primevue/menubar'
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
-import Popover from 'primevue/popover' // reemplazo v4
+import Popover from 'primevue/popover' // reemplaza OverlayPanel
 import Panel from 'primevue/panel'
 import Password from 'primevue/password'
 import ProgressBar from 'primevue/progressbar'
@@ -74,14 +74,38 @@ import Tree from 'primevue/tree'
 import TreeTable from 'primevue/treetable'
 import Divider from 'primevue/divider'
 
+// preset Aura con primario negro
+const BlackPrimaryAura = definePreset(Aura, {
+  semantic: {
+    primary: {
+      50:  '{neutral.50}',
+      100: '{neutral.100}',
+      200: '{neutral.200}',
+      300: '{neutral.300}',
+      400: '{neutral.400}',
+      500: '{neutral.900}', // usa '{neutral.950}' si quieres negro absoluto
+      600: '{neutral.900}',
+      700: '{neutral.900}',
+      800: '{neutral.950}',
+      900: '{neutral.950}',
+      950: '{neutral.950}'
+    }
+  }
+})
+
 export default function setupPrimeVue(app) {
   app.use(PrimeVue, {
     ripple: true,
     theme: {
-      preset: Aura,
-      options: { darkModeSelector: 'html.dark', cssLayer: false }
+      preset: BlackPrimaryAura,
+      options: {
+        prefix: 'p',
+        cssLayer: false,
+        darkModeSelector: '.app-dark'
+      }
     }
   })
+
   app.use(ToastService)
   app.use(ConfirmationService)
 
