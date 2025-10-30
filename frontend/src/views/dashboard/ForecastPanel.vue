@@ -1,179 +1,133 @@
 <template>
-        <!-- The Toast component to show messages -->
-		<Toast />
+	<!-- Toast para mensajes -->
+	<Toast />
 
-        <!-- Confirmation Dialog for unsaved changes -->
-		<Dialog
-			v-model:visible="confirmVisible"
-			:modal="true"
-			:draggable="false"
-			:dismissableMask="true"
-			header="Ungespeicherte Änderungen"
-			:style="{ width: '520px' }"
-		>
-			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
-			<div class="flex justify-content-end gap-2">
-				<Button
-					label="Abbrechen"
-					severity="secondary"
-					@click="((confirmVisible = false), (pendingChange = null))"
-				/>
-				<Button label="Verwerfen" severity="danger" @click="discardAndApply" />
-				<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
-			</div>
-		</Dialog>
-
-        <!-- Loader efect for the whole page -->
-		<div v-if="loadingAll" class="page-loader glass">
-			<ProgressSpinner style="width: 48px; height: 48px" strokeWidth="4" />
-			<div class="loader-text">Lädt Daten…</div>
+	<!-- Confirmación de cambios sin guardar -->
+	<Dialog v-model:visible="confirmVisible" :modal="true" :draggable="false" :dismissableMask="true"
+		header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
+		<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
+		<div class="flex justify-content-end gap-2">
+			<Button label="Abbrechen" severity="secondary"
+				@click="(() => { confirmVisible = false; pendingChange = null })()" />
+			<Button label="Verwerfen" severity="danger" @click="discardAndApply" />
+			<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
 		</div>
+	</Dialog>
 
-        <!-- Main Forecast Grid Layout -->  
-		<div class="container-fluid forecast-grid">
-			<!-- L (2/12) -->
-			<aside class="filters-col">
-				<GlassCard title="Filter" class="filters-card">
+	<!-- Loader fullscreen -->
+	<LoaderFullScreen v-if="loadingAll" />
+
+	<!-- Grid principal -->
+	<div class="forecast-grid">
+		<!-- Filtros -->
+		<aside class="filters-col">
+			<Card class="filters-card">
+				<template #content>
 					<div class="filters-inner">
 						<div class="field-block flex-1 min-h-0">
 							<div class="selector-host">
-								<ForecastFilters
-									class="ff-host"
-									:mode="mode"
-									:primary-options="primaryOptions"
-									:primary-id="primaryId"
-									:secondary-options="secondaryOptions"
-									:secondary-id="secondaryId"
-									@update:mode="onMode"
-									@update:primary-id="onPrimary"
-									@update:secondary-id="onSecondary"
-									@next="handleNext"
-								/>
+								<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
+									:primary-id="primaryId" :secondary-options="secondaryOptions"
+									:secondary-id="secondaryId" @update:mode="onMode" @update:primary-id="onPrimary"
+									@update:secondary-id="onSecondary" />
 								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
 							</div>
 						</div>
-
 						<div class="filters-footer">
 							<Button label="Weiter" icon="pi pi-arrow-right" @click="handleNext" />
 						</div>
 					</div>
-				</GlassCard>
-			</aside>
+				</template>
+			</Card>
+		</aside>
 
-			<!-- R (10/12) -->
-			<main class="content-col">
-				<header class="topbar glass topbar--compact">
-					<div class="title-left">
-						<div class="eyebrow">Forecast</div>
-						<div class="title-line">
-							<strong class="kunde">{{ selectedClientName || 'Kunde' }}</strong>
-							<span class="sep" aria-hidden="true"></span>
-							<span class="pc">
-								{{ pcTitlePretty || selectedPCNameRaw || '(PC)' }}
-							</span>
+		<!-- Contenido -->
+		<main class="content-col">
+			<!-- Header -->
+			<Card class="topbar-card">
+				<template #content>
+					<div class="topbar-inner">
+						<div class="title-left">
+							<div class="eyebrow">Forecast</div>
+							<div class="title-line">
+								<strong class="kunde">{{ selectedClientName || 'Kunde' }}</strong>
+								<span class="sep" aria-hidden="true"> | </span>
+								<span class="pc">{{ pcTitlePretty || selectedPCNameRaw || '(PC)' }}</span>
+							</div>
+						</div>
+						<div class="actions">
+							<Button label="Speichern" icon="pi pi-save" :disabled="changedCount === 0 || loadingAll"
+								:outlined="changedCount === 0 || loadingAll" @click="saveForecast" />
 						</div>
 					</div>
+				</template>
+			</Card>
 
-					<div class="actions">
-						<Button
-							label="Speichern"
-							icon="pi pi-save"
-							:disabled="changedCount === 0 || loadingAll"
-							:outlined="changedCount === 0 || loadingAll"
-							@click="saveForecast"
-						/>
-					</div>
-				</header>
 
-				<div class="charts-row">
-					<GlassCard
-						:title="'Monatliche Entwicklung (kumuliert)'"
-						class="no-strip chart-card"
-					>
-						<!-- Observado para medir alto disponible -->
+			<!-- Charts -->
+			<div class="charts-row">
+				<Card class="chart-card chart-lg">
+					<template #header>
+						Monatliche Entwicklung (kumuliert)
+					</template>
+					<template #content>
 						<div ref="cumWrap" class="card-body-fit chart-pad">
-							<div class="chart-body" :style="{ height: cumH + 'px' }">
+							<div class="chart-body">
 								<template v-if="hasSelection && !loadingAll">
-									<LineChartSmart
-										:key="`cum-${cumH}-${currentClientId}-${currentPcId}`"
-										type="cumulative"
-										:client-id="currentClientId"
-										:profit-center-id="currentPcId"
-										api-prefix="/api"
-										:auto-fetch="false"
-										:cum-data="liveCumData"
-									/>
+									<LineChartSmart :key="`cum-${cumH}-${currentClientId}-${currentPcId}`"
+										type="cumulative" :client-id="currentClientId" :profit-center-id="currentPcId"
+										api-prefix="/api" :auto-fetch="false" :cum-data="liveCumData" />
 								</template>
-								<div v-else class="chart-empty"></div>
+								<div v-else class="chart-empty" />
 							</div>
 						</div>
-					</GlassCard>
+					</template>
+				</Card>
 
-					<GlassCard :title="'Versionen'" class="no-strip chart-card">
-						<!-- Observado para medir alto disponible -->
+				<Card class="chart-card chart-sm">
+					<template #header>Versionen</template>
+					<template #content>
 						<div ref="verWrap" class="card-body-fit chart-pad">
-							<div class="chart-body" :style="{ height: verH + 'px' }">
+							<div class="chart-body">
 								<template v-if="hasSelection && !loadingAll">
-									<LineChartSmart
-										:key="`ver-${verH}-${currentClientId}-${currentPcId}`"
-										type="versions"
-										:client-id="currentClientId"
-										:profit-center-id="currentPcId"
-										api-prefix="/api"
-										:auto-fetch="true"
-									/>
+									<LineChartSmart :key="`ver-${verH}-${currentClientId}-${currentPcId}`"
+										type="versions" :client-id="currentClientId" :profit-center-id="currentPcId"
+										api-prefix="/api" :auto-fetch="true" />
 								</template>
-								<div v-else class="chart-empty"></div>
+								<div v-else class="chart-empty" />
 							</div>
 						</div>
-					</GlassCard>
-				</div>
+					</template>
+				</Card>
+			</div>
 
-				<GlassCard :title="''" class="no-strip table-card">
+			<!-- Tabla -->
+			<Card class="table-card">
+				<template #content>
 					<div class="table-pad">
 						<template v-if="hasSelection && !loadingAll">
 							<div class="nav-bar flex items-center justify-end gap-8 mb-2">
-								<Button
-									icon="pi pi-angle-left"
-									size="small"
-									outlined
-									@click="shiftViewport(-1)"
-									:disabled="viewportStart <= 0"
-								/>
+								<Button icon="pi pi-angle-left" size="small" outlined @click="shiftViewport(-1)"
+									:disabled="viewportStart <= 0" />
 								<span class="range-label">{{ rangeLabelDE }}</span>
-								<Button
-									icon="pi pi-angle-right"
-									size="small"
-									outlined
-									@click="shiftViewport(+1)"
-									:disabled="viewportStart >= maxViewportStart"
-								/>
+								<Button icon="pi pi-angle-right" size="small" outlined @click="shiftViewport(+1)"
+									:disabled="viewportStart >= maxViewportStart" />
 							</div>
-
-							<ForecastTable
-								ref="tableRef"
-								:months="months"
-								:ventas="sales"
-								:budget="budget"
-								:forecast="forecast"
-								:viewport-start="viewportStart"
-								:viewport-size="12"
-								:is-editable-ym="isEditableYM"
-								@edit-forecast="
-									({ index, value }) => {
-										const n = Number(String(value).replace(',', '.'))
-										forecast[index] = isNaN(n) ? 0 : n
-									}
-								"
-							/>
+							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
+								:forecast="forecast" :viewport-start="viewportStart" :viewport-size="12"
+								:is-editable-ym="isEditableYM" @edit-forecast="({ index, value }) => {
+									const n = Number(String(value).replace(',', '.'))
+									forecast[index] = isNaN(n) ? 0 : n
+								}" />
 						</template>
 						<div v-else class="card-placeholder">
 							Kunde / Profit-Center nicht ausgewählt
 						</div>
 					</div>
-				</GlassCard>
-			</main>
-		</div>
+				</template>
+			</Card>
+		</main>
+	</div>
 </template>
 
 <script setup>
@@ -181,13 +135,12 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Toast from 'primevue/toast'
-import ProgressSpinner from 'primevue/progressspinner'
+import LoaderFullScreen from '@/components/ui/LoaderFullScreen.vue'
 import { useToast } from 'primevue/usetoast'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import ForecastFilters from '@/components/filters/ComponentFilter.vue'
 import ForecastTable from '@/components/tables/ComponentTable.vue'
-import GlassCard from '@/components/ui/GlassCard.vue'
 import LineChartSmart from '@/components/charts/LineChartSmart.vue'
 
 const toast = useToast()
@@ -564,13 +517,24 @@ function handleNext() {
 watch([mode, primaryId, secondaryId], async () => {
 	loading.value = false
 	if (!hasSelection.value) return
+
 	loadingAll.value = true
+
 	try {
-		await Promise.all([loadSeriesTable(), loadSeriesChart()])
+		await Promise.all([
+			loadSeriesTable(),   // tabla + versiones
+			loadSeriesChart(),   // datos del chart acumulado
+		])
+
+		await nextTick() // Esperar render del DOM
+
+		// Esperar un frame más para que los gráficos monten visualmente
+		await new Promise(resolve => requestAnimationFrame(resolve))
 	} finally {
-		loadingAll.value = false
+		loadingAll.value = false // Solo ahora desaparece el loader
 	}
 })
+
 onMounted(() => {
 	loadMaster()
 })
@@ -582,50 +546,190 @@ const currentPcId = computed(() => (mode.value === 'client' ? secondaryId.value 
 const tableRef = ref(null)
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
+/* GRID principal: ocupa exactamente el alto útil */
 .forecast-grid {
-        --title-h: 60px;
-        --title-pad-y: 6px;
-        --title-pad-x: 10px;
-        --forecast-grid-height: calc(100vh - var(--navbar-h));
-        --filters-gap: 10px;
-        --filters-padding: 10px;
-        --content-header-height: var(--title-h);
-        --topbar-title-line-height: 1.1;
-        --chart-pad: 0.5rem 0.25rem;
+	--gap: 16px;
+	min-height: 100%;
+	/* antes: min-height */
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: var(--gap);
+	padding: var(--pad-y) var(--pad-x, 16px);
+	box-sizing: border-box;
+	overflow: hidden;
+	/* evita doble scroll */
 }
+
+/* Aside filtros: llena alto */
+.filters-col {
+	grid-column: span 2;
+	min-width: 0;
+	display: flex;
+	height: 100%;
+}
+
+/* Card de filtros: estirada */
+.filters-card {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+/* Interior: ocupa y deja el footer abajo */
+.filters-inner {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: .75rem;
+}
+
+/* Footer pegado abajo */
 .filters-footer {
 	margin-top: auto;
+}
+
+/* Si el contenido del aside puede desbordar: scroll solo en el aside */
+.filters-col {
+	overflow: auto;
+}
+
+.content-col {
+	grid-column: span 10;
+	min-width: 0;
+	display: grid;
+	gap: var(--gap);
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-template-rows: auto 1fr auto;
+	min-height: 0;
+}
+
+/* Fila 1: título ocupa 12 */
+.topbar-card {
+  grid-column: 1 / -1;
+  padding: 0; /* Opcional, si querés controlar los márgenes vos mismo */
+}
+
+.topbar-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+/* ajustá según tu UI */
+}
+
+.title-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.kunde {
+  font-weight: bold;
+}
+
+.pc {
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+}
+
+
+/* Fila 2: charts 9 + 3 */
+.charts-row {
+	display: contents;
+}
+
+/* deja a los hijos posicionarse en la grilla del padre */
+.chart-card {
 	display: flex;
-}
-.filters-footer .p-button {
-	width: 100%;
-}
-.ff-host :deep(.p-button:has(.pi-arrow-right)) {
-	display: none !important;
-}
-.card-body-fit {
-        display: flex;           /* flex mejor que grid para fill vertical */
-        flex-direction: column;
-        flex: 1 1 auto;
-        min-height: 0;
-}
-.chart-empty {
-	width: 100%;
+	flex-direction: column;
 	height: 100%;
+	min-height: 0;
+}
+
+.chart-pad {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+
+.chart-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+
+.chart-lg {
+	grid-column: span 9;
+}
+
+.chart-sm {
+	grid-column: span 3;
+}
+
+.chart-lg,
+.chart-sm {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+/* Fila 3: tabla 12 */
+.table-card {
+	grid-column: 1 / -1;
+}
+
+/* Responsivo */
+@media (max-width: 1199px) {
+	.filters-col {
+		grid-column: 1 / -1;
+	}
+
+	.content-col {
+		grid-column: 1 / -1;
+	}
+
+	.chart-lg,
+	.chart-sm {
+		grid-column: 1 / -1;
+	}
 }
 
 /* ======== TABLE ======== */
 .table-card {
 	display: block;
 }
+
 .table-pad {
-	padding: 10px;
+	padding: .15rem;
 }
+
 .nav-bar {
 	padding: 2px 6px;
 	margin-bottom: 8px;
 }
+
 .table-card :deep(input),
 .table-card :deep(.p-inputtext) {
 	width: 100%;
@@ -636,18 +740,13 @@ const tableRef = ref(null)
 	line-height: 1.2;
 	color: var(--text) !important;
 }
+
 .table-card :deep(::placeholder) {
 	color: color-mix(in oklab, var(--text) 55%, transparent);
 }
+
 .table-card :deep(td) {
-	padding: 6px 8px;
-}
-.table-card :deep(td[style*='background']) {
-	color: #111 !important;
-	text-shadow: none;
-}
-html.dark .table-card :deep(td[style*='background']) {
-	color: #fff !important;
+	padding: 1px 2px;
 }
 
 .card-placeholder {
@@ -658,29 +757,5 @@ html.dark .table-card :deep(td[style*='background']) {
 	border: 1px dashed var(--border);
 	border-radius: 12px;
 	background: color-mix(in oklab, var(--surface) 65%, transparent);
-}
-.page-loader {
-	position: fixed;
-	inset: var(--navbar-h) 0 0 0;
-	z-index: 999;
-	display: grid;
-	place-items: center;
-	gap: 12px;
-	background: color-mix(in oklab, var(--bg) 40%, transparent);
-	backdrop-filter: saturate(var(--glass-sat)) blur(6px);
-}
-.loader-text {
-	font-size: 0.9rem;
-	color: var(--text);
-	opacity: 0.85;
-}
-.page-loader .p-progress-spinner-circle {
-	animation: spinnerColor 1.8s infinite linear;
-}
-@keyframes spinnerColor {
-	0% { stroke: #0ea5e9; }
-	33% { stroke: #10b981; }
-	66% { stroke: #ef4444; }
-	100% { stroke: #0ea5e9; }
 }
 </style>

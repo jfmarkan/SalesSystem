@@ -1,11 +1,12 @@
-// PrimeVue + Aura con primario negro y modo oscuro por clase
+// PrimeVue + Aura preset con primario negro y modo oscuro por clase .app-dark
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import ConfirmationService from 'primevue/confirmationservice'
 import Tooltip from 'primevue/tooltip'
 import { definePreset } from '@primeuix/themes'
 import Aura from '@primeuix/themes/aura'
-import 'primeicons/primeicons.css'
+
+// NO importes primeicons aquí; ya se importan en main.js
 
 // Componentes globales (ajusta a lo que realmente uses)
 import Accordion from 'primevue/accordion'
@@ -29,7 +30,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
-import /* !verifica versión */ Editor from 'primevue/editor'
+import Editor from 'primevue/editor' // verifica versión si usas v4 reciente
 import Fieldset from 'primevue/fieldset'
 import FileUpload from 'primevue/fileupload'
 import FloatLabel from 'primevue/floatlabel'
@@ -74,7 +75,7 @@ import Tree from 'primevue/tree'
 import TreeTable from 'primevue/treetable'
 import Divider from 'primevue/divider'
 
-// preset Aura con primario negro
+// Preset Aura con primario negro
 const BlackPrimaryAura = definePreset(Aura, {
   semantic: {
     primary: {
@@ -83,7 +84,7 @@ const BlackPrimaryAura = definePreset(Aura, {
       200: '{neutral.200}',
       300: '{neutral.300}',
       400: '{neutral.400}',
-      500: '{neutral.900}', // usa '{neutral.950}' si quieres negro absoluto
+      500: '{neutral.900}', // usa '{neutral.950}' para negro absoluto
       600: '{neutral.900}',
       700: '{neutral.900}',
       800: '{neutral.950}',
@@ -100,7 +101,7 @@ export default function setupPrimeVue(app) {
       preset: BlackPrimaryAura,
       options: {
         prefix: 'p',
-        cssLayer: false,
+        cssLayer: false,          // déjalo en false si ya manejas orden de CSS
         darkModeSelector: '.app-dark'
       }
     }
@@ -109,6 +110,7 @@ export default function setupPrimeVue(app) {
   app.use(ToastService)
   app.use(ConfirmationService)
 
+  // Registro global sólo de lo que uses realmente
   app.component('Accordion', Accordion)
   app.component('AccordionTab', AccordionTab)
   app.component('AutoComplete', AutoComplete)

@@ -297,11 +297,6 @@ function onForecastInput(i, e, ym) {
 </template>
 
 <style scoped>
-:root {
-	--red: #b01513;
-}
-
-/* Contenedor ocupa 100% */
 .table-shell {
 	height: 100%;
 	width: 100%;
@@ -333,101 +328,42 @@ function onForecastInput(i, e, ym) {
 .stick-head {
 	position: sticky;
 	top: 0;
-	z-index: 2;
+
 	background: rgba(255, 255, 255, 0.92);
 	backdrop-filter: blur(8px);
 	border-bottom: 1px solid rgba(2, 6, 23, 0.12);
 }
-@media (prefers-color-scheme: dark) {
-	.stick-head {
-		background: rgba(0, 0, 0, 0.78);
-		border-bottom-color: rgba(255, 255, 255, 0.16);
-		color: #f8fafc;
-	}
-}
-:global(.dark) .stick-head {
-	background: rgba(0, 0, 0, 0.78);
-	border-bottom-color: rgba(255, 255, 255, 0.16);
-	color: #f8fafc;
-}
+
 
 /* Sticky left: cubre completamente */
 .stick-left {
 	position: sticky;
 	left: 0;
-	background: rgba(255, 255, 255, 0.96);
-	backdrop-filter: blur(6px);
-	box-shadow: 3px 0 8px rgba(0, 0, 0, 0.06);
+	text-align: right;
+	background: #FFF;
 }
-@media (prefers-color-scheme: dark) {
-	.stick-left {
-		background: rgba(0, 0, 0, 0.82);
-		box-shadow: 3px 0 8px rgba(0, 0, 0, 0.35);
-		color: #f8fafc;
-	}
-}
-:global(.dark) .stick-left {
-	background: rgba(0, 0, 0, 0.82);
-	box-shadow: 3px 0 8px rgba(0, 0, 0, 0.35);
-	color: #f8fafc;
-}
+
 
 .left-cover {
 	z-index: 3;
 }
 
-/* Marco mes actual */
-.cur-left {
-	border-left: 2px solid var(--red) !important;
-}
-.cur-right {
-	border-right: 2px solid var(--red) !important;
-}
-.cur-top {
-	border-top: 2px solid var(--red) !important;
-}
-.cur-bottom {
-	border-bottom: 2px solid var(--red) !important;
-}
-
 /* Header: resaltar mes actual */
 .head-current {
-	background: linear-gradient(180deg, rgba(255, 221, 87, 0.55), rgba(255, 221, 87, 0.35));
-}
-@media (prefers-color-scheme: dark) {
-	.head-current {
-		background: linear-gradient(180deg, rgba(255, 221, 87, 0.35), rgba(255, 221, 87, 0.2));
-		color: #111;
-	}
-}
-:global(.dark) .head-current {
-	background: linear-gradient(180deg, rgba(255, 221, 87, 0.35), rgba(255, 221, 87, 0.2));
-	color: #111;
+	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
 }
 
 /* Filas */
 .cell {
 	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	text-align: center;
+	font-size: 0.85rem;
 }
 .cell-sales {
-	background: rgba(31, 86, 115, 0.12);
+	background: rgba(31, 86, 115, 0.25);
 }
 .cell-budget {
-	background: rgba(84, 132, 154, 0.12);
-}
-@media (prefers-color-scheme: dark) {
-	.cell-sales {
-		background: rgba(255, 255, 255, 0.06);
-	}
-	.cell-budget {
-		background: rgba(255, 255, 255, 0.06);
-	}
-}
-:global(.dark) .cell-sales {
-	background: rgba(255, 255, 255, 0.06);
-}
-:global(.dark) .cell-budget {
-	background: rgba(255, 255, 255, 0.06);
+	background: rgba(84, 132, 154, 0.25);
 }
 
 /* Input Forecast */
@@ -436,13 +372,7 @@ function onForecastInput(i, e, ym) {
 	color: #0f172a !important;
 	border: 1px solid rgba(2, 6, 23, 0.2) !important;
 	border-radius: 6px;
-}
-@media (prefers-color-scheme: dark) {
-	.inp-forecast {
-		background: rgba(255, 255, 255, 0.12) !important;
-		color: #f8fafc !important;
-		border-color: rgba(255, 255, 255, 0.24) !important;
-	}
+	text-align: center;
 }
 
 /* Desvíos */

@@ -1,117 +1,80 @@
-<!-- src/views/Dashboard.vue -->
 <template>
 	<div class="container-fluid dashboard-grid">
+		<!-- GLOBAL LOADER -->
+		<div v-if="loading" class="global-loader">
+			<div class="glass"></div>
+			<div class="spinner-content">
+				<ProgressSpinner style="width: 48px; height: 48px" strokeWidth="4" />
+				<span class="loader-text">Lädt…</span>
+			</div>
+		</div>
+
 		<!-- IZQ 8/12 -->
 		<section class="col-8 left-col">
-			<!-- KPIs 4x (3/12) alto fijo -->
+			<!-- KPIs 4x (3/12) -->
 			<div class="row12 kpi-row">
-				<GlassCard class="kpi">
-					<KpiCard modelValue="ist_vs_prognose" :kpis="kpisById" :unit="unit" />
-				</GlassCard>
-				<GlassCard class="kpi">
-					<KpiCard modelValue="ist_vs_budget" :kpis="kpisById" :unit="unit" />
-				</GlassCard>
-				<GlassCard class="kpi">
-					<KpiCard modelValue="diff_ist_budget_m3" :kpis="kpisById" :unit="unit" />
-				</GlassCard>
-				<GlassCard class="kpi">
-					<KpiCard modelValue="umsatz_eur" :kpis="kpisById" :unit="unit" />
-				</GlassCard>
+				<Card class="kpi"
+					v-for="kpiId in ['ist_vs_prognose', 'ist_vs_budget', 'diff_ist_budget_m3', 'umsatz_eur']"
+					:key="kpiId">
+					<template #content>
+						<KpiCard :modelValue="kpiId" :kpis="kpisById" :unit="unit" />
+					</template>
+				</Card>
 			</div>
 
-			<!-- Chart 8/12 + Table 4/12 -->
+			<!-- Chart + Table -->
 			<div class="row12 main-row">
-				<GlassCard class="fill col-8">
-					<template #actions>
-						<SelectButton
-							:modelValue="unit"
-							:options="unitOptions"
-							@update:modelValue="changeUnit"
-							:allowEmpty="false"
-							class="unit-toggle"
-						/>
+				<!-- Chart -->
+				<Card class="fill col-8">
+					<template #header>
+						<SelectButton :modelValue="unit" :options="unitOptions" @update:modelValue="changeUnit"
+							:allowEmpty="false" class="unit-toggle" />
 					</template>
-					<Skeleton v-if="loading" class="skel" borderRadius="12px" />
-					<EmptyState
-						v-else-if="!radarLabels.length"
-						icon="pi pi-chart-line"
-						text="Sin series"
-					/>
-					<ChartCard
-						v-else
-						class="widget"
-						:labels="radarLabels"
-						:series="radarSeries"
-						:unit="unit"
-					/>
-				</GlassCard>
+					<template #content>
+						<EmptyState v-if="!radarLabels.length && !loading" icon="pi pi-chart-line" text="Sin series" />
+						<ChartCard v-else class="widget" :labels="radarLabels" :series="radarSeries" :unit="unit" />
+					</template>
+				</Card>
 
-				<GlassCard class="fill col-4">
-					<template #actions>
-						<i class="pi pi-table" />
-						<SelectButton
-							:modelValue="unit"
-							:options="unitOptions"
-							@update:modelValue="changeUnit"
-							:allowEmpty="false"
-							class="unit-toggle"
-						/>
+				<!-- Table -->
+				<Card class="col-4">
+					<template #header>
+						<div class="flex align-items-center gap-2">
+							<i class="pi pi-table"></i>
+							<SelectButton :modelValue="unit" :options="unitOptions" @update:modelValue="changeUnit"
+								:allowEmpty="false" class="unit-toggle" />
+						</div>
 					</template>
-					<Skeleton v-if="loading" class="skel" borderRadius="12px" />
-					<EmptyState v-else-if="!tableRows.length" icon="pi pi-table" text="Sin filas" />
-					<ProfitCentersTable
-						v-else
-						class="widget"
-						:rows="tableRows"
-						:totals="tableTotals"
-						:unit="unit"
-						:selectedId="selectedPcId"
-						@row-select="onSelectPc"
-					/>
-				</GlassCard>
+					<template #content>
+						<EmptyState v-if="!tableRows.length && !loading" icon="pi pi-table" text="Sin filas" />
+						<ProfitCentersTable v-else class="widget" :rows="tableRows" :totals="tableTotals" :unit="unit"
+							:selectedId="selectedPcId" @row-select="onSelectPc" />
+					</template>
+				</Card>
 			</div>
 		</section>
 
 		<!-- DER 4/12 -->
 		<section class="col-4 right-col">
-			<GlassCard class="fill" :divider="false">
-				<div class="widget no-header">
-					<Skeleton v-if="loading" class="skel" borderRadius="12px" />
-					<EmptyState
-						v-else-if="!calendarEvents.length"
-						icon="pi pi-calendar"
-						text="Sin eventos"
-					/>
+			<!-- Calendar -->
+			<Card>
+				<template #content>
+					<EmptyState v-if="!calendarEvents.length && !loading" icon="pi pi-calendar" text="Sin eventos" />
 					<CalendarCard v-else class="widget" @update-action="onUpdateAction" />
-				</div>
-			</GlassCard>
+				</template>
+			</Card>
 
-			<GlassCard class="fill" :divider="false">
-				<div class="widget no-header">
-					<Skeleton v-if="loading" class="skel" borderRadius="12px" />
-					<EmptyState
-						v-else-if="!extraQuota.items.length"
-						icon="pi pi-inbox"
-						text="Sin datos"
-					/>
-				</div>
-				<ExtraQuotaCard
-					v-if="extraQuota.items.length"
-					class="widget"
-					:title="extraQuota.title"
-					:unit="unit"
-					:target="extraQuota.target"
-					:achieved="extraQuota.achieved"
-					:items="extraQuota.items"
-					:mix="extraQuota.mix"
-					scope="self"
-					:currentUserId="me.id"
-					:currentUserName="me.name"
-					:pcDetail="pcDetail"
-				/>
-			</GlassCard>
+			<!-- Extra Quotas -->
+			<Card v-if="extraQuota.items.length">
+				<template #content>
+					<ExtraQuotaCard class="widget" :title="extraQuota.title" :unit="unit" :target="extraQuota.target"
+						:achieved="extraQuota.achieved" :items="extraQuota.items" :mix="extraQuota.mix" scope="self"
+						:currentUserId="me.id" :currentUserName="me.name" :pcDetail="pcDetail" />
+				</template>
+			</Card>
 		</section>
 
+		<!-- Error -->
 		<div v-if="errorMsg" class="err" aria-live="polite">{{ errorMsg }}</div>
 	</div>
 </template>
@@ -120,12 +83,12 @@
 import { ref, computed, onMounted, watch, defineComponent } from 'vue'
 import api from '@/plugins/axios'
 
+import Card from 'primevue/card'
 import SelectButton from 'primevue/selectbutton'
-import Skeleton from 'primevue/skeleton'
+import ProgressSpinner from 'primevue/progressspinner'
 
-import GlassCard from '@/components/ui/GlassCard.vue'
 import KpiCard from '@/components/widgets/KpiCard.vue'
-import CalendarCard from '@/components/widgets/Calendar.vue'
+import CalendarCard from '@/components/widgets/CalendarCard.vue'
 import ChartCard from '@/components/widgets/ChartCard.vue'
 import ProfitCentersTable from '@/components/widgets/ProfitCentersTable.vue'
 import ExtraQuotaCard from '@/components/widgets/ExtraQuotaCard.vue'
@@ -133,9 +96,7 @@ import ExtraQuotaCard from '@/components/widgets/ExtraQuotaCard.vue'
 const unit = ref('VKEH')
 const unitOptions = ['VKEH', 'M3', 'EUR']
 const period = ref(new Date().toISOString().slice(0, 7))
-const fiscalYear = computed(
-	() => Number((period.value || '').slice(0, 4)) || new Date().getFullYear(),
-)
+const fiscalYear = computed(() => Number((period.value || '').slice(0, 4)) || new Date().getFullYear())
 
 const me = ref({ id: null, name: '' })
 const kpiItems = ref([])
@@ -226,8 +187,8 @@ const tableTotals = computed(() => ({
 	budget: tableTotalsRaw.value?.budget ?? 0,
 }))
 
-async function onUpdateAction() {}
-async function onSelectPc() {}
+async function onUpdateAction() { }
+async function onSelectPc() { }
 
 const EmptyState = defineComponent({
 	name: 'EmptyState',
@@ -240,132 +201,111 @@ const EmptyState = defineComponent({
 </script>
 
 <style scoped>
-/* ====== 12 cols. Paddings y altura. Sin solapamientos. ====== */
 .dashboard-grid {
-	/* Paddings: elige valores. Mantengo 16px vertical y 16px horizontal por defecto */
-	--pad-y: 16px; /* usa .25rem o .5rem si prefieres */
-	--pad-x: 16px; /* usa .5rem o 1rem si prefieres */
-	--gap: 16px; /* separación uniforme */
-	--navbar-h: var(--navbar-h, 64px);
-
+	--gap: 16px;
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	gap: var(--gap);
 	padding: var(--pad-y) var(--pad-x);
-
-	/* clave: la página puede crecer si el contenido excede */
-	min-height: calc(100svh - var(--navbar-h) - (var(--pad-y) * 2));
+	min-height: 100%;
 	box-sizing: border-box;
 }
 
-/* columnas maestras */
+/* Columnas principales */
 .col-8 {
 	grid-column: span 8;
 	min-width: 0;
 }
+
 .col-4 {
 	grid-column: span 4;
 	min-width: 0;
 }
 
-/* IZQ: KPIs fijas + zona flexible que NO solapa */
+/* KPIs */
 .left-col {
 	display: grid;
-	grid-template-rows: var(--kpi-h, 112px) auto; /* auto permite crecer */
+	grid-template-rows: auto auto;
 	gap: var(--gap);
 	min-height: 0;
 }
 
-/* KPIs 4x 3/12 */
 .kpi-row {
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	gap: var(--gap);
-	min-height: 0;
-}
-.kpi-row > .kpi {
-	grid-column: span 3;
-	height: 100%;
-	min-height: 0;
 }
 
-/* Fila principal: chart 8/12 y tabla 4/12. Sin alturas forzadas */
+.kpi-row>.kpi {
+	grid-column: span 3;
+}
+
+/* Main Row (Chart + Table) */
 .main-row {
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	gap: var(--gap);
-	min-height: 0;
-}
-.main-row .col-8 {
-	grid-column: span 8;
-	min-height: 0;
-}
-.main-row .col-4 {
-	grid-column: span 4;
-	min-height: 0;
 }
 
-/* DERECHA: dos tarjetas apiladas. Dejan crecer la página si hace falta */
+.main-row .col-8 {
+	grid-column: span 7;
+}
+
+.main-row .col-4 {
+	grid-column: span 5;
+}
+
+.main-row .col-8>.p-card,
+.main-row .col-4>.p-card {
+	max-height: 320px;
+	overflow: hidden;
+}
+
+.main-row .p-card .widget {
+	height: auto !important;
+	min-height: 0 !important;
+}
+
+/* Right Column */
 .right-col {
 	display: grid;
-	grid-auto-rows: minmax(200px, 1fr);
+	grid-auto-rows: auto;
 	gap: var(--gap);
-	min-height: 0;
 }
 
-/* ====== Cards ====== */
-/* no animación. no forzar fondos para respetar main.scss */
-.fill,
-.kpi {
-	border-radius: 12px;
-	border: 1px solid var(--card-border, color-mix(in oklab, #000, transparent 85%));
+/* Loader global */
+.global-loader {
+	position: fixed;
+	inset: 0;
+	z-index: 999;
+	display: grid;
+	place-items: center;
 }
-.fill {
+
+.global-loader .glass {
+	position: absolute;
+	inset: 0;
+	backdrop-filter: blur(12px);
+	background-color: rgba(255, 255, 255, 0.4);
+	z-index: 1;
+}
+
+.spinner-content {
+	position: relative;
+	z-index: 2;
 	display: flex;
 	flex-direction: column;
-	min-height: 0;
-}
-.fill :deep(.card-header) {
-	padding-top: 6px;
-	padding-bottom: 6px;
-}
-.fill :deep(.card-content) {
-	flex: 1;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
+	align-items: center;
 }
 
-/* calendario y extra sin header */
-.no-header {
-	height: 100%;
+.loader-text {
+	margin-top: 0.75rem;
+	font-weight: 600;
+	font-size: 16px;
+	color: black;
 }
 
-/* widget ocupa el espacio disponible dentro de la card */
-.widget {
-	width: 100%;
-	height: 100%;
-	min-height: 0;
-}
-
-/* SelectButton pill */
-.unit-toggle :deep(.p-button) {
-	background: transparent;
-	border: 0;
-}
-.unit-toggle :deep(.p-button.p-highlight) {
-	font-weight: 700;
-}
-.unit-toggle :deep(.p-buttonset) {
-	padding: 2px;
-	border-radius: 999px;
-}
-
-/* Empty, Skeleton, Error */
-.skel {
-	height: 100%;
-	border-radius: 12px;
-}
+/* Empty */
 .empt {
 	height: 100%;
 	display: grid;
@@ -373,28 +313,32 @@ const EmptyState = defineComponent({
 	color: var(--text-weak, #7a8a9a);
 	gap: 0.25rem;
 }
+
 .err {
 	grid-column: 1/-1;
 	padding: 8px 12px;
 	border-radius: 8px;
 }
 
-/* ====== Responsive ====== */
 @media (max-width: 1199px) {
+
 	.col-8,
 	.col-4 {
 		grid-column: 1 / -1;
 	}
-	.kpi-row > .kpi {
+
+	.kpi-row>.kpi {
 		grid-column: span 6;
 	}
+
 	.main-row .col-8,
 	.main-row .col-4 {
 		grid-column: span 12;
 	}
 }
+
 @media (max-width: 700px) {
-	.kpi-row > .kpi {
+	.kpi-row>.kpi {
 		grid-column: span 12;
 	}
 }

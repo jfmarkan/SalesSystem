@@ -1,132 +1,119 @@
 <template>
-	<Toast />
-
-	<!-- Confirm dialog -->
-	<Dialog v-model:visible="confirmVisible" :modal="true" :draggable="false" :dismissableMask="true"
-		header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
-		<p class="mb-3 text-muted-90">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
-		<template #footer>
-			<div class="dialog-actions flex justify-content-end gap-2">
-				<Button label="Abbrechen" severity="secondary" text
-					@click="confirmVisible = false; pendingChange = null" />
-				<Button label="Verwerfen" severity="danger" text @click="discardAndApply" />
-				<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
+	<div class="budget-case-grid">
+		<Dialog v-model:visible="confirmVisible" modal dismissable-mask header="Ungespeicherte Änderungen"
+			:style="{ width: '520px' }">
+			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
+			<div class="flex justify-content-end gap-2">
+				<Button label="Abbrechen" severity="secondary" 
+					@click="() => { confirmVisible = false; pendingChange.value = null }" />
+				<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
+				<Button label="Speichern" severity="success" icon="pi pi-save" @click="saveAndApply" />
 			</div>
-		</template>
-	</Dialog>
+		</Dialog>
 
-	<!-- Main Forecast Layout -->
-	<div class="forecast-grid container-fluid">
 		<!-- Sidebar / Filters -->
 		<aside class="filters-col">
-			<div class="filters-card glass">
-				<div class="filters-inner">
-					<div class="selector-host">
-						<ForecastFilters
-							:mode="mode"
-							:primary-options="primaryOptions"
-							:primary-id="primaryId"
-							:secondary-options="secondaryOptionsWithDots"
-							:secondary-id="secondaryId"
-							@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
-							@update:primary-id="(v) => guardedChange('primary', v)"
-							@update:secondary-id="(v) => guardedChange('secondary', v)"
-							@next="handleNext"
-							class="ff-host"
-						/>
-						<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
+			<Card class="filters-card">
+				<template #content>
+					<div class="filters-inner">
+						<div class="field-block flex-1 min-h-0">
+							<div class="selector-host">
+								<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
+									:primary-id="primaryId" :secondary-options="secondaryOptionsWithDots"
+									:secondary-id="secondaryId"
+									@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
+									@update:primary-id="(v) => guardedChange('primary', v)"
+									@update:secondary-id="(v) => guardedChange('secondary', v)" @next="handleNext" />
+								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
+							</div>
+						</div>
+						<div class="filters-footer">
+							<div class="legend">
+								<span class="legend-item">
+									<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
+									Vorhanden
+								</span>
+								<span class="legend-item">
+									<i class="pi pi-circle legend-icon legend-icon-pending"></i>
+									Fehlt
+								</span>
+							</div>
+						</div>
 					</div>
-					<div class="legend mt-4">
-						<span class="legend-item">
-							<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
-							Vorhanden
-						</span>
-						<span class="legend-item">
-							<i class="pi pi-circle legend-icon legend-icon-pending"></i>
-							Fehlt
-						</span>
-					</div>
-				</div>
-			</div>
+				</template>
+			</Card>
 		</aside>
 
-		<!-- Main content area -->
+		<!-- Main content -->
 		<main class="content-col">
-			<header class="topbar glass topbar--compact">
-				<div class="title-left">
-					<div class="eyebrow">Budget Case</div>
-					<div class="title-line">
-						<strong class="kunde">{{ selectedClientName || 'Kunde' }}</strong>
-						<span class="sep" aria-hidden="true"></span>
-						<span class="pc">{{ selectedPCName || '(PC)' }}</span>
+			<!-- Header -->
+			<Card class="topbar-card">
+				<template #content>
+					<div class="topbar-inner">
+						<div class="title-left">
+							<div class="eyebrow">Budget Case</div>
+							<div class="title-line">
+								<strong class="kunde">{{ selectedClientName || 'Kunde' }}</strong>
+								<span class="sep" aria-hidden="true"> | </span>
+								<span class="pc">{{ selectedPCName || '(PC)' }}</span>
+							</div>
+						</div>
+						<div class="actions">
+							<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty"
+								:outlined="!budgetDirty" @click="saveBudgetCase" />
+						</div>
 					</div>
-				</div>
-				<div class="actions">
-					<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty" :outlined="!budgetDirty"
-						@click="saveBudgetCase" />
-				</div>
-			</header>
+				</template>
+			</Card>
 
-			<!-- Central Charts Row -->
+			<!-- Charts -->
 			<div class="charts-row">
-				<div class="chart-card glass">
-					<div class="chart-pad">
-						<h3 class="section-title">Diagramm</h3>
-						<div class="chart-body">
-							<LineChartSmart
-								v-if="hasSelection"
-								type="cumulative"
-								:client-id="currentClientId"
-								:profit-center-id="currentPcId"
-								api-prefix="/api"
-								:auto-fetch="false"
-								:cum-data="cumDataForChart"
-								:busy="loading"
-							/>
-							<div v-else class="empty">Keine Auswahl</div>
+				<Card class="chart-card chart-lg">
+					<template #content>
+						<div class="chart-pad">
+							<div class="chart-body">
+								<LineChartSmart v-if="hasSelection" type="cumulative" :client-id="currentClientId"
+									:profit-center-id="currentPcId" api-prefix="/api" :auto-fetch="false"
+									:cum-data="cumDataForChart" :busy="loading" />
+								<div v-else class="card-placeholder">Keine Auswahl</div>
+							</div>
 						</div>
-					</div>
-				</div>
+					</template>
+				</Card>
 
-				<div class="chart-card glass">
-					<div class="chart-pad">
-						<h3 class="section-title">Budget-Fall</h3>
-						<div class="chart-body">
-							<BudgetCasePanel
-								v-if="hasSelection"
-								:key="`${currentClientId}-${currentPcId}`"
-								ref="bcRef"
-								:client-group-number="cgnForChild"
-								:profit-center-code="pccForChild"
-								:disabled="false"
-								:prefill="prefillFromDb"
-								@dirty-change="(v) => budgetDirty = !!v"
-								@values-change="onChildValues"
-								@simulated="onSimulated"
-							/>
-							<div v-else class="empty">Keine Auswahl</div>
+				<Card class="chart-card chart-sm">
+					<template #content>
+						<div class="chart-pad">
+							<div class="chart-body">
+								<BudgetCasePanel v-if="hasSelection" :key="`${currentClientId}-${currentPcId}`"
+									ref="bcRef" :client-group-number="cgnForChild" :profit-center-code="pccForChild"
+									:disabled="false" :prefill="prefillFromDb" @dirty-change="(v) => budgetDirty = !!v"
+									@values-change="onChildValues" @simulated="onSimulated" />
+								<div v-else class="card-placeholder">Keine Auswahl</div>
+							</div>
 						</div>
-					</div>
-				</div>
+					</template>
+				</Card>
 			</div>
 
 			<!-- Table -->
-			<div class="table-card glass">
-				<div class="table-pad">
-					<h3 class="section-title">Tabelle</h3>
-					<div class="panel">
-						<ForecastTable
-							v-if="hasSelection"
-							:months="months"
-							:ventas="sales"
-							:budget="budget"
-							:forecast="forecast"
-							@edit-forecast="() => {}"
-						/>
+			<Card class="table-card">
+				<template #content>
+					<div class="table-pad">
+						<template v-if="hasSelection">
+							<div class="nav-bar flex items-center justify-end gap-8 mb-2">
+								<!-- Sin botones, solo rango visible -->
+								<span class="range-label">Monate 1–12</span>
+							</div>
+							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
+								:forecast="forecast" :viewport-start="0" :viewport-size="12"
+								:is-editable-ym="() => false" @edit-forecast="() => { }" />
+						</template>
 						<div v-else class="card-placeholder">Keine Auswahl</div>
 					</div>
-				</div>
-			</div>
+				</template>
+			</Card>
+
 		</main>
 	</div>
 </template>
@@ -142,7 +129,6 @@ import { useToast } from 'primevue/usetoast'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 
-import ForecastTitle from '@/components/titles/ComponentTitle.vue'
 import ForecastFilters from '@/components/filters/ComponentFilter.vue'
 import ForecastTable from '@/components/tables/ComponentTable.vue'
 import LineChartSmart from '@/components/charts/LineChartSmart.vue'
@@ -346,6 +332,7 @@ async function refreshCaseFlagsForSecondary() {
 		hasCaseCpcSet.value = found
 	}
 }
+
 
 /* Prefill */
 const prefillFromDb = ref({ best_case: null, worst_case: null })
@@ -640,6 +627,7 @@ async function discardAndApply() {
 	if (pendingChange.value) await applyChange(pendingChange.value.kind, pendingChange.value.value)
 	pendingChange.value = null
 }
+
 function handleNext() {
 	const list = secondaryOptions.value; if (!list?.length) return
 	const idx = list.findIndex(o => o.value === secondaryId.value)
@@ -677,53 +665,187 @@ const selectedPCName = computed(() => {
 </script>
 
 <style scoped>
-.forecast-grid {
-        --forecast-grid-height: 100vh;
-        --filters-gap: 12px;
+.budget-case-grid {
+	--gap: 16px;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: var(--gap);
+	padding: var(--pad-y) var(--pad-x, 16px);
+	box-sizing: border-box;
+	height: 100%;
+	overflow: hidden;
 }
+
+/* Sidebar */
+.filters-col {
+	grid-column: span 2;
+	min-width: 0;
+	display: flex;
+	height: 100%;
+	overflow: auto;
+}
+
 .filters-card {
-        padding: 10px;
-        border-radius: 15px;
-}
-.ff-host :deep(.p-listbox) {
-	width: 100%;
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+	min-height: 0;
 }
-.ff-host :deep(.p-listbox-list-wrapper),
-.ff-host :deep(.p-listbox-list) {
+
+.filters-inner {
 	flex: 1;
-	overflow-y: auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: .75rem;
 }
+
+.filters-footer {
+	margin-top: auto;
+}
+
 .legend {
 	font-size: 13px;
-	margin-top: auto;
 	display: flex;
-	flex-direction: column;
+	justify-content: space-evenly;
 	gap: 6px;
 }
+
 .legend-item {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 }
-.legend-icon {
-	font-size: 12px;
-}
+
 .legend-icon-done {
 	color: var(--p-green-500, #10b981);
 }
+
 .legend-icon-pending {
 	color: var(--p-surface-500, #9ca3af);
 }
 
+/* Main content */
+.content-col {
+	grid-column: span 10;
+	display: grid;
+	gap: var(--gap);
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-template-rows: auto 1fr auto;
+	min-height: 0;
+}
+
+/* Header */
+.topbar-card {
+	grid-column: 1 / -1;
+}
+
+.topbar-inner {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.title-left {
+	display: flex;
+	flex-direction: column;
+}
+
+.title-line {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.eyebrow {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	margin-bottom: 0.25rem;
+}
+
+.kunde {
+	font-weight: bold;
+}
+
+.pc {
+	color: var(--text);
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+}
+
+/* Charts */
+.charts-row {
+	display: contents;
+}
+
+.chart-card {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.chart-lg {
+	grid-column: span 9;
+}
+
+.chart-sm {
+	grid-column: span 3;
+}
+
+.chart-pad {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+
+.chart-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+
+/* Table */
 .table-card {
-        display: block;
+	grid-column: 1 / -1;
 }
+
 .table-pad {
-	padding: 10px;
+	padding: .15rem;
 }
+
+.nav-bar {
+	padding: 2px 6px;
+	margin-bottom: 8px;
+}
+
+.table-card :deep(input),
+.table-card :deep(.p-inputtext) {
+	width: 100%;
+	box-sizing: border-box;
+	height: 28px;
+	padding: 2px 6px;
+	font-size: 0.875rem;
+	line-height: 1.2;
+	color: var(--text) !important;
+}
+
+.table-card :deep(::placeholder) {
+	color: color-mix(in oklab, var(--text) 55%, transparent);
+}
+
+.table-card :deep(td) {
+	padding: 1px 2px;
+}
+
 .card-placeholder {
 	min-height: 120px;
 	display: grid;
@@ -732,5 +854,21 @@ const selectedPCName = computed(() => {
 	border: 1px dashed var(--border);
 	border-radius: 12px;
 	background: color-mix(in oklab, var(--surface) 65%, transparent);
+}
+
+/* Responsive */
+@media (max-width: 1199px) {
+	.filters-col {
+		grid-column: 1 / -1;
+	}
+
+	.content-col {
+		grid-column: 1 / -1;
+	}
+
+	.chart-lg,
+	.chart-sm {
+		grid-column: 1 / -1;
+	}
 }
 </style>

@@ -27,22 +27,22 @@ function setMode(v) {
 <template>
 	<div class="filter-wrap">
 		<div class="mode-toggle">
-			<button
+			<Button
 				type="button"
 				:class="['m-btn', m === 'client' && 'active']"
 				:aria-pressed="m === 'client'"
 				@click="setMode('client')"
 			>
 				Kunde
-			</button>
-			<button
+			</Button>
+			<Button
 				type="button"
 				:class="['m-btn', m === 'pc' && 'active']"
 				:aria-pressed="m === 'pc'"
 				@click="setMode('pc')"
 			>
 				Profit Center
-			</button>
+			</Button>
 		</div>
 
 		<div class="select-row">
@@ -72,14 +72,6 @@ function setMode(v) {
 				</template>
 			</Listbox>
 		</div>
-
-		<Button
-			class="btn-next"
-			label="Weiter"
-			icon="pi pi-arrow-right"
-			@click="$emit('next')"
-			:disabled="!sid"
-		/>
 	</div>
 </template>
 
@@ -101,20 +93,15 @@ function setMode(v) {
 	padding: 8px 12px;
 	border-radius: 10px;
 	border: 1px solid var(--input-border);
-	background: var(--input-bg);
-	color: var(--text);
-	font-weight: 600;
+	font-weight: 500;
 	cursor: pointer;
 }
 .m-btn.active {
-	background: var(--primary);
-	color: #001018;
-	border-color: transparent;
+	background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
+	color: white;
+	border: none;
 }
 
-.select-row {
-	flex: 0 0 auto;
-}
 .select-native {
 	width: 100%;
 	height: 36px;
@@ -126,47 +113,11 @@ function setMode(v) {
 	outline: none;
 }
 
-/* zona lista: ocupa TODO lo restante entre select y botón */
-.list-wrap {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
 .list-caption {
 	font-size: 0.85rem;
 	opacity: 0.9;
 }
 
-/* forzar Listbox a llenar alto disponible y scrollear dentro */
-:deep(.listbox-grow) {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-}
-:deep(.listbox-grow.p-listbox) {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-}
-:deep(.listbox-grow .p-listbox-list-wrapper) {
-	flex: 1 1 auto;
-	min-height: 0;
-	height: 100% !important;
-	max-height: none !important;
-	overflow: auto;
-}
-:deep(.listbox-grow .p-listbox-item) {
-	font-size: 1rem;
-	color: var(--text);
-	padding: 10px 12px;
-	line-height: 1.3;
-}
-
-/* botón abajo siempre */
 .btn-next {
 	margin-top: auto;
 	width: 100%;
