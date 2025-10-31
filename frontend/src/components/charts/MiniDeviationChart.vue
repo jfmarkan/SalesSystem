@@ -34,11 +34,11 @@ const fmt = (x) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).
 
 // palette fija: azul=Ist, verde=Budget, amarillo=Forecast
 const C = {
-  salesLine:   '#60a5fa',                 // blue
+  salesLine:   '#6E8DA8',                 // blue
   salesFill:   'rgba(96,165,250,.20)',
-  budgetLine:  '#22c55e',                 // green
+  budgetLine:  '#7AA488',                 // green
   budgetFill:  'rgba(34,197,94,.20)',
-  fcLine:      '#FFC20E',                 // yellow
+  fcLine:      '#B3A45B',                 // yellow
   fcFill:      'rgba(255,194,14,.20)',
 }
 
@@ -78,7 +78,7 @@ const options = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: isSeries.value, position: 'bottom', labels: { color: '#e5e7eb' } },
+    legend: { display: isSeries.value, position: 'bottom', labels: { color: '#737373' } },
     tooltip: {
       mode: 'index',
       intersect: false,
@@ -97,14 +97,14 @@ const options = computed(() => ({
   scales: {
     x: {
       stacked: false,
-      ticks: { color: '#e5e7eb' },
-      grid: { color: 'rgba(255,255,255,.08)' }
+      ticks: { color: '#737373' },
+      grid: { color: 'rgba(0,0,0, .15)' }
     },
     y: {
       stacked: false,
       beginAtZero: true,
-      ticks: { color: '#e5e7eb', callback: (v) => fmt(v) },
-      grid: { color: 'rgba(255,255,255,.08)' }
+      ticks: { color: '#737373', callback: (v) => fmt(v) },
+      grid: { color: 'rgba(0,0,0,.15)' }
     }
   }
 }))
