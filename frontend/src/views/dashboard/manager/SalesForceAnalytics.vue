@@ -1,415 +1,272 @@
-<!-- src/views/SalesManagerProDashboardPrime.vue -->
 <template>
-	<div class="view-wrap full-bleed" style="--top-offset: 80px">
-		<div class="grid">
-			<!-- IZQ: LISTA VENDEDORES -->
-			<aside class="col-12 md:col-2">
-				<div class="glass card-shadow panel aside">
-					<Listbox
-						v-model="selectedSeller"
-						:options="sellerItems"
-						optionValue="id"
-						optionLabel="__displayName"
-						dataKey="id"
-						class="seller-listbox"
-						listStyle="max-height: 90vh"
-					>
-						<template #option="{ option }">
-							<div class="seller-item">
+	<Toast />
+
+	<!-- GRID PRINCIPAL -->
+	<div class="sales-force-analysis-grid">
+		<!-- ASIDE: Lista de vendedores -->
+		<aside class="filters-col">
+			<Card class="filters-card">
+				<template #content>
+					<Listbox v-model="selectedSeller" :options="sellerItems" optionValue="id"
+						optionLabel="__displayName" dataKey="id" class="seller-listbox"  listStyle="max-height:100%">
+						<template #option="{ option, selected }">
+							<div :class="['seller-row', { selected }]">
 								<div :class="['avatar-ring', teamClass(option)]">
-									<Avatar
-										v-if="option.__photo"
-										:image="option.__photo"
-										class="avatar-img"
-										shape="circle"
-									/>
-									<Avatar
-										v-else
-										:label="initials(option.__displayName)"
-										class="avatar-initials"
-										shape="circle"
-									/>
+									<Avatar v-if="option.profile_picture" :image="option.profile_picture" shape="circle"
+										size="large" />
+									<Avatar v-else :label="initials(option.__displayName)" shape="circle" size="large"
+										class="avatar-initials" />
 								</div>
-								<div class="seller-name">{{ option.__displayName }}</div>
+								<span class="seller-name">{{ option.__displayName }}</span>
 							</div>
 						</template>
-						<template #empty><div class="empty">Keine Einträge.</div></template>
+						<template #empty>
+							<div class="empty">Keine Einträge.</div>
+						</template>
 					</Listbox>
-				</div>
-			</aside>
+				</template>
+			</Card>
+		</aside>
 
-			<!-- DER -->
-			<section class="col-12 md:col-10">
-				<div class="glass card-shadow panel header-strip">
-					<div class="flex align-items-center justify-content-between gap-2">
+
+		<!-- CONTENIDO PRINCIPAL -->
+		<main class="content-col">
+			<!-- TOPBAR -->
+			<Card class="topbar-card">
+				<template #content>
+					<div class="topbar-inner">
 						<h3 class="m-0">Übersicht</h3>
 						<div class="flex align-items-center gap-2">
-							<Button
-								icon="pi pi-chevron-left"
-								class="p-button-rounded p-button-text"
-								@click="shiftPeriod(-1)"
-							/>
-							<span class="pill"
-								><i class="pi pi-calendar mr-2" />{{ periodLabel }}</span
-							>
-							<Button
-								icon="pi pi-chevron-right"
-								class="p-button-rounded p-button-text"
-								@click="shiftPeriod(1)"
-							/>
+							<Button icon="pi pi-chevron-left" text rounded @click="shiftPeriod(-1)" />
+							<span class="pill">
+								<i class="pi pi-calendar mr-2" />{{ periodLabel }}
+							</span>
+							<Button icon="pi pi-chevron-right" text rounded @click="shiftPeriod(1)" />
 						</div>
 					</div>
-				</div>
+				</template>
+			</Card>
 
-				<div class="grid">
-					<!-- Desvíos -->
-					<div class="col-12 md:col-8">
-						<div class="glass card-shadow panel tall-vh">
-							<div class="panel-head">
-								<h3>Abweichungsbegründungen</h3>
-								<div class="kpis flex align-items-center gap-2">
-									<Tag
-										severity="success"
-										value="Fristgerecht"
-										rounded
-									/><strong>{{ kpiInTerm }}</strong>
-									<span class="sep">|</span>
-									<Tag severity="warning" value="Verspätet" rounded /><strong>{{
-										kpiOutTerm
-									}}</strong>
-								</div>
+			<!-- MAIN ROW (8 + 4 columnas) -->
+			<div class="charts-row">
+				<!-- IZQ: Tabla de desvíos -->
+				<Card class="chart-card chart-lg">
+					<template #header>
+						<div class="flex align-items-center justify-content-between flex-wrap">
+							<h3 class="m-0">Abweichungsbegründungen</h3>
+							<div class="flex align-items-center gap-2">
+								<Tag severity="success" value="Fristgerecht" rounded />
+								<strong>{{ kpiInTerm }}</strong>
+								<span class="text-500">|</span>
+								<Tag severity="warning" value="Verspätet" rounded />
+								<strong>{{ kpiOutTerm }}</strong>
 							</div>
-
-							<DataTable
-								:value="deviationsSorted"
-								responsiveLayout="scroll"
-								:rows="10"
-								:paginator="true"
-								paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
-								currentPageReportTemplate="{first}–{last} von {totalRecords}"
-								class="table-plain table-flex roomy-rows"
-								:loading="isLoadingDevs"
-								@row-click="onDeviationRowClick"
-							>
-								<Column header="Typ" style="width: 140px">
-									<template #body="{ data: r }">
-										<span
-											v-if="String(r.type).toLowerCase() === 'forecast'"
-											class="pill-tag pill-forecast"
-											>Forecast</span
-										>
-										<span v-else class="pill-tag pill-ist">Ist</span>
-									</template>
-								</Column>
-
-								<Column header="Profitcenter" style="width: 280px">
-									<template #body="{ data: r }">
-										<span v-if="r.pcName">{{ r.pcName }}</span>
-									</template>
-								</Column>
-
-								<Column header="Delta" style="width: 200px">
-									<template #body="{ data: r }">
-										<span :class="Number(r.deltaAbs || 0) >= 0 ? 'pos' : 'neg'">
-											{{
-												fmtAmount(Number(r.deltaAbs || 0), unitOf(r.pcCode))
-											}}
-										</span>
-									</template>
-								</Column>
-
-								<Column header="Plan" style="width: 130px">
-									<template #body="{ data: r }">
-										<span
-											v-if="hasPlan(r)"
-											class="p-tag p-tag-success p-tag-rounded"
-											>Plan</span
-										>
-										<span v-else class="p-tag p-tag-secondary p-tag-rounded"
-											>Kein Plan</span
-										>
-									</template>
-								</Column>
-
-								<Column header="Status" style="width: 160px">
-									<template #body="{ data: r }">
-										<span
-											v-if="isOverdue(r)"
-											class="p-tag p-tag-danger p-tag-rounded"
-											>Überfällig</span
-										>
-										<span
-											v-else
-											class="p-tag p-tag-rounded"
-											:class="r.justified ? 'p-tag-success' : 'p-tag-warning'"
-										>
-											{{ r.justified ? 'Begründet' : 'Offen' }}
-										</span>
-									</template>
-								</Column>
-
-								<Column header="" style="width: 120px">
-									<template #body="{ data: r }">
-										<Button
-											label="Ansehen"
-											class="p-button-text p-button-sm"
-											@click.stop="openDeviation(r)"
-										/>
-									</template>
-								</Column>
-
-								<template #empty
-									><div class="empty">
-										Keine Daten für den Zeitraum.
-									</div></template
-								>
-							</DataTable>
 						</div>
-					</div>
+					</template>
+					<template #content>
+						<DataTable :value="deviationsSorted" responsiveLayout="scroll" :rows="10" paginator
+							paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+							currentPageReportTemplate="{first}–{last} von {totalRecords}" :loading="isLoadingDevs"
+							@row-click="onDeviationRowClick">
+							<Column header="Typ" style="width: 140px">
+								<template #body="{ data: r }">
+									<Tag :severity="String(r.type).toLowerCase() === 'forecast' ? 'warning' : 'info'"
+										:value="String(r.type).toLowerCase() === 'forecast' ? 'Forecast' : 'Ist'"
+										rounded />
+								</template>
+							</Column>
 
-					<!-- Lado derecho -->
-					<div class="col-12 md:col-4 right-col">
-						<!-- Profitcenter -->
-						<div class="glass card-shadow panel">
+							<Column header="Profitcenter" field="pcName" style="width: 280px" />
+
+							<Column header="Delta" style="width: 200px">
+								<template #body="{ data: r }">
+									<span :class="Number(r.deltaAbs || 0) >= 0 ? 'text-green-500' : 'text-red-500'">
+										{{ fmtAmount(Number(r.deltaAbs || 0), unitOf(r.pcCode)) }}
+									</span>
+								</template>
+							</Column>
+
+							<Column header="Plan" style="width: 130px">
+								<template #body="{ data: r }">
+									<Tag :severity="hasPlan(r) ? 'success' : 'secondary'"
+										:value="hasPlan(r) ? 'Plan' : 'Kein Plan'" rounded />
+								</template>
+							</Column>
+
+							<Column header="Status" style="width: 160px">
+								<template #body="{ data: r }">
+									<Tag :severity="isOverdue(r)
+										? 'danger'
+										: r.justified
+											? 'success'
+											: 'warning'" :value="isOverdue(r)
+												? 'Überfällig'
+												: r.justified
+													? 'Begründet'
+													: 'Offen'" rounded />
+								</template>
+							</Column>
+
+							<Column header="" style="width: 120px">
+								<template #body="{ data: r }">
+									<Button label="Ansehen" text size="small" @click.stop="openDeviation(r)" />
+								</template>
+							</Column>
+
+							<template #empty>
+								<div class="text-center text-500 p-3">Keine Daten für den Zeitraum.</div>
+							</template>
+						</DataTable>
+					</template>
+				</Card>
+
+				<!-- DER: Profitcenter + ExtraQuota -->
+				<div class="chart-card chart-sm flex flex-column gap-3">
+					<Card>
+						<template #header>Profitcenter</template>
+						<template #content>
 							<PcOverviewManager :userId="selectedSeller" unit="M3" :period="null" />
-						</div>
+						</template>
+					</Card>
 
-						<!-- Extra Quota -->
-						<div class="glass card-shadow panel">
-							<div class="panel-head">
-								<Button
-									label="Anzeigen"
-									class="p-button-text p-button-sm"
-									@click="showXQAnalysis = true"
-								/>
+					<Card>
+						<template #header>
+							<div class="flex justify-content-end">
+								<Button label="Anzeigen" text size="small" @click="showXQAnalysis = true" />
 							</div>
-							<ExtraQuotaCard
-								title="Zusatzquote"
-								unit="m³"
-								:target="xq.target"
-								:achieved="xq.achieved"
-								:mix="xq.mix"
-								:items="xq.items"
-								:pcDetail="xq.pcDetail"
-								:currentUserId="selectedSeller"
-								:showMoreButton="false"
-							/>
-						</div>
-					</div>
+						</template>
+						<template #content>
+							<ExtraQuotaCard title="Zusatzquote" unit="m³" :target="xq.target" :achieved="xq.achieved"
+								:mix="xq.mix" :items="xq.items" :pcDetail="xq.pcDetail" :currentUserId="selectedSeller"
+								:showMoreButton="false" />
+						</template>
+					</Card>
 				</div>
-			</section>
-		</div>
+			</div>
+		</main>
+	</div>
 
-		<Dialog
-			v-model:visible="showDeviationModal"
-			modal
-			appendTo="body"
-			:draggable="false"
-			:blockScroll="true"
-			:style="{ width: 'min(900px, 96vw)' }"
-			:breakpoints="{ '960px': '96vw', '640px': '100vw' }"
-			header="Abweichung · Detail"
-			class="glass-modal"
-		>
-			<template v-if="activeDeviation">
-				<div class="dev-header">
-					<div class="dev-title">
-						<i class="pi pi-sliders-h mr-2" />
-						<span>{{ activeDeviation.pcName || '—' }}</span>
-						<span class="sep-dot">·</span>
-						<span>{{ typeLabel(activeDeviation.type) }}</span>
-						<span class="sep-dot">·</span>
-						<span>{{ periodText(activeDeviation.year, activeDeviation.month) }}</span>
-					</div>
-					<div>
-						<span
-							v-if="isOverdue(activeDeviation)"
-							class="p-tag p-tag-danger p-tag-rounded"
-							>Überfällig</span
-						>
-						<span
-							v-else
-							class="p-tag p-tag-rounded"
-							:class="activeDeviation.justified ? 'p-tag-success' : 'p-tag-warning'"
-						>
-							{{ activeDeviation.justified ? 'Begründet' : 'Offen' }}
-						</span>
-					</div>
+	<!-- DIALOG: Desvío Detalle -->
+	<Dialog v-model:visible="showDeviationModal" modal appendTo="body" :draggable="false" :blockScroll="true"
+		header="Abweichung · Detail" style="width: min(900px, 96vw)">
+		<template v-if="activeDeviation">
+			<div class="flex justify-content-between align-items-center mb-3 flex-wrap">
+				<div class="font-bold flex align-items-center flex-wrap gap-2">
+					<i class="pi pi-sliders-h" />
+					<span>{{ activeDeviation.pcName || '—' }}</span>
+					<span class="text-500">·</span>
+					<span>{{ typeLabel(activeDeviation.type) }}</span>
+					<span class="text-500">·</span>
+					<span>{{ periodText(activeDeviation.year, activeDeviation.month) }}</span>
 				</div>
+				<Tag :severity="isOverdue(activeDeviation)
+					? 'danger'
+					: activeDeviation.justified
+						? 'success'
+						: 'warning'" :value="isOverdue(activeDeviation)
+							? 'Überfällig'
+							: activeDeviation.justified
+								? 'Begründet'
+								: 'Offen'" rounded />
+			</div>
 
-				<!-- Grid principal: 6 / 6 arriba, 12 abajo -->
-				<div class="grid">
-					<!-- IZQ (6): Kennzahlen + Begründung apilados -->
-					<div class="col-12 md:col-6">
-						<div class="inner glass card-shadow" style="margin-bottom: 12px">
-							<h4 class="inner-title">Kennzahlen</h4>
-							<ul class="kv">
-								<li>
+			<div class="grid">
+				<!-- IZQ -->
+				<div class="col-12 md:col-6">
+					<Card class="mb-3">
+						<template #header>Kennzahlen</template>
+						<template #content>
+							<ul class="list-none p-0 m-0 flex flex-column gap-2">
+								<li class="flex justify-content-between">
 									<span>Umsatz</span>
-									<strong>{{
-										fmtAmount(
-											activeDeviation.sales,
-											unitOf(activeDeviation.pcCode),
-										)
-									}}</strong>
+									<strong>{{ fmtAmount(activeDeviation.sales, unitOf(activeDeviation.pcCode))
+										}}</strong>
 								</li>
-								<li>
+								<li class="flex justify-content-between">
 									<span>Budget</span>
-									<strong>{{
-										fmtAmount(
-											activeDeviation.budget,
-											unitOf(activeDeviation.pcCode),
-										)
-									}}</strong>
+									<strong>{{ fmtAmount(activeDeviation.budget, unitOf(activeDeviation.pcCode))
+										}}</strong>
 								</li>
-								<li>
+								<li class="flex justify-content-between">
 									<span>Forecast</span>
-									<strong>{{
-										fmtAmount(
-											activeDeviation.forecast,
-											unitOf(activeDeviation.pcCode),
-										)
-									}}</strong>
+									<strong>{{ fmtAmount(activeDeviation.forecast, unitOf(activeDeviation.pcCode))
+										}}</strong>
 								</li>
-								<li>
+								<li class="flex justify-content-between">
 									<span>Delta</span>
 									<strong
-										:class="
-											(activeDeviation.deltaAbs ?? 0) >= 0 ? 'pos' : 'neg'
-										"
-									>
-										{{
-											fmtAmount(
-												activeDeviation.deltaAbs,
-												unitOf(activeDeviation.pcCode),
-											)
-										}}
-										<small
-											>({{
-												Math.round(activeDeviation.deltaPct ?? 0)
-											}}%)</small
-										>
-									</strong>
-								</li>
-								<li>
-									<span>Status</span>
-									<strong>
-										<span v-if="isOverdue(activeDeviation)">Überfällig</span>
-										<span v-else>{{
-											activeDeviation.justified ? 'Begründet' : 'Offen'
-										}}</span>
+										:class="(activeDeviation.deltaAbs ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'">
+										{{ fmtAmount(activeDeviation.deltaAbs, unitOf(activeDeviation.pcCode)) }}
+										<small>({{ Math.round(activeDeviation.deltaPct ?? 0) }}%)</small>
 									</strong>
 								</li>
 							</ul>
-						</div>
+						</template>
+					</Card>
 
-						<div class="inner glass card-shadow">
-							<h4 class="inner-title">Begründung</h4>
-							<p
-								class="mono"
-								v-if="
-									activeDeviation.comment && activeDeviation.comment.trim().length
-								"
-							>
+					<Card>
+						<template #header>Begründung</template>
+						<template #content>
+							<p v-if="activeDeviation.comment?.trim().length" class="font-mono white-space-pre-line">
 								{{ activeDeviation.comment }}
 							</p>
-							<p v-else class="muted">Keine Begründung angegeben.</p>
-							<div
-								class="muted small"
-								v-if="activeDeviation.justAuthor || activeDeviation.justDate"
-							>
+							<p v-else class="text-500">Keine Begründung angegeben.</p>
+							<div class="text-500 text-sm mt-2"
+								v-if="activeDeviation.justAuthor || activeDeviation.justDate">
 								<i class="pi pi-user mr-1" v-if="activeDeviation.justAuthor" />{{
-									activeDeviation.justAuthor || ''
-								}}
-								<span
-									v-if="activeDeviation.justAuthor && activeDeviation.justDate"
-									class="mx-2"
-									>·</span
-								>
+									activeDeviation.justAuthor || '' }}
+								<span v-if="activeDeviation.justAuthor && activeDeviation.justDate"
+									class="mx-1">·</span>
 								<i class="pi pi-calendar mr-1" v-if="activeDeviation.justDate" />{{
-									activeDeviation.justDate
-										? fmtDate(activeDeviation.justDate)
-										: ''
-								}}
+									activeDeviation.justDate ? fmtDate(activeDeviation.justDate) : '' }}
 							</div>
-						</div>
-					</div>
+						</template>
+					</Card>
+				</div>
 
-					<!-- DER (6): Chart -->
-					<div class="col-12 md:col-6">
-						<div class="inner glass card-shadow">
-							<h4 class="inner-title">Verlauf</h4>
-							<MiniDeviationChart
-								:months="activeDeviation.months"
+				<!-- DER -->
+				<div class="col-12 md:col-6">
+					<Card>
+						<template #header>Verlauf</template>
+						<template #content>
+							<MiniDeviationChart :months="activeDeviation.months"
 								:sales="activeDeviation.salesSeries ?? activeDeviation.sales"
 								:budget="activeDeviation.budgetSeries ?? activeDeviation.budget"
-								:forecast="
-									activeDeviation.forecastSeries ?? activeDeviation.forecast
-								"
-								:height="420"
-							/>
-						</div>
-					</div>
+								:forecast="activeDeviation.forecastSeries ?? activeDeviation.forecast" :height="420" />
+						</template>
+					</Card>
+				</div>
 
-					<!-- Abajo (12): Aktionsplan -->
-					<div class="col-12">
-						<div class="inner glass card-shadow">
-							<h4 class="inner-title">Aktionsplan</h4>
-							<p
-								v-if="
-									activeDeviation.plan &&
-									String(activeDeviation.plan).trim().length
-								"
-								class="mono"
-							>
+				<!-- Abajo -->
+				<div class="col-12">
+					<Card>
+						<template #header>Aktionsplan</template>
+						<template #content>
+							<p v-if="activeDeviation.plan?.trim().length" class="font-mono">
 								<i class="pi pi-flag mr-2" />{{ activeDeviation.plan }}
 							</p>
-							<template
-								v-if="
-									Array.isArray(activeDeviation.actions) &&
-									activeDeviation.actions.length
-								"
-							>
-								<ul class="actions">
-									<li v-for="(a, i) in activeDeviation.actions" :key="i">
-										<i
-											:class="[
-												'pi',
-												a.done
-													? 'pi-check-circle text-success'
-													: 'pi-circle',
-											]"
-										/>
-										<span class="ml-2">{{ a.title || '—' }}</span>
-										<span class="muted ml-2" v-if="a.due"
-											>· Fällig: {{ fmtDate(a.due) }}</span
-										>
-										<span class="muted ml-2" v-if="a.desc">· {{ a.desc }}</span>
-									</li>
-								</ul>
-							</template>
-							<p v-else class="muted">Kein Aktionsplan vorhanden.</p>
-						</div>
-					</div>
+							<ul v-if="Array.isArray(activeDeviation.actions) && activeDeviation.actions.length"
+								class="list-none p-0 m-0 flex flex-column gap-2">
+								<li v-for="(a, i) in activeDeviation.actions" :key="i">
+									<i :class="['pi', a.done ? 'pi-check-circle text-green-500' : 'pi-circle']" />
+									<span class="ml-2">{{ a.title || '—' }}</span>
+									<span class="text-500 ml-2" v-if="a.due">· Fällig: {{ fmtDate(a.due) }}</span>
+									<span class="text-500 ml-2" v-if="a.desc">· {{ a.desc }}</span>
+								</li>
+							</ul>
+							<p v-else class="text-500">Kein Aktionsplan vorhanden.</p>
+						</template>
+					</Card>
 				</div>
-			</template>
-		</Dialog>
+			</div>
+		</template>
+	</Dialog>
 
-		<!-- MODAL: Extra Quota Analysis -->
-		<Dialog
-			v-model:visible="showXQAnalysis"
-			modal
-			appendTo="body"
-			:draggable="false"
-			:blockScroll="true"
-			:style="{ width: 'min(1100px, 98vw)' }"
-			:breakpoints="{ '1100px': '98vw', '640px': '100vw' }"
-			header="Zusatzquoten · Analyse"
-			class="glass-modal"
-		>
-			<ExtraQuotaAnalysis embedded :userId="selectedSeller" @close="showXQAnalysis = false" />
-		</Dialog>
-	</div>
+	<!-- DIALOG: Extra Quota Analysis -->
+	<Dialog v-model:visible="showXQAnalysis" modal appendTo="body" :draggable="false" :blockScroll="true"
+		header="Zusatzquoten · Analyse" style="width: min(1100px, 98vw)">
+		<ExtraQuotaAnalysis embedded :userId="selectedSeller" @close="showXQAnalysis = false" />
+	</Dialog>
 </template>
 
 <script setup>
@@ -790,88 +647,176 @@ watch(selectedSeller, () => {
 </script>
 
 <style scoped>
-:deep(.p-dialog-mask) {
-	z-index: 10010;
-}
-.full-bleed {
-	width: 100vw;
-	margin-left: calc(50% - 50vw);
-	margin-right: calc(50% - 50vw);
-}
-.view-wrap {
-	min-height: calc(100vh - 80px);
-	padding: 12px 24px 28px;
+.sales-force-analysis-grid {
+	--gap: 16px;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: var(--gap);
+	height: 100%;
 	box-sizing: border-box;
 }
 
-.glass {
-	background: rgba(255, 255, 255, 0.45);
-	border: 1px solid rgba(255, 255, 255, 0.35);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border-radius: 14px;
-}
-.card-shadow {
-	box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
-}
-@media (prefers-color-scheme: dark) {
-	.glass {
-		background: rgba(0, 0, 0, 0.38);
-		border-color: rgba(255, 255, 255, 0.18);
-		color: #e5e7eb;
-	}
-	.card-shadow {
-		box-shadow: 0 24px 64px rgba(0, 0, 0, 0.66);
-	}
-}
-.panel {
-	padding: 10px;
-}
-.header-strip {
-	margin-bottom: 12px;
+.filters-col {
+	grid-column: span 2;
+	display: flex;
+	min-width: 0;
+	height: 100%;
 }
 
-.aside {
-	position: sticky;
-	top: var(--top-offset, 80px);
-	height: calc(100vh - var(--top-offset, 80px) - 16px);
+.filters-card {
+	flex: 1;
 	display: flex;
 	flex-direction: column;
+	height: 100%;
 	min-height: 0;
 }
+
 .seller-listbox {
-	flex: 1 1 auto;
-	min-height: 0;
-	height: 100%;
-}
-:deep(.p-listbox.seller-listbox) {
-	background: transparent;
-	border: 0;
-	box-shadow: none;
+	flex: 1;
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
+	box-sizing: border-box;
 }
-:deep(.p-listbox.seller-listbox .p-listbox-list-wrapper) {
-	flex: 1 1 auto;
+
+.seller-listbox :deep(.p-listbox-list-wrapper) {
+	flex: 1;
 	min-height: 0;
-	max-height: none;
 	height: 100%;
-	overflow: auto;
+	overflow-y: auto;
 }
-:deep(.p-listbox.seller-listbox .p-listbox-list) {
-	max-height: none;
-}
-.seller-item {
+
+.seller-row {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 8px;
-	border-radius: 10px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: background 0.15s ease;
 }
+
+.seller-row:hover {
+	background: var(--surface-100);
+}
+
+.seller-row.selected {
+	background: var(--primary-50);
+}
+
+.avatar-ring {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+	flex-shrink: 0;
+}
+
+.avatar-initials {
+	background: transparent !important;
+	color: #fff !important;
+	font-weight: 600;
+	font-size: 1rem;
+}
+
 .seller-name {
+	flex: 1;
 	font-weight: 500;
+	font-size: 0.9rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+
+.content-col {
+	grid-column: span 10;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	grid-template-rows: auto 1fr;
+	gap: var(--gap);
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+}
+
+.topbar-card {
+	grid-column: 1 / -1;
+}
+
+.topbar-inner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	max-width: 70%;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background-color: color-mix(in srgb, var(--surface-ground) 85%, var(--primary-color));
+	font-weight: 600;
+}
+
+.charts-row {
+	display: contents;
+	height: 100%;
+}
+
+.chart-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.chart-lg {
+	grid-column: span 8;
+}
+
+.chart-sm {
+	grid-column: span 4;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.chart-sm .p-card {
+	flex: 1 1 auto;
+	overflow: hidden;
+}
+
+.chart-sm .p-card:nth-child(1) {
+	flex: 1 1 60%;
+	max-height: 60%;
+	overflow: auto;
+}
+
+.chart-sm .p-card:nth-child(2) {
+	flex: 1 1 40%;
+	max-height: 40%;
+}
+
+@media (max-width: 1199px) {
+	.filters-col {
+		grid-column: 1 / -1;
+	}
+
+	.content-col {
+		grid-column: 1 / -1;
+	}
+
+	.chart-lg,
+	.chart-sm {
+		grid-column: 1 / -1;
+	}
 }
 
 .avatar-ring {
@@ -883,244 +828,24 @@ watch(selectedSeller, () => {
 	align-items: center;
 	justify-content: center;
 }
+
 .team-alpha {
 	background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
 }
+
 .team-bravo {
 	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
 }
+
 .team-none {
-	background: transparent;
-	outline: 1px dashed rgba(0, 0, 0, 0.25);
-}
-@media (prefers-color-scheme: dark) {
-	.team-none {
-		outline-color: rgba(255, 255, 255, 0.35);
-	}
-}
-:deep(.p-avatar.avatar-img),
-:deep(.p-avatar.avatar-initials) {
-	background: transparent !important;
-	border: 0 !important;
-}
-.avatar-img,
-.avatar-initials {
-	width: 100%;
-	height: 100%;
-	border-radius: 999px;
-	color: #fff;
-	font-weight: 300;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	border: 1px dashed var(--surface-border);
 }
 
-.tall-vh {
-	height: 82vh;
-}
-.table-flex :deep(.p-datatable-wrapper) {
-	flex: 1 1 auto;
-	min-height: 0;
-	max-height: none;
-	overflow: auto;
+.font-mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.pill-tag {
-	display: inline-flex;
-	align-items: center;
-	padding: 0.25rem 0.6rem;
-	border-radius: 999px;
-	font-weight: 700;
-	font-size: 0.85rem;
-	line-height: 1;
-}
-.pill-forecast {
-	background: #d8a406;
-	color: #000;
-}
-.pill-ist {
-	background: #456287;
-	color: #fff;
-}
-
-.panel-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 6px;
-}
-.pill {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	padding: 6px 12px;
-	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.06);
-	font-weight: 800;
-}
-.mr-2 {
-	margin-right: 0.5rem;
-}
-.mx-2 {
-	margin: 0 0.5rem;
-}
-.sep {
-	opacity: 0.55;
-}
-.kpi-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 10px;
-}
-.kpi-foot {
-	font-size: 0.85rem;
-	opacity: 0.75;
-	margin-top: 8px;
-}
-.pairs {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-.pair {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-.text-success {
-	color: #059669;
-}
-.text-warn {
-	color: #d97706;
-}
-.text-danger {
-	color: #e11d48;
-}
-.empty {
-	text-align: center;
-	opacity: 0.75;
-	padding: 12px;
-}
-
-.right-col .panel + .panel {
-	margin-top: 12px;
-}
-
-.glass-modal :deep(.p-dialog-content) {
-	background: transparent;
-}
-.dev-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-bottom: 10px;
-}
-.dev-title {
-	font-weight: 800;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex-wrap: wrap;
-}
-.sep-dot {
-	opacity: 0.6;
-	margin: 0 6px;
-}
-.inner {
-	padding: 12px;
-	border-radius: 12px;
-}
-.inner-title {
-	margin: 0 0 8px 0;
-	font-size: 1rem;
-	font-weight: 800;
-}
-.kv {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-.kv li {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-.kv li span {
-	opacity: 0.8;
-}
-.kv li strong small {
-	opacity: 0.7;
-	font-weight: 600;
-	margin-left: 6px;
-}
-.mono {
-	white-space: pre-wrap;
-	font-family:
-		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-		monospace;
-}
-.muted {
-	opacity: 0.75;
-}
-.small {
-	font-size: 0.9rem;
-}
-.actions {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-.ml-2 {
-	margin-left: 0.5rem;
-}
-.pos {
-	color: #059669;
-	font-weight: 600;
-}
-.neg {
-	color: #e11d48;
-	font-weight: 600;
-}
-
-.table-plain .p-datatable-wrapper,
-.table-plain table,
-.table-plain .p-datatable-header,
-.table-plain .p-datatable-footer,
-.table-plain .p-paginator,
-.table-plain thead > tr > th,
-.table-plain tbody > tr > td {
-	background-color: transparent !important;
-}
-.table-plain thead > tr > th {
-	border: 0;
-	color: inherit;
-}
-.table-plain tbody > tr > td {
-	color: inherit;
-	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-.table-plain tbody > tr:hover {
-	background-color: rgba(0, 0, 0, 0.04);
-}
-@media (prefers-color-scheme: dark) {
-	.table-plain tbody > tr > td {
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-	}
-	.table-plain tbody > tr:hover {
-		background-color: rgba(255, 255, 255, 0.06);
-	}
-}
-.table-plain tbody > tr > td {
-	padding: 0.9rem 0.75rem;
-}
-.table-plain thead > tr > th {
-	padding: 0.85rem 0.75rem;
+.white-space-pre-line {
+	white-space: pre-line;
 }
 </style>

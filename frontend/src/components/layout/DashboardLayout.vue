@@ -4,6 +4,7 @@
 			<template #start>
 				<img src="@/assets/img/logos/logo-dark.svg" alt="Logo" class="logo" />
 			</template>
+
 			<template #end>
 				<div class="toolbar-actions">
 					<Button icon="pi pi-th-large" text plain @click="$router.push('/dashboard')"
@@ -19,18 +20,19 @@
 						<Badge v-if="deviationsCount > 0" :value="deviationsCount" class="badge-count"
 							severity="danger" />
 					</div>
+
 					<Button icon="pi pi-briefcase" text plain @click="$router.push('/extra-quotas')"
 						:class="{ 'active-nav': isActive('/extra-quotas') }" />
-					<Button icon="pi pi-list-check" text plain @click="$router.push('/action-plans')"
-						:class="{ 'active-nav': isActive('/action-plans') }" />
+					<Button icon="pi pi-sitemap" text plain @click="$router.push('/company-analytics')"
+						:class="{ 'active-nav': isActive('/company-analytics') }" />
 
 					<!-- REPORTES -->
-					<!-- MENU DE REPORTES (solo manager o más) -->
 					<template v-if="isManagerOrUp">
-						<Menu ref="reportsMenu" :model="reportsItems" popup />
-						<Button icon="pi pi-file" text plain @click="toggleReportsMenu" />
+						<Button icon="pi pi-file" text plain @click="$router.push('/profit-center-report')"
+							:class="{ 'active-nav': isActive('/profit-center-report') }" />
+						<Button icon="pi pi-users" text plain @click="$router.push('/sales-force')"
+							:class="{ 'active-nav': isActive('/sales-force') }" />
 					</template>
-
 
 					<!-- SETTINGS -->
 					<Button v-if="isSuperAdmin" icon="pi pi-cog" text plain @click="$router.push('/settings')"
@@ -49,8 +51,23 @@
 						</div>
 					</Popover>
 
-					<Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png" shape="circle"
-						class="avatar" @click="toggleUserMenu" />
+					<!-- AVATAR -->
+					<Avatar
+						v-if="profilePicture"
+						:image="profilePicture"
+						shape="circle"
+						class="avatar"
+						@click="toggleUserMenu"
+						@error="onAvatarError"
+					/>
+					<Avatar
+						v-else
+						shape="circle"
+						class="avatar avatar-initials"
+						@click="toggleUserMenu"
+					>
+						{{ userInitials }}
+					</Avatar>
 				</div>
 			</template>
 		</Toolbar>
@@ -70,7 +87,6 @@ import Avatar from 'primevue/avatar'
 import Badge from 'primevue/badge'
 import Popover from 'primevue/popover'
 import Divider from 'primevue/divider'
-import Menu from 'primevue/menu'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
@@ -91,18 +107,44 @@ const isManagerOrUp = computed(() =>
 	rolesList.value.includes('admin')
 )
 
+// Nombre e iniciales del usuario
+const firstName = computed(() => auth.user?.first_name ?? auth.user?.name?.split(' ')[0] ?? '')
+const lastName = computed(() => auth.user?.last_name ?? auth.user?.name?.split(' ').slice(1).join(' ') ?? '')
 
-// Navigation
-const isActive = (path) => route.path.startsWith(path)
+const userInitials = computed(() => {
+	const name = `${firstName.value} ${lastName.value}`.trim()
+	return name
+		.split(' ')
+		.map(word => word[0])
+		.join('')
+		.toUpperCase()
+})
 
-const reportsMenu = ref()
-function toggleReportsMenu(event) {
-	reportsMenu.value?.toggle(event)
+// Función para obtener URL absoluta
+function absolutizeUrl(path) {
+	if (!path) return null
+	if (path.startsWith('http')) return path
+	const base = import.meta.env.VITE_API_BASE_URL || window.location.origin
+	return `${base}/storage/${path.replace(/^\/?storage\//, '').replace(/^\/+/, '')}`
 }
-const reportsItems = [
-	{ label: 'Profitcenter Report', icon: 'pi pi-file', command: () => router.push('/report-generator') },
-	{ label: 'Company Analytics', icon: 'pi pi-chart-bar', command: () => router.push('/company-analytics') }
-]
+
+// Avatar dinámico con fallback a iniciales
+const profilePicture = computed(() => {
+	const details = auth.user?.user_details
+	const url = details?.profile_picture_url || details?.profile_picture
+	return absolutizeUrl(url)
+})
+
+// Si la imagen falla, mostramos iniciales
+function onAvatarError() {
+	if (auth.user?.user_details) {
+		auth.user.user_details.profile_picture = null
+		auth.user.user_details.profile_picture_url = null
+	}
+}
+
+// Navegación
+const isActive = (path) => route.path.startsWith(path)
 
 const userMenu = ref()
 function toggleUserMenu(event) {
@@ -120,9 +162,7 @@ function goto(path) {
 	router.push(path)
 }
 
-const firstName = computed(() => auth.user?.first_name ?? auth.user?.name?.split(' ')[0] ?? '')
-const lastName = computed(() => auth.user?.last_name ?? auth.user?.name?.split(' ').slice(1).join(' ') ?? '')
-
+// Deviations count
 const deviationsCount = ref(0)
 let intervalId
 async function refreshDeviationCount() {
@@ -144,7 +184,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* Mantiene todo en UNA LÍNEA horizontal */
+/* Barra superior */
 .app-toolbar {
 	height: 54px !important;
 	min-height: 54px !important;
@@ -163,7 +203,6 @@ onBeforeUnmount(() => {
 	object-fit: contain;
 }
 
-/* Íconos + avatar en una sola fila */
 .toolbar-actions {
 	display: flex;
 	align-items: center;
@@ -178,6 +217,17 @@ onBeforeUnmount(() => {
 	cursor: pointer;
 }
 
+.avatar-initials {
+	background-color: #4b5563; /* Gris oscuro */
+	color: white;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: bold;
+	font-size: 0.8rem;
+	text-transform: uppercase;
+}
+
 /* Badge */
 .relative {
 	position: relative;
@@ -189,10 +239,11 @@ onBeforeUnmount(() => {
 	right: -6px;
 }
 
+/* Botón activo */
 .active-nav {
-  background-color: rgb(0, 0, 0) !important;
-  color: white !important;
-  border-radius: 6px;
+	background-color: rgb(0, 0, 0) !important;
+	color: white !important;
+	border-radius: 6px;
 }
 
 /* Contenido principal */

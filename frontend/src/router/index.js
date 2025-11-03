@@ -16,7 +16,6 @@ import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
 import ReportGenerator from '@/views/dashboard/manager/ProfitCenterAnalytics.vue';
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
-import Users from '@/views/dashboard/admin/settings/Users.vue';
 import QuotaByUser from '@/views/dashboard/admin/settings/QuotaByUser.vue';
 import AdminDashboard from '@/views/dashboard/admin/AdminDashboard.vue';
 import SalesForceAnalytics from '@/views/dashboard/manager/SalesForceAnalytics.vue';
@@ -113,7 +112,7 @@ const routes = [
                 }
             },
             {
-                path: '/report-generator',
+                path: '/profit-center-report',
                 component: ReportGenerator,
                 meta: {
                     requiresAuth: true

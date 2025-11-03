@@ -122,7 +122,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	try {
 		ro?.disconnect()
-	} catch {}
+	} catch {
+		//else
+	}
 })
 
 function scrollToIndex(i, smooth = true) {
@@ -371,6 +373,7 @@ function onForecastInput(i, e, ym) {
 	background: rgba(255, 255, 255, 0.9) !important;
 	color: #0f172a !important;
 	border: 1px solid rgba(2, 6, 23, 0.2) !important;
+	width: 100%;
 	border-radius: 6px;
 	text-align: center;
 }
@@ -397,23 +400,5 @@ function onForecastInput(i, e, ym) {
 .dev-green {
 	background: rgba(5, 164, 111, 0.16);
 	color: #093a2c;
-}
-@media (prefers-color-scheme: dark) {
-	.dev-red {
-		background: rgba(239, 68, 68, 0.28);
-		color: #fff;
-	}
-	.dev-orange {
-		background: rgba(245, 158, 11, 0.28);
-		color: #fff;
-	}
-	.dev-yellow {
-		background: rgba(234, 179, 8, 0.28);
-		color: #111;
-	}
-	.dev-green {
-		background: rgba(34, 197, 94, 0.28);
-		color: #0b1f16;
-	}
 }
 </style>

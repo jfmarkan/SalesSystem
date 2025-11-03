@@ -108,14 +108,11 @@ const subnote = computed(() => props.note || (current.value.unit && current.valu
 .kpi-root{
   display:flex; flex-direction:column; height:100%;
   gap:.75rem;
-  padding:10px 12px;            /* aire extra solo en KPI */
 }
 
 .kpi-title{
   font-size:.9rem; line-height:1.2; font-weight:500; color:#334155;
 }
-@media (prefers-color-scheme: dark) { .kpi-title{ color:#e5e7eb; } }
-:global(.dark) .kpi-title{ color:#e5e7eb; }
 
 .kpi-main{
   display:flex; align-items:center; justify-content:space-between; gap:1rem;
@@ -123,8 +120,6 @@ const subnote = computed(() => props.note || (current.value.unit && current.valu
 .kpi-value{
   font-size:2.25rem; line-height:1; font-weight:800; color:#0f172a;
 }
-@media (prefers-color-scheme: dark) { .kpi-value{ color:#f8fafc; } }
-:global(.dark) .kpi-value{ color:#f8fafc; }
 
 .kpi-icon{
   width:2.75rem; height:2.75rem; border-radius:.8rem; color:#fff;
@@ -137,17 +132,4 @@ const subnote = computed(() => props.note || (current.value.unit && current.valu
   display:flex; align-items:center; justify-content:space-between; gap:.5rem;
 }
 .kpi-sub{ color:#64748b; font-weight:500; }
-@media (prefers-color-scheme: dark) { .kpi-sub{ color:#cbd5e1; } }
-:global(.dark) .kpi-sub{ color:#cbd5e1; }
-
-.kpi-selector{ display:flex; gap:.5rem; align-items:center; }
-.kpi-selector label{ font-size:.85rem; color:#64748b; }
-@media (prefers-color-scheme: dark) { .kpi-selector label{ color:#cbd5e1; } }
-:global(.dark) .kpi-selector label{ color:#cbd5e1; }
-.kpi-selector select{
-  border:1px solid rgba(2,6,23,.15); background:transparent; color:inherit;
-  border-radius:.5rem; padding:.25rem .5rem;
-}
-@media (prefers-color-scheme: dark) { .kpi-selector select{ border-color: rgba(255,255,255,.2); } }
-:global(.dark) .kpi-selector select{ border-color: rgba(255,255,255,.2); }
 </style>

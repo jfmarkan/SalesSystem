@@ -66,6 +66,7 @@ function setMode(v) {
 				optionLabel="label"
 				optionValue="value"
 				:disabled="!m || pid == null"
+				listStyle="max-height:100%"
 			>
 				<template #option="{ option }">
 					<span v-html="option.label"></span>

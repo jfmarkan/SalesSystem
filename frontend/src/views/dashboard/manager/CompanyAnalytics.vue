@@ -4,32 +4,29 @@
 		<aside class="aside-col">
 			<Card class="flat-card tree-card">
 				<template #content>
-					<Tree
-						:value="nodes"
-						:expandedKeys="expandedKeys"
-						v-model:selectionKeys="selectionKeys"
-						selectionMode="single"
-						filter
-						filterMode="lenient"
-						:filterBy="'label'"
-						v-model:filterValue="treeFilter"
-						class="w-full p-0"
-						@node-expand="onNodeExpand"
-						@node-select="onNodeSelect"
-						@node-unselect="onNodeUnselect"
-						@update:selectionKeys="onSelectionUpdate"
-					>
+					<Tree :value="nodes" :expandedKeys="expandedKeys" v-model:selectionKeys="selectionKeys"
+						selectionMode="single" filter filterMode="lenient" :filterBy="'label'"
+						v-model:filterValue="treeFilter" class="w-full p-0" @node-expand="onNodeExpand"
+						@node-select="onNodeSelect" @node-unselect="onNodeUnselect"
+						@update:selectionKeys="onSelectionUpdate">
 						<template #default="{ node }">
-  <div class="flex align-items-center gap-2">
-    <i v-if="node.data?.type === 'company'" class="pi pi-home text-primary"></i>
-    <i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500"></i>
-    <i v-else-if="node.data?.type === 'user'" class="pi pi-user"></i>
-    <i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500"></i>
-    <i v-else-if="node.data?.type === 'client'" class="pi pi-building"></i>
-    <span>{{ node.label }}</span>
-  </div>
-</template>
+							<div class="flex align-items-center gap-2">
+								<i v-if="node.data?.type === 'company'" class="pi pi-home text-primary"></i>
+								<i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500"></i>
+								<i v-else-if="node.data?.type === 'user'" class="pi pi-user"></i>
+								<i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500"></i>
 
+								<!-- Cliente: sin icono, letra con color + 'LETRA - Nombre' -->
+								<template v-else-if="node.data?.type === 'client'">
+									<span class="classification-badge"
+										:class="'class-' + (node.data.classification || 'x').toLowerCase()">
+										{{ node.data.classification }}
+									</span>
+								</template>
+
+								<span>{{ node.label }}</span>
+							</div>
+						</template>
 					</Tree>
 				</template>
 			</Card>
@@ -40,12 +37,8 @@
 			<div class="header-grid">
 				<Card class="flat-card header-card">
 					<template #content>
-						<AnalyticsBreadcrumb
-							:nodes="nodes"
-							:selectedKey="selectedKey"
-							@navigate="selectByKey"
-							class="w-full p-0"
-						/>
+						<AnalyticsBreadcrumb :nodes="nodes" :selectedKey="selectedKey" @navigate="selectByKey"
+							class="w-full p-0" />
 					</template>
 				</Card>
 
@@ -54,24 +47,16 @@
 						<div class="fy-switch">
 							<Button icon="pi pi-angle-left" text @click="prevFY" />
 							<span class="fy-text">{{ fyLabel }}</span>
-							<Button
-								icon="pi pi-angle-right"
-								text
-								@click="nextFY"
-								:disabled="fyStart >= currentFYStart"
-							/>
+							<Button icon="pi pi-angle-right" text @click="nextFY"
+								:disabled="fyStart >= currentFYStart" />
 						</div>
 					</template>
 				</Card>
 
 				<Card class="flat-card unit-card">
 					<template #content>
-						<SelectButton
-							v-model="unitMode"
-							:options="unitOptions"
-							optionLabel="label"
-							optionValue="value"
-						/>
+						<SelectButton v-model="unitMode" :options="unitOptions" optionLabel="label"
+							optionValue="value" />
 					</template>
 				</Card>
 			</div>
@@ -79,37 +64,21 @@
 			<div class="charts-grid">
 				<Card class="flat-card line-card" :class="{ wide: !showStacked }">
 					<template #content>
-						<Chart
-							v-if="series"
-							type="line"
-							:data="chartData"
-							:options="chartOptions"
-							class="chart"
-						/>
+						<Chart v-if="series" type="line" :data="chartData" :options="chartOptions" class="chart" />
 					</template>
 				</Card>
 
 				<Card v-if="series && showStacked" class="flat-card stack-card">
 					<template #content>
-						<Chart
-							type="bar"
-							:data="stackedData"
-							:options="stackedOptions"
-							class="chart"
-						/>
+						<Chart type="bar" :data="stackedData" :options="stackedOptions" class="chart" />
 					</template>
 				</Card>
 			</div>
 
 			<Card class="flat-card table-card">
 				<template #content>
-					<ForecastTable
-						v-if="series"
-						:months="months"
-						:sales="salesArr"
-						:budget="budgetArr"
-						:forecast="fcstArr"
-					/>
+					<ForecastTable v-if="series" :months="months" :sales="salesArr" :budget="budgetArr"
+						:forecast="fcstArr" />
 				</template>
 			</Card>
 		</main>
@@ -118,7 +87,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import Card from 'primevue/card'
 import Tree from 'primevue/tree'
 import Button from 'primevue/button'
@@ -128,42 +96,34 @@ import api from '@/plugins/axios'
 import AnalyticsBreadcrumb from '@/components/analytics/CompanyBreadcrumb.vue'
 import ForecastTable from '@/components/analytics/AnalyticsTable.vue'
 
-// === Auth ===
-const auth = useAuthStore()
-const userRole = computed(() => auth.user?.role_id ?? 99)
-const userId = computed(() => auth.user?.id ?? null)
-
-// === Tree and selection ===
 const nodes = ref([])
 const expandedKeys = ref({})
 const selectionKeys = ref({})
 const selectedKey = ref('')
 const treeFilter = ref('')
 
-// === Fecha y año fiscal ===
 const now = new Date()
 const initialFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
 const currentFYStart = initialFYStart
 const fyStart = ref(initialFYStart)
 const fyLabel = computed(() => `WJ ${fyStart.value}/${String(fyStart.value + 1).slice(-2)}`)
 
-// === Unidad de medida ===
 const unitMode = ref('m3')
 const series = ref(null)
 const unitOptions = computed(() =>
 	series.value?.unit_mode_allowed
 		? [
-				{ label: 'm³', value: 'm3' },
-				{ label: '€', value: 'euro' },
-				{ label: 'VK-EH', value: 'units' },
-			]
+			{ label: 'm³', value: 'm3' },
+			{ label: '€', value: 'euro' },
+			{ label: 'VK-EH', value: 'units' },
+		]
 		: [
-				{ label: 'm³', value: 'm3' },
-				{ label: '€', value: 'euro' },
-			],
+			{ label: 'm³', value: 'm3' },
+			{ label: '€', value: 'euro' },
+		],
 )
 
-// === Utilidades numéricas ===
+// helpers numéricos
 const toNum = (v) => {
 	if (v == null) return 0
 	if (typeof v === 'number') return v
@@ -187,22 +147,26 @@ function distributeProportional(base, extra) {
 	return out.map((v) => v + (v / total) * extra)
 }
 
-// === Datos y cálculos ===
 const months = computed(() => series.value?.months || [])
 const salesArr = computed(() => (series.value ? series.value.sales[unitMode.value] || [] : []))
 
 const budgetArr = computed(() => {
 	const s = series.value
 	if (!s) return []
+
 	const k = unitMode.value
 	const ctx = s.context?.type
 	const base = toNums12(s.budgets?.[k] || [])
+
 	if (['company', 'team', 'user', 'pc'].includes(ctx)) return base
 
 	const assignedTotal = toNum(s?.extra_breakdown?.assigned?.[k]) || 0
 	const wonTotal = toNum(s?.extra_breakdown?.won?.[k]) || 0
 	const remaining = toNum(s?.extra_quotas?.[k] ?? 0)
-	const delta = assignedTotal > 0 || wonTotal > 0 ? assignedTotal - wonTotal : remaining
+
+	const delta = (assignedTotal > 0 || wonTotal > 0)
+		? (assignedTotal - wonTotal)
+		: remaining
 
 	return distributeProportional(base, delta)
 })
@@ -217,15 +181,9 @@ const fcstArr = computed(() => {
 	return base.map((v, i) => v + (eqf[i] || 0))
 })
 
-// === Cargar árbol ===
+// Cargar árbol (el backend ya aplica scope por rol y ordena clientes por €)
 async function loadRoot() {
-	const role = userRole.value
-	const id = userId.value
-	let node_id = 'root'
-	if (role >= 4 && id) node_id = `user:${id}`
-	else if (role === 3) node_id = 'company_main'
-
-	const { data } = await api.get('/api/analytics/tree', { params: { node_id } })
+	const { data } = await api.get('/api/analytics/tree', { params: { node_id: 'root' } })
 	nodes.value = (data || []).map(toNode)
 
 	const rootNode = nodes.value?.[0]
@@ -242,43 +200,17 @@ async function loadRoot() {
 	await fetchSeries()
 }
 
-async function loadChildren(key) {
-	const { data } = await api.get('/api/analytics/tree', { params: { node_id: key } })
-	return (data || []).map(toNode)
-}
-
-function toNode(item) {
-  const classification = item.meta?.classification?.toUpperCase() ?? ''
-  const isClient = item.type === 'client'
-  const label = isClient && classification
-    ? `${classification} - ${item.label}`
-    : item.label
-
-  return {
-    key: item.id,
-    label,
-    leaf: !item.has_children,
-    data: {
-      type: item.type,
-      classification,
-      volume: item.meta?.volume ?? 0,
-      ...(item.meta || {}),
-    },
-    children: Array.isArray(item.children) ? item.children.map(toNode) : undefined,
-  }
-}
-
-
+// No hacemos lazy load; pero si se diera el caso, re-ordenamos clientes por €
 async function onNodeExpand({ node }) {
 	if (!node) return
 	if (!node.children) {
-		const children = await loadChildren(node.key)
-		if (node.data?.type === 'pc') {
-			children.sort((a, b) => (b.data.volume ?? 0) - (a.data.volume ?? 0))
-		}
-		node.children = children
-		nodes.value = [...nodes.value]
+		const { data } = await api.get('/api/analytics/tree', { params: { node_id: node.key } })
+		node.children = (data || []).map(toNode)
 	}
+	if (node.data?.type === 'pc' && Array.isArray(node.children)) {
+		node.children.sort((a, b) => (b.data.volume ?? 0) - (a.data.volume ?? 0))
+	}
+	nodes.value = [...nodes.value]
 	expandedKeys.value = { ...expandedKeys.value, [node.key]: true }
 }
 
@@ -328,13 +260,27 @@ async function fetchSeries() {
 	if (!data?.unit_mode_allowed && unitMode.value === 'units') unitMode.value = 'm3'
 }
 
-// === Gráficos ===
+// Mapeo de items a TreeNode (agregamos clasificación + volume)
+function toNode(item) {
+	const t = item.type
+	const classification = item.meta?.classification ?? ''
+	const volume = item.meta?.volume ?? 0
+
+	return {
+		key: item.id,
+		label: item.label, // ya viene "LETTER - Nombre" desde backend
+		leaf: !item.has_children,
+		data: { type: t, classification, volume, ...(item.meta || {}) },
+		children: Array.isArray(item.children) ? item.children.map(toNode) : undefined,
+	}
+}
+
+// Gráficos (igual que tu versión)
 const cum = (arr) =>
 	arr.reduce((acc, v, i) => {
 		acc.push((acc[i - 1] || 0) + v)
 		return acc
 	}, [])
-
 const chartData = computed(() => {
 	if (!series.value) return { labels: [], datasets: [] }
 	const s = series.value
@@ -381,7 +327,6 @@ const chartData = computed(() => {
 		],
 	}
 })
-
 const chartOptions = computed(() => ({
 	maintainAspectRatio: false,
 	plugins: {
@@ -390,16 +335,14 @@ const chartOptions = computed(() => ({
 			callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtThousand(ctx.parsed.y)}` },
 		},
 	},
-	scales: {
-		y: { beginAtZero: true, ticks: { callback: (v) => fmtThousand(v) } },
-	},
+	scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtThousand(v) } } },
 }))
 
+// Stacked: igual que tu versión
 const showStacked = computed(() => {
 	const t = series.value?.context?.type
 	return ['company', 'team', 'user', 'pc'].includes(t)
 })
-
 const stackedData = computed(() => {
 	if (!series.value) return { labels: [], datasets: [] }
 	const k = unitMode.value
@@ -414,15 +357,12 @@ const stackedData = computed(() => {
 		],
 	}
 })
-
 const stackedOptions = computed(() => ({
 	maintainAspectRatio: false,
 	responsive: true,
 	plugins: {
 		legend: { position: 'bottom' },
-		tooltip: {
-			callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtThousand(ctx.parsed.y)}` },
-		},
+		tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtThousand(ctx.parsed.y)}` } },
 	},
 	scales: {
 		x: { stacked: true },
@@ -430,9 +370,7 @@ const stackedOptions = computed(() => ({
 	},
 }))
 
-onMounted(() => {
-	loadRoot()
-})
+onMounted(() => { loadRoot() })
 </script>
 
 <style scoped>
@@ -440,30 +378,32 @@ onMounted(() => {
 	display: grid;
 	grid-template-columns: 3fr 9fr;
 	gap: 16px;
-	height: 100vh;
-	padding: 12px 16px;
+	height: 100%;
 	box-sizing: border-box;
 }
 
-/* Aside (árbol) */
+/* === ASIDE === */
 .aside-col {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
 }
+
 .tree-card {
 	flex: 1 1 auto;
 	overflow: hidden;
 }
+
 .tree-card :deep(.p-card-content) {
 	padding: 6px 8px !important;
 }
+
 .tree-card .p-tree {
 	height: calc(100vh - 120px);
 	overflow-y: auto;
 }
 
-/* Main */
+/* === MAIN === */
 .main-col {
 	display: flex;
 	flex-direction: column;
@@ -471,12 +411,12 @@ onMounted(() => {
 	min-height: 0;
 }
 
-/* Header */
 .header-grid {
 	display: grid;
 	grid-template-columns: 8fr 2fr 2fr;
 	gap: 12px;
 }
+
 .header-card,
 .fy-card,
 .unit-card {
@@ -485,89 +425,108 @@ onMounted(() => {
 	align-items: center;
 	justify-content: center;
 }
+
 .fy-switch {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
 }
+
 .fy-text {
 	font-weight: 600;
 	font-size: 0.9rem;
 }
 
-/* Charts */
 .charts-grid {
 	display: grid;
 	grid-template-columns: 9fr 3fr;
 	gap: 12px;
 	min-height: 0;
 }
+
 .line-card.wide {
 	grid-column: span 2;
 }
+
 .chart {
 	height: 480px;
 	width: 100%;
 }
+
 @media (max-width: 1024px) {
 	.chart {
 		height: 320px;
 	}
+
 	.charts-grid {
 		grid-template-columns: 1fr;
 	}
 }
 
-/* Tabla */
 .table-card {
 	flex: 1 1 auto;
 	overflow: auto;
 	padding-bottom: 4px;
 }
+
 .table-card :deep(.p-card-content) {
 	padding: 0.4rem 0.6rem !important;
 }
 
-/* Card UI */
 .flat-card :deep(.p-card-body) {
 	padding: 0 !important;
 }
+
 .flat-card :deep(.p-card-content) {
 	padding: 0.5rem 0.6rem !important;
 }
 
-/* Clasificación visual para clientes */
+/* Badge de clasificación */
 .classification-badge {
-	width: 1.5rem;
-	height: 1.5rem;
+	width: 1.4rem;
+	height: 1.4rem;
 	border-radius: 50%;
 	font-weight: bold;
 	color: white;
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 0.9rem;
+	font-size: 0.8rem;
 }
+
 .class-a {
-	background-color: #1d4ed8;
+	background-color: #668C73;
 }
+
+/* Azul */
 .class-b {
-	background-color: #10b981;
+	background-color: #59768E;
 }
+
+/* Verde */
 .class-c {
-	background-color: #f59e0b;
+	background-color: #978B4B;
 }
+
+/* Amarillo */
 .class-d {
-	background-color: #ef4444;
+	background-color: #A3535B;
 }
+
+/* Rojo */
 .class-x {
-	background-color: #6b7280;
+	background-color: #8C8C8C;
 }
+
+/* Gris */
 .class-pa {
-	background-color: #7c3aed;
+	background-color: #91B79D;
 }
+
+/* Violeta */
 .class-pb {
-	background-color: #db2777;
+	background-color: #86A2BD;
 }
+
 </style>

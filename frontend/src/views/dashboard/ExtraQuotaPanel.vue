@@ -1217,7 +1217,7 @@ onMounted(async () => {
 
 <style scoped>
 .eqp-root {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1230,7 +1230,6 @@ onMounted(async () => {
   grid-template-columns: 2fr 10fr;
   grid-template-rows: auto 1fr auto;
   gap: var(--gap);
-  padding: 12px 16px;
   height: 100%;
   box-sizing: border-box;
   overflow: hidden;

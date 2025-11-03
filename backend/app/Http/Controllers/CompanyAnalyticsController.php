@@ -4,26 +4,56 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class CompanyAnalyticsController extends Controller
 {
     public function tree(Request $request){
         $nodeId = $request->input('node_id', 'root');
 
+        // === Scope por rol ===
+        // 1 o 2 -> ver todo el grupo (en este sistema aún hay 1 compañía "main")
+        // 3     -> ver árbol de la compañía (company_main)
+        // >3    -> ver SOLO su propio árbol (usuario -> PC -> clientes)
+        $user = Auth::user();
+        $roleId = (int)($user->role_id ?? 99);
+        $authUserId = (int)($user->id ?? 0);
+
         if ($nodeId === 'root') {
-            return response()->json([[
-                'id'           => 'company_main',
-                'label'        => config('app.company_name', env('COMPANY_NAME', 'Steinbacher Dämmstoffe')),
-                'has_children' => true,
-                'type'         => 'company',
-                'children'     => $this->treeTeams(),
-            ]]);
+            // Para roles 1/2/3 devolvemos la compañía principal completa;
+            // para otros roles, devolvemos SOLO el subárbol del usuario autenticado.
+            if ($roleId === 1 || $roleId === 2 || $roleId === 3) {
+                return response()->json([[
+                    'id'           => 'company_main',
+                    'label'        => config('app.company_name', env('COMPANY_NAME', 'Steinbacher Dämmstoffe')),
+                    'has_children' => true,
+                    'type'         => 'company',
+                    // La función ya ordena clientes por euros y añade clasificación
+                    'children'     => $this->treeTeams(null /* no filter user */, $roleId, $authUserId),
+                ]]);
+            } else {
+                // Solo su propio subárbol (puede estar en varios teams)
+                return response()->json([[
+                    'id'           => 'company_main',
+                    'label'        => config('app.company_name', env('COMPANY_NAME', 'Steinbacher Dämmstoffe')),
+                    'has_children' => true,
+                    'type'         => 'company',
+                    'children'     => $this->treeTeams($authUserId /* filtrar por este user */, $roleId, $authUserId),
+                ]]);
+            }
         }
 
+        // No usamos carga perezosa en este endpoint (ya devolvemos árbol completo).
         return response()->json([]);
     }
 
-    private function treeTeams(): array{
+    /**
+     * Construye Team -> Users -> PCs -> Clients
+     * - Si $onlyUserId != null filtra para mostrar sólo ese usuario (rol >3)
+     * - Ordena clientes por EUR descendente
+     * - Incluye meta: classification (letter) y volume (euro)
+     */
+    private function treeTeams(?int $onlyUserId = null, int $roleId = 99, int $authUserId = 0): array{
         $teams = DB::table('teams')
             ->select('id', 'name', 'manager_user_id')
             ->orderBy('name')
@@ -71,6 +101,7 @@ class CompanyAnalyticsController extends Controller
             }
         }
 
+        // Asignaciones base (cliente, pc por team/user)
         $assignments = DB::table('assignments')
             ->whereIn('assignments.team_id', $teamIds)
             ->leftJoin('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
@@ -82,20 +113,25 @@ class CompanyAnalyticsController extends Controller
                 'client_profit_centers.profit_center_code',
                 'profit_centers.profit_center_name',
                 'clients.client_group_number',
-                'clients.client_name'
+                'clients.client_name',
+                'clients.classification_id'
             )
+            ->whereNotNull('assignments.user_id')
             ->get();
 
-        $userIdsAll = array_values(array_unique($userIdsAll));
-        $display = $this->fetchUsersDisplay($userIdsAll);
-
+        // === Construir mapa team->user->pc->clients (sin duplicados) ===
         $map = [];
-        foreach ($assignments as $r) {
-            if (!$r->user_id) continue;
+        $allCgns = [];
+        $allPcs  = [];
 
+        foreach ($assignments as $r) {
             $tid = (int)$r->team_id;
             $uid = (int)$r->user_id;
 
+            // Filtrado por rol: si onlyUserId está definido, mostrar solo ese user
+            if ($onlyUserId !== null && $uid !== $onlyUserId) continue;
+
+            // Si el usuario no está en el equipo visible, lo omitimos (consistente con lógica original)
             $isVisibleInTeam = isset($usersByTeam[$tid][$uid]);
             if (!$isVisibleInTeam) continue;
 
@@ -103,30 +139,86 @@ class CompanyAnalyticsController extends Controller
             $pcName = (string)($r->profit_center_name ?? $pcCode);
             $cgn    = $r->client_group_number ? (string)$r->client_group_number : null;
             $cname  = $r->client_name ? (string)$r->client_name : null;
+            $classId= $r->classification_id !== null ? (int)$r->classification_id : null;
 
-            $map[$tid]                  = $map[$tid]                  ?? [];
-            $map[$tid][$uid]            = $map[$tid][$uid]            ?? [];
-            $map[$tid][$uid][$pcCode]   = $map[$tid][$uid][$pcCode]   ?? ['pc_name' => $pcName, 'clients' => [], '_seen' => []];
+            if (!isset($map[$tid])) $map[$tid] = [];
+            if (!isset($map[$tid][$uid])) $map[$tid][$uid] = [];
+            if (!isset($map[$tid][$uid][$pcCode])) {
+                $map[$tid][$uid][$pcCode] = [
+                    'pc_name'  => $pcName,
+                    'clients'  => [],
+                    '_seen'    => [],
+                ];
+            }
 
             if ($cgn && !isset($map[$tid][$uid][$pcCode]['_seen'][$cgn])) {
                 $map[$tid][$uid][$pcCode]['clients'][] = [
                     'client_group_number' => $cgn,
-                    'client_name'         => $cname ?? $cgn
+                    'client_name'         => $cname ?? $cgn,
+                    'classification_id'   => $classId, // puede venir null
                 ];
                 $map[$tid][$uid][$pcCode]['_seen'][$cgn] = true;
+
+                $allCgns[] = $cgn;
+                $allPcs[]  = $pcCode;
             }
         }
 
+        // Limpieza _seen
         foreach ($map as $tid => &$users) {
             foreach ($users as $uid => &$pcs) {
                 foreach ($pcs as $pc => &$info) {
                     unset($info['_seen']);
-                    usort($info['clients'], fn($a, $b) => strcmp($a['client_name'], $b['client_name']));
+                    // ya NO ordenamos alfabéticamente; ordenaremos por euros más abajo
                 }
                 ksort($pcs);
             }
         }
         unset($users, $pcs, $info);
+
+        $allCgns = array_values(array_unique($allCgns));
+        $allPcs  = array_values(array_unique($allPcs));
+
+        // === Volúmenes en Euros por (cgn, pc) ===
+        $volMap = [];
+        if (!empty($allCgns) && !empty($allPcs)) {
+            $ucAgg = DB::table('unit_conversions')
+                ->select(
+                    'profit_center_code',
+                    DB::raw('MAX(factor_to_m3) as factor_to_m3'),
+                    DB::raw('MAX(factor_to_euro) as factor_to_euro')
+                )->groupBy('profit_center_code');
+
+            $volRows = DB::table('sales')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', function($j){
+                    $j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code');
+                })
+                ->whereIn('client_profit_centers.client_group_number', $allCgns)
+                ->whereIn('client_profit_centers.profit_center_code', $allPcs)
+                ->select(
+                    'client_profit_centers.client_group_number as cgn',
+                    'client_profit_centers.profit_center_code as pc',
+                    DB::raw('SUM(sales.volume * COALESCE(uc.factor_to_m3,1) * COALESCE(uc.factor_to_euro,0)) as euro')
+                )
+                ->groupBy('client_profit_centers.client_group_number', 'client_profit_centers.profit_center_code')
+                ->get();
+
+            foreach ($volRows as $vr) {
+                $key = (string)$vr->cgn . '|' . (string)$vr->pc;
+                $volMap[$key] = (float)$vr->euro;
+            }
+        }
+
+        // === Mapa de clasificación por cgn (por si viene null en assignment) ===
+        $classByCgn = [];
+        if (!empty($allCgns)) {
+            $classByCgn = DB::table('clients')
+                ->whereIn('client_group_number', $allCgns)
+                ->pluck('classification_id', 'client_group_number')
+                ->map(fn($v)=> (int)$v)
+                ->toArray();
+        }
 
         $out = [];
         foreach ($teams as $t) {
@@ -141,9 +233,14 @@ class CompanyAnalyticsController extends Controller
             $uids = array_keys($usersByTeam[$t->id] ?? []);
             sort($uids);
 
+            // Si filtramos por user específico (rol >3), quedarnos con ese
+            if ($onlyUserId !== null) {
+                $uids = array_values(array_filter($uids, fn($u) => (int)$u === (int)$onlyUserId));
+            }
+
             foreach ($uids as $uid) {
                 $isManager = ($usersByTeam[$t->id][$uid] ?? 'seller') === 'manager';
-                $labelUser = $display[$uid] ?? ('User ' . $uid);
+                $labelUser = $this->fetchUsersDisplay([$uid])[$uid] ?? ('User ' . $uid);
 
                 $userNode = [
                     'id'           => 'user_' . $uid . '_t' . $t->id,
@@ -155,6 +252,16 @@ class CompanyAnalyticsController extends Controller
 
                 if (isset($map[$t->id][$uid])) {
                     foreach ($map[$t->id][$uid] as $pcCode => $info) {
+                        // Ordenar clientes por € desc
+                        usort($info['clients'], function($a, $b) use ($pcCode, $volMap){
+                            $ka = $a['client_group_number'].'|'.$pcCode;
+                            $kb = $b['client_group_number'].'|'.$pcCode;
+                            $va = $volMap[$ka] ?? 0.0;
+                            $vb = $volMap[$kb] ?? 0.0;
+                            if ($va === $vb) return 0;
+                            return ($va < $vb) ? 1 : -1;
+                        });
+
                         $pcNode = [
                             'id'           => 'pc_' . $pcCode . '_u' . $uid . '_t' . $t->id,
                             'label'        => $info['pc_name'],
@@ -162,29 +269,43 @@ class CompanyAnalyticsController extends Controller
                             'type'         => 'pc',
                             'children'     => [],
                         ];
+
                         foreach ($info['clients'] as $cl) {
-$clientClassification = DB::table('clients')
-    ->where('client_group_number', $cl['client_group_number'])
-    ->value('classification_id'); // Asume que tenés este campo
+                            $cgn = $cl['client_group_number'];
+                            $classId = $cl['classification_id'] ?? ($classByCgn[$cgn] ?? 5);
+                            $letter  = $this->mapClassification($classId);
+                            $volKey  = $cgn . '|' . $pcCode;
+                            $euro    = $volMap[$volKey] ?? 0.0;
+
+                            // Label del cliente: "LETTER - Nombre del cliente"
+                            $labelClient = ' - ' . ($cl['client_name'] ?? $cgn);
 
                             $pcNode['children'][] = [
-                                'id'           => 'client_' . $cl['client_group_number'] . '_pc' . $pcCode . '_u' . $uid . '_t' . $t->id,
-                                'label'        => $cl['client_name'],
+                                'id'           => 'client_' . $cgn . '_pc' . $pcCode . '_u' . $uid . '_t' . $t->id,
+                                'label'        => $labelClient,
                                 'has_children' => false,
                                 'type'         => 'client',
-                                    'meta'         => [
-        'classification_id' => $clientClassification // <- NUEVO
-    ]
+                                'meta'         => [
+                                    'classification' => $letter,
+                                    'volume'         => $euro,
+                                    'client_group_number' => $cgn,
+                                ],
                             ];
                         }
                         $userNode['children'][] = $pcNode;
                     }
                 }
 
-                $teamNode['children'][] = $userNode;
+                // Evitar agregar user vacío (sin PCs)
+                if (!empty($userNode['children'])) {
+                    $teamNode['children'][] = $userNode;
+                }
             }
 
-            $out[] = $teamNode;
+            // Evitar agregar team vacío (sin users)
+            if (!empty($teamNode['children'])) {
+                $out[] = $teamNode;
+            }
         }
 
         return $out;
@@ -287,6 +408,8 @@ $clientClassification = DB::table('clients')
         $ids = array_values(array_unique(array_filter(array_merge($ids, $members, $assignees))));
         return $ids;
     }
+
+    // ====== A partir de acá, TODO lo de series/totals/pcMonthly/pcOverview/pcList queda EXACTO ======
 
     public function series(Request $request){
         try {
@@ -427,7 +550,7 @@ $clientClassification = DB::table('clients')
                 $fcEur[$i] = (float)$r->euro;
             }
 
-            /* EQF: oportunidad abierta, última versión por opp+mes, FY, + filtros */
+            /* EQF ... (SIN CAMBIOS) */
             $opLv = DB::table('sales_opportunities')
                 ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
                 ->groupBy('opportunity_group_id');
@@ -453,7 +576,6 @@ $clientClassification = DB::table('clients')
                 ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','op.profit_center_code'))
                 ->whereNotIn('op.status', ['won','lost']);
 
-            // scoping por contexto
             if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
                 $eqfQ->where('op.user_id', $ctx['user_id'] ?? 0);
             } elseif (($ctx['type'] ?? '') === 'team') {
@@ -462,7 +584,6 @@ $clientClassification = DB::table('clients')
             if (in_array($ctx['type'] ?? '', ['pc','client'])) {
                 $eqfQ->where('op.profit_center_code', $ctx['pc_code'] ?? '');
             }
-            // 🔧 FIX: en contexto cliente, filtrar por cliente
             if (($ctx['type'] ?? '') === 'client') {
                 $eqfQ->where('op.client_group_number', $ctx['client_group_number'] ?? '');
             }
@@ -482,12 +603,11 @@ $clientClassification = DB::table('clients')
                 $eqfEur[$i]= (float)$r->euro;
             }
 
-            // Forecast final = forecast base + EQF
             $fcU_plus   = array_map(fn($a,$b)=>$a+$b, $fc,   $eqfU);
             $fcM3_plus  = array_map(fn($a,$b)=>$a+$b, $fcM3, $eqfM3);
             $fcEur_plus = array_map(fn($a,$b)=>$a+$b, $fcEur,$eqfEur);
 
-            /* EXTRA QUOTA remaining = ASSIGNED - WON converted */
+            /* EXTRA QUOTA remaining (SIN CAMBIOS RELEVANTES) */
             $eqUserIds = null;
             if (in_array($ctx['type'] ?? '', ['user','pc','client'])) {
                 $eqUserIds = [$ctx['user_id'] ?? 0];
@@ -495,7 +615,6 @@ $clientClassification = DB::table('clients')
                 $eqUserIds = $this->teamUserIds($ctx['team_id']);
             }
 
-            // ASSIGNED (publicado en FY)
             $eqAssignedQ = DB::table('extra_quota_assignments as eq')
                 ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','eq.profit_center_code'))
                 ->where('eq.fiscal_year', $fyStart)->where('eq.is_published', 1)
@@ -511,7 +630,6 @@ $clientClassification = DB::table('clients')
             $assignedM3= (float)($eqAssignedRow->m3 ?? 0.0);
             $assignedE = (float)($eqAssignedRow->euro ?? 0.0);
 
-            // WON converted (sum presupuesto de versión ganada)
             $wonConvQ = DB::table('sales_opportunities as s')
                 ->join('extra_quota_budgets as b', function($j){
                     $j->on('b.opportunity_group_id','=','s.opportunity_group_id')
@@ -533,12 +651,10 @@ $clientClassification = DB::table('clients')
             $wonM3= (float)($wonConvRow->m3 ?? 0.0);
             $wonE = (float)($wonConvRow->euro ?? 0.0);
 
-            // Remaining
             $extraUnits = max(0.0, $assignedU  - $wonU);
             $extraM3    = max(0.0, $assignedM3 - $wonM3);
             $extraEur   = max(0.0, $assignedE  - $wonE);
 
-            // Distribuir remaining a budgets (company/team/user/pc); en client NO
             $applyExtraQuota = in_array($ctx['type'] ?? '', ['company', 'team', 'user', 'pc']);
             $distribute = function($base, $extra) {
                 $total = array_sum($base);
@@ -554,7 +670,6 @@ $clientClassification = DB::table('clients')
             $budgetM3Adj  = $applyExtraQuota ? $distribute($budgetM3, $extraM3)    : $budgetM3;
             $budgetEurAdj = $applyExtraQuota ? $distribute($budgetEur,$extraEur)   : $budgetEur;
 
-            // Respuesta
             return response()->json([
                 'context' => $ctx,
                 'fy_start' => $fyStart,
@@ -572,13 +687,11 @@ $clientClassification = DB::table('clients')
                     'm3'    => $this->fmtArr($budgetM3Adj),
                     'euro'  => $this->fmtArr($budgetEurAdj),
                 ],
-                // Forecasts incluyen EQF
                 'forecasts' => [
                     'units' => $this->fmtArr($fcU_plus),
                     'm3'    => $this->fmtArr($fcM3_plus),
                     'euro'  => $this->fmtArr($fcEur_plus),
                 ],
-                // (opcional para debug)
                 'extra_quota_forecasts' => [
                     'units' => $this->fmtArr($eqfU),
                     'm3'    => $this->fmtArr($eqfM3),
@@ -600,7 +713,6 @@ $clientClassification = DB::table('clients')
                         'm3'    => $this->fmt(array_sum($budgetM3Adj)),
                         'euro'  => $this->fmt(array_sum($budgetEurAdj)),
                     ],
-                    // Totales de forecast con EQF incluido
                     'forecasts' => [
                         'units' => $this->fmt(array_sum($fcU_plus)),
                         'm3'    => $this->fmt(array_sum($fcM3_plus)),
@@ -648,6 +760,7 @@ $clientClassification = DB::table('clients')
     }
 
     public function totals(Request $request){
+        // SIN CAMBIOS
         $nodeId = (string)$request->input('node_id', '');
         if ($nodeId === '') return response()->json(['error' => 'node_id ist erforderlich'], 422);
 
@@ -866,7 +979,6 @@ $clientClassification = DB::table('clients')
             }
             $budgetWithExtraRows = collect(array_values($budgetMap));
         } else {
-            // client: NO sumar extra remaining al budget
             $budgetWithExtraRows = $budgetRows;
         }
 
@@ -932,6 +1044,7 @@ $clientClassification = DB::table('clients')
     }
 
     public function pcMonthly(Request $request){
+        // SIN CAMBIOS DEL USUARIO (solo formato/trazas)
         $pc = trim((string)$request->query('profit_center_code', ''));
         if ($pc === '') {
             return response()->json(['error' => 'profit_center_code ist erforderlich'], 422);
@@ -1062,8 +1175,7 @@ $clientClassification = DB::table('clients')
             $fcM[$i] = (float)$r->m3;
         }
 
-        // === EXTRA QUOTA: remaining for this PC (assigned - won converted) ===
-        // ASSIGNED
+        // === EXTRA QUOTA... (igual que tu versión original) ===
         $eqAssignedQ = DB::table('extra_quota_assignments as eq')
             ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','eq.profit_center_code'))
             ->where('eq.fiscal_year', $fyStart)->where('eq.is_published', 1)
@@ -1076,16 +1188,14 @@ $clientClassification = DB::table('clients')
         $assignedM = (float)($eqAssignedQ->m3 ?? 0.0);
         $assignedE = (float)($eqAssignedQ->euro ?? 0.0);
 
-        // WON converted
-        $wonConvQ = DB::table('sales_opportunities as s')
+        $applyFY($wonConvQ = DB::table('sales_opportunities as s')
             ->where('s.status','won')
             ->where('s.profit_center_code', $pc)
             ->join('extra_quota_budgets as b', function($j){
                 $j->on('b.opportunity_group_id','=','s.opportunity_group_id')
                   ->on('b.version','=','s.version');
             })
-            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','s.profit_center_code'));
-        $applyFY($wonConvQ, 'b', $fyStart);
+            ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','s.profit_center_code')), 'b', $fyStart);
         $wonRow = $wonConvQ->selectRaw('
                 COALESCE(SUM(b.volume),0) as units,
                 COALESCE(SUM(b.volume * COALESCE(uc.factor_to_m3,1)),0) as m3,
@@ -1096,12 +1206,10 @@ $clientClassification = DB::table('clients')
         $wonM = (float)($wonRow->m3 ?? 0.0);
         $wonE = (float)($wonRow->euro ?? 0.0);
 
-        // REMAINING
         $extraU = max(0.0, $assignedU - $wonU);
         $extraM = max(0.0, $assignedM - $wonM);
         $extraE = max(0.0, $assignedE - $wonE);
 
-        // Distribute remaining into monthly budget arrays
         $applyExtra = function(array $base, float $extra) {
             $total = array_sum($base);
             if ($extra == 0.0) return $base;
@@ -1119,7 +1227,6 @@ $clientClassification = DB::table('clients')
         $budUAdj = $applyExtra($budU, $extraU);
         $budMAdj = $applyExtra($budM, $extraM);
 
-        // === USED: EQF (open) última versión, <= as_of (omitido aquí en pcMonthly para simplicidad) ===
         $lv = DB::table('sales_opportunities')
             ->select('opportunity_group_id', DB::raw('MAX(version) as max_version'))
             ->where('profit_center_code', $pc)
@@ -1179,7 +1286,7 @@ $clientClassification = DB::table('clients')
         ]);
     }
 
-    public function pcOverview(Request $request){
+public function pcOverview(Request $request){
         $pc = trim((string)$request->query('profit_center_code', ''));
         if ($pc === '') {
             return response()->json(['error' => 'profit_center_code ist erforderlich'], 422);
@@ -1539,5 +1646,19 @@ $clientClassification = DB::table('clients')
         ->get();
 
         return response()->json($rows);
+    }
+
+    private function mapClassification($id): string
+    {
+        return match ((int)$id) {
+            1 => 'A',
+            2 => 'B',
+            3 => 'C',
+            4 => 'D',
+            5 => 'X',
+            6 => 'PA',
+            7 => 'PB',
+            default => 'X',
+        };
     }
 }

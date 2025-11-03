@@ -40,13 +40,12 @@
 				<Card class="col-4">
 					<template #header>
 						<div class="flex align-items-center gap-2">
-							<i class="pi pi-table"></i>
 							<SelectButton :modelValue="unit" :options="unitOptions" @update:modelValue="changeUnit"
 								:allowEmpty="false" class="unit-toggle" />
 						</div>
 					</template>
 					<template #content>
-						<EmptyState v-if="!tableRows.length && !loading" icon="pi pi-table" text="Sin filas" />
+						<EmptyState v-if="!tableRows.length && !loading" text="Sin filas" />
 						<ProfitCentersTable v-else class="widget" :rows="tableRows" :totals="tableTotals" :unit="unit"
 							:selectedId="selectedPcId" @row-select="onSelectPc" />
 					</template>

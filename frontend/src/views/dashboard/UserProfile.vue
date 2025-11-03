@@ -3,14 +3,13 @@
   <div class="profile-card">
     <Toast />
 
-    <!-- ÚNICO GRID: 12 cols => ID (3) + CONTACT (9) + PWD (3 debajo de ID) -->
     <div class="top-grid">
-      <!-- ID-CARD (3 cols) -->
+      <!-- ID-CARD -->
       <div class="id-card glass">
         <div class="avatar-wrap" @dragover.prevent @drop.prevent="onDrop">
           <img
             :src="avatarSrc"
-            :class="['avatar', isFallback ? 'placeholder' : 'real']"
+            class="avatar"
             alt="Avatar"
             @error="onImgError"
           />
@@ -27,7 +26,7 @@
         </div>
       </div>
 
-      <!-- CONTACT-CARD (9 cols) -->
+      <!-- CONTACT-CARD -->
       <div class="contact-card glass">
         <div class="row two">
           <div>
@@ -83,7 +82,7 @@
         </div>
       </div>
 
-      <!-- PWD-CARD (3 cols) — debajo de ID con mismo ancho -->
+      <!-- PWD-CARD -->
       <div class="pwd-card glass">
         <h3 class="section-title">Passwort ändern</h3>
 
@@ -134,7 +133,6 @@
       </div>
     </div>
 
-    <!-- Loader -->
     <div v-if="loading" class="page-loader">
       <div class="dots"><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span></div>
       <div class="caption">Lädt…</div>
@@ -143,7 +141,6 @@
 </template>
 
 <script setup>
-// code in English; UI German
 import { ref, reactive, computed, onMounted } from 'vue'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
@@ -155,75 +152,93 @@ import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import { useAuthStore } from '@/stores/auth'
 
-// placeholders
 import femalePlaceholder from '@/assets/img/placeholders/user-female.svg'
-import malePlaceholder   from '@/assets/img/placeholders/user-male.svg'
+import malePlaceholder from '@/assets/img/placeholders/user-male.svg'
 
 const toast = useToast()
 const auth = useAuthStore()
 const API = '/api'
 
-// identity
-const firstName = computed(() => auth.user?.first_name || auth.firstName || '')
-const lastName  = computed(() => auth.user?.last_name  || auth.lastName  || '')
-const email     = computed(() => auth.user?.email || '')
-const gender    = computed(() => String(auth.user?.gender || '').toUpperCase())
-const roleMap   = { 1:'Superadmin', 2:'Admin', 3:'Manager', 4:'Sales Rep' }
-const roleId    = computed(() => Number(auth.roleId ?? auth.role_id ?? auth.user?.role_id ?? 0))
+const firstName = computed(() => auth.user?.first_name || '')
+const lastName = computed(() => auth.user?.last_name || '')
+const email = computed(() => auth.user?.email || '')
+const gender = computed(() => String(auth.user?.gender || '').toUpperCase())
+const roleMap = { 1: 'Superadmin', 2: 'Admin', 3: 'Manager', 4: 'Sales Rep' }
+const roleId = computed(() => Number(auth.roleId ?? auth.role_id ?? auth.user?.role_id ?? 0))
 const displayRole = computed(() => roleMap[roleId.value] || (auth.user?.role || '—'))
-const userId    = computed(() => Number(auth.user?.id ?? auth.id ?? auth.userId ?? 0))
+const userId = computed(() => Number(auth.user?.id ?? 0))
 
-// form
 const form = reactive({
   address: '', city: '', state: '', postal_code: '', country: '', phone: '', profile_picture: null
 })
 
-// avatar
 const fileInput = ref(null)
 const avatarPreview = ref('')
-const isFallback = ref(true)
-
-function absolutizeUrl(url) {
-  if (!url) return ''
-  if (/^https?:\/\//i.test(url)) return url
-  // server ya devuelve absoluta con el fix del controller, pero por si acaso:
-  const base = import.meta.env.VITE_API_BASE_URL || window.location.origin
-  const clean = url.replace(/^\/+/, '')
-  return `${base}/${clean}`
-}
-function cacheBust(u) {
-  if (!u) return u
-  const sep = u.includes('?') ? '&' : '?'
-  return `${u}${sep}t=${Date.now()}`
-}
-const avatarSrc = computed(() => {
-  if (!isFallback.value && avatarPreview.value) return avatarPreview.value
-  return (gender.value === 'F') ? femalePlaceholder : malePlaceholder
-})
-function onImgError() {
-  isFallback.value = true
-  avatarPreview.value = ''
-}
-
+const profilePictureUrl = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 
-// password
-const pwd = reactive({ current:'', new:'', confirm:'' })
+const pwd = reactive({ current: '', new: '', confirm: '' })
 const changingPwd = ref(false)
 const pwdStrongEnough = computed(() => (pwd.new?.length || 0) >= 8)
 const pwdMatch = computed(() => pwd.new === pwd.confirm && pwd.new.length > 0)
 const canSavePwd = computed(() => pwd.current.trim().length > 0 && pwdStrongEnough.value && pwdMatch.value)
 
-// countries
 const countryOptions = [
-  { label:'Österreich', value:'AT' }, { label:'Deutschland', value:'DE' },
-  { label:'Schweiz', value:'CH' },    { label:'Italien', value:'IT' },
-  { label:'Frankreich', value:'FR' }, { label:'Spanien', value:'ES' }
+  { label: 'Österreich', value: 'AT' },
+  { label: 'Deutschland', value: 'DE' },
+  { label: 'Frankreich', value: 'FR' },
+  { label: 'Ungarn', value: 'HU' },
+  { label: 'Italien', value: 'IT' },
+  { label: 'Polen', value: 'PL' },
+  { label: 'Schweiz', value: 'CH' },
+  { label: 'Spanien', value: 'ES' }
 ]
 
-// load
-async function loadDetails(){
+// --- Avatar helpers ---
+const avatarSrc = computed(() => {
+  if (avatarPreview.value) return avatarPreview.value
+  if (profilePictureUrl.value) return profilePictureUrl.value
+  return gender.value === 'F' ? femalePlaceholder : malePlaceholder
+})
+
+function onImgError() {
+  avatarPreview.value = ''
+  profilePictureUrl.value = null
+}
+
+function pickImage() {
+  fileInput.value?.click()
+}
+
+function readImageAsDataURL(file) {
+  const reader = new FileReader()
+  reader.onload = () => {
+    avatarPreview.value = reader.result
+  }
+  reader.onerror = () => {
+    console.error('Error reading file preview')
+    avatarPreview.value = ''
+  }
+  reader.readAsDataURL(file)
+}
+
+function onFile(e) {
+  const f = e.target.files?.[0]
+  if (!f) return
+  form.profile_picture = f
+  readImageAsDataURL(f)
+}
+
+function onDrop(e) {
+  const f = e.dataTransfer?.files?.[0]
+  if (!f) return
+  form.profile_picture = f
+  readImageAsDataURL(f)
+}
+
+// --- API actions ---
+async function loadDetails() {
   if (!userId.value) return
   loading.value = true
   try {
@@ -235,20 +250,16 @@ async function loadDetails(){
     form.postal_code = data?.postal_code || ''
     form.country = data?.country || ''
     form.phone = data?.phone || ''
-    const raw = data?.profile_picture_url || data?.profile_picture || ''
-    if (raw) {
-      // usa absoluta del back + cache-buster para ver el cambio al instante
-      avatarPreview.value = cacheBust(absolutizeUrl(raw))
-      isFallback.value = false
-    }
-  } finally { loading.value = false }
+    profilePictureUrl.value = data?.profile_picture_url || null
+    avatarPreview.value = ''
+  } finally {
+    loading.value = false
+  }
 }
 
-// save details (mantiene preview y fuerza refresco)
-async function saveDetails(){
+async function saveDetails() {
   if (!userId.value) return
   saving.value = true
-  const currentPreview = avatarPreview.value
   try {
     await ensureCsrf()
     const fd = new FormData()
@@ -258,29 +269,37 @@ async function saveDetails(){
     fd.append('postal_code', form.postal_code ?? '')
     fd.append('country', form.country ?? '')
     fd.append('phone', form.phone ?? '')
-    if (form.profile_picture instanceof File) fd.append('profile_picture', form.profile_picture)
-
-    const { data } = await api.post(`${API}/users/${userId.value}/details`, fd, {
-      headers: { 'Content-Type':'multipart/form-data' }
-    })
-
-    const persisted = data?.profile_picture_url || data?.profile_picture || ''
-    if (persisted) {
-      avatarPreview.value = cacheBust(absolutizeUrl(persisted))
-      isFallback.value = false
-    } else if (form.profile_picture instanceof File) {
-      avatarPreview.value = cacheBust(currentPreview)
-      isFallback.value = false
+    if (form.profile_picture instanceof File) {
+      fd.append('profile_picture', form.profile_picture)
     }
 
-    toast.add({ severity:'success', summary:'Gespeichert', detail:'Profil aktualisiert', life:1600 })
-  } catch {
-    toast.add({ severity:'error', summary:'Fehler', detail:'Speichern fehlgeschlagen', life:2200 })
-  } finally { saving.value = false }
+    const { data } = await api.post(`${API}/users/${userId.value}/details`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    // ✅ Imagen nueva guardada → actualizar preview
+    profilePictureUrl.value = data?.profile_picture_url || null
+    avatarPreview.value = '' // usamos directamente la URL ya persistida
+
+    // ✅ ACTUALIZAR EL USUARIO GLOBALMENTE (navbar, etc.)
+    if (auth.user) {
+      auth.user.user_details = {
+        ...(auth.user.user_details || {}),
+        profile_picture: data?.profile_picture,
+        profile_picture_url: data?.profile_picture_url
+      }
+    }
+
+    toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Profil aktualisiert', life: 1600 })
+  } catch (err) {
+    console.error(err)
+    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Speichern fehlgeschlagen', life: 2200 })
+  } finally {
+    saving.value = false
+  }
 }
 
-// save password
-async function savePassword(){
+async function savePassword() {
   if (!userId.value || !canSavePwd.value) return
   changingPwd.value = true
   try {
@@ -290,123 +309,62 @@ async function savePassword(){
       password: pwd.new,
       password_confirmation: pwd.confirm
     })
-    pwd.current = ''; pwd.new = ''; pwd.confirm = ''
-    toast.add({ severity:'success', summary:'Gespeichert', detail:'Passwort aktualisiert', life:1600 })
-  } catch (e){
+    pwd.current = ''
+    pwd.new = ''
+    pwd.confirm = ''
+    toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Passwort aktualisiert', life: 1600 })
+  } catch (e) {
     const msg = e?.response?.data?.message || 'Passwort konnte nicht geändert werden'
-    toast.add({ severity:'error', summary:'Fehler', detail: msg, life:2200 })
-  } finally { changingPwd.value = false }
-}
-
-// avatar handlers
-function pickImage(){ fileInput.value?.click() }
-function onFile(e){
-  const f = e.target.files?.[0]; if (!f) return
-  form.profile_picture = f
-  avatarPreview.value = cacheBust(URL.createObjectURL(f)) // ver al toque
-  isFallback.value = false
-}
-function onDrop(e){
-  const f = e.dataTransfer?.files?.[0]; if (!f) return
-  form.profile_picture = f
-  avatarPreview.value = cacheBust(URL.createObjectURL(f))
-  isFallback.value = false
+    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
+  } finally {
+    changingPwd.value = false
+  }
 }
 
 onMounted(loadDetails)
 </script>
 
 <style scoped>
-.profile-card{
-  position:relative;
-  padding:24px;
-  width:100%;
-  max-width:1200px;
-  margin:0 auto;
-  --loader-dot-green:#05A46F;
-  --loader-dot-red:#B01513;
-  --loader-dot-blue:#54849A;
-}
+.profile-card { position:relative; padding:24px; width:100%; max-width:1200px; margin:0 auto; }
 
-/* 12-col grid: ID(3), CONTACT(9), PWD(3 debajo de ID) */
-.top-grid{
-  display:grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap:24px;
-}
+.top-grid { display:grid; grid-template-columns: repeat(12, 1fr); gap:24px; }
 
-.id-card{
-  grid-column: span 3;
-  padding:18px;
-  display:flex; flex-direction:column; align-items:center; gap:16px;
-}
-.contact-card{
-  grid-column: span 9;
-  padding:18px;
-  display:flex; flex-direction:column; gap:14px; min-height: 320px;
-}
-.pwd-card{
-  grid-column: span 3; /* MISMO ANCHO QUE ID */
-  padding:20px;
-}
+.id-card { grid-column: span 3; padding:18px; display:flex; flex-direction:column; align-items:center; gap:16px; }
+.contact-card { grid-column: span 9; padding:18px; display:flex; flex-direction:column; gap:14px; min-height:320px; }
+.pwd-card { grid-column: span 3; padding:20px; }
 
-/* Avatar */
-.avatar-wrap{ position:relative; width:160px; height:160px; margin-top: 24px; margin-bottom: 28px; }
-.avatar{
-  width:160px; height:160px; object-fit: cover;
-  background: transparent; /* transparente */
-}
-.avatar.real{ border-radius: 50%; object-fit: cover; }
-.avatar.placeholder{ border-radius: 10px; object-fit: contain; }
+.avatar-wrap { position:relative; width:160px; height:160px; margin-top:24px; margin-bottom:28px; }
+.avatar { width:160px; height:160px; border-radius:50%; object-fit:cover; background:transparent; }
+.avatar-btn { position:absolute; left:50%; transform:translate(-50%, 50%); bottom:0; width:40px; height:40px;
+  border-radius:50%; border:none; background:#54849A; color:#fff; cursor:pointer; display:flex; align-items:center;
+  justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.25); }
+.hidden { display:none; }
 
-/* Botón de cambiar imagen: centrado abajo con leve superposición */
-.avatar-btn{
-  position:absolute;
-  left:50%; transform: translate(-50%, 50%);
-  bottom:0;
-  width:40px; height:40px;
-  border-radius:50%;
-  border:none; background:#54849A; color:#fff; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.25);
-}
-.hidden{ display:none; }
+.identity { text-align:center; display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.last-name { font-weight:800; font-size:1.7rem; color:#0f172a; }
+.first-name { font-weight:400; font-size:1.25rem; color:#111827; }
+.role { font-weight:300; font-style:italic; color:#334155; }
 
-/* Identidad */
-.identity{ text-align:center; display:flex; flex-direction:column; gap:6px; margin-top:6px; }
-.last-name{ font-weight:800; font-size:1.7rem; color:#0f172a; }
-.first-name{ font-weight:400; font-size:1.25rem; color:#111827; }
-.role{ font-weight:300; font-style:italic; color:#334155; }
+.row { display:flex; flex-direction:column; gap:8px; }
+.row.two { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.lbl { font-size:.95rem; color:#334155; font-weight:600; }
 
-/* Contacto */
-.row{ display:flex; flex-direction:column; gap:8px; }
-.row.two{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-.lbl{ font-size:.95rem; color:#334155; font-weight:600; }
+.card-spacer { flex:1 1 auto; }
+.actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:6px; }
 
-/* Acciones al borde inferior derecho de la tarjeta de contacto */
-.card-spacer{ flex:1 1 auto; }
-.actions{ display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top: 6px; }
+.section-title { margin:0 0 16px; font-size:1.08rem; font-weight:800; color:#0f172a; }
+.hint { font-size:.82rem; margin-top:4px; }
+.hint.error { color:#b91c1c; }
+.hint.ok { color:#0f766e; }
+.is-invalid { border-color:#b91c1c !important; box-shadow:0 0 0 1px rgba(185,28,28,.15) inset; }
+.pwd-actions { display:flex; justify-content:flex-end; margin-top:20px; }
 
-/* Password */
-.section-title{ margin:0 0 16px; font-size:1.08rem; font-weight:800; color:#0f172a; }
-.hint{ font-size:.82rem; margin-top:4px; }
-.hint.error{ color:#b91c1c; }
-.hint.ok{ color:#0f766e; }
-.is-invalid{ border-color:#b91c1c !important; box-shadow:0 0 0 1px rgba(185,28,28,.15) inset; }
-.pwd-actions{ display:flex; justify-content:flex-end; margin-top: 20px; }
+.page-loader { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; pointer-events:none; }
 
-/* Loader */
-.page-loader{
-  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  flex-direction:column; gap:10px; pointer-events:none;
-}
+:deep(.p-inputtext), :deep(.p-dropdown) { width:100%; }
 
-/* Prime width fix */
-:deep(.p-inputtext), :deep(.p-dropdown){ width:100%; }
-
-/* MOBILE: TODO APILADO UNO BAJO EL OTRO */
 @media (max-width: 1024px){
-  .top-grid{ grid-template-columns: 1fr; }
-  .id-card, .contact-card, .pwd-card{ grid-column: 1 / -1; }
+  .top-grid { grid-template-columns: 1fr; }
+  .id-card, .contact-card, .pwd-card { grid-column: 1 / -1; }
 }
 </style>
