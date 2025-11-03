@@ -163,11 +163,18 @@ class CompanyAnalyticsController extends Controller
                             'children'     => [],
                         ];
                         foreach ($info['clients'] as $cl) {
+$clientClassification = DB::table('clients')
+    ->where('client_group_number', $cl['client_group_number'])
+    ->value('classification_id'); // Asume que tenés este campo
+
                             $pcNode['children'][] = [
                                 'id'           => 'client_' . $cl['client_group_number'] . '_pc' . $pcCode . '_u' . $uid . '_t' . $t->id,
                                 'label'        => $cl['client_name'],
                                 'has_children' => false,
                                 'type'         => 'client',
+                                    'meta'         => [
+        'classification_id' => $clientClassification // <- NUEVO
+    ]
                             ];
                         }
                         $userNode['children'][] = $pcNode;

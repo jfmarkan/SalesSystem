@@ -1,12 +1,12 @@
-<!-- ExtraQuotaPanel.vue -->
 <template>
-  <div class="forecast-wrapper">
+  <div class="eqp-root">
+    <!-- Toast -->
     <Toast />
 
-    <!-- Unsaved changes -->
+    <!-- Confirmación de cambios sin guardar -->
     <Dialog
       v-model:visible="confirmVisible"
-      :modal="true"
+      modal
       :draggable="false"
       :dismissableMask="true"
       header="Ungespeicherte Änderungen"
@@ -15,64 +15,15 @@
       <p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
       <div class="flex justify-content-end gap-2">
         <Button label="Abbrechen" severity="secondary" @click="((confirmVisible = false), (pendingChange = null))" />
-        <Button label="Verwerfen" severity="danger" @click="discardAndApply" />
+        <Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
         <Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
-      </div>
-    </Dialog>
-
-    <!-- Gewonnen: Modal (EXTERNO) -->
-    <WonChanceModal
-      v-model:visible="wonDialogVisible"
-      :lookupClientByNumber="lookupClientByNumber"
-      :checkClientPcExists="checkClientPcExists"
-      :initialClientNumber="opForm.client_group_number"
-      :initialClientName="opForm.potential_client_name"
-      :initialClassificationId="null"
-      :profitCenterCode="opForm.profit_center_code"
-      :fiscalYear="opForm.fiscal_year"
-      @finalize="onModalFinalize"
-      @merge-forecast="onModalMerge"
-    />
-
-    <!-- Kunde wählen -->
-    <Dialog
-      v-model:visible="clientSearchVisible"
-      :modal="true"
-      :draggable="false"
-      header="Kunden auswählen"
-      :style="{ width: '720px' }"
-    >
-      <div class="mb-2">
-        <InputText
-          v-model="clientSearchQuery"
-          class="w-full"
-          placeholder="Suche nach Name oder Nummer…"
-        />
-      </div>
-
-      <div class="client-list-wrap" style="max-height: 420px; overflow: auto;">
-        <div
-          v-for="c in filteredClients"
-          :key="c.client_number"
-          class="client-row"
-          @click="selectClient(c)"
-          style="padding: 12px 10px; cursor: pointer; border-radius: 10px; margin-bottom: 6px; border: 1px solid rgba(0,0,0,.08);"
-        >
-          <div class="cr-name" v-html="renderClientRow(c)" style="font-size: 16px; font-weight: 600;"></div>
-        </div>
-        <div v-if="!clientLoading && !filteredClients.length">Keine Ergebnisse…</div>
-        <div v-if="clientLoading">Laden…</div>
-      </div>
-
-      <div class="mt-3 flex justify-content-end">
-        <Button label="Schließen" severity="secondary" @click="clientSearchVisible = false" />
       </div>
     </Dialog>
 
     <!-- Das ist Forecast (vor Erstellung) -->
     <Dialog
       v-model:visible="preCreateConflictVisible"
-      :modal="true"
+      modal
       :draggable="false"
       header="Das ist Forecast"
       :style="{ width: '520px' }"
@@ -87,36 +38,56 @@
       </div>
     </Dialog>
 
-    <GridLayout
-      :layout="layout"
-      :col-num="12"
-      :row-height="8"
-      :is-draggable="false"
-      :is-resizable="false"
-      :margin="[10, 10]"
-      :use-css-transforms="true"
-    >
-      <GridItem
-        v-for="item in layout"
-        :key="item.i"
-        :i="item.i"
-        :x="item.x"
-        :y="item.y"
-        :w="item.w"
-        :h="item.h"
-      >
-        <GlassCard :class="{ 'no-strip': item.type === 'title' }" :title="getTitle(item)">
-          <!-- TITLE -->
-          <div
-            v-if="item.type === 'title'"
-            class="h-full p-3 flex align-items-center justify-content-between"
-          >
-            <h2 class="m-0">Zusätzliche Quoten</h2>
-            <Button icon="pi pi-plus" label="Neue Chance" class="p-button" @click="startCreateMode" />
-          </div>
+    <!-- Modal: Chance gewonnen -->
+    <WonChanceModal
+      v-model:visible="wonDialogVisible"
+      :lookupClientByNumber="lookupClientByNumber"
+      :checkClientPcExists="checkClientPcExists"
+      :initialClientNumber="opForm.client_group_number"
+      :initialClientName="opForm.potential_client_name"
+      :initialClassificationId="null"
+      :profitCenterCode="opForm.profit_center_code"
+      :fiscalYear="opForm.fiscal_year"
+      @finalize="onModalFinalize"
+      @merge-forecast="onModalMerge"
+    />
 
-          <!-- LEFT -->
-          <div v-else-if="item.type === 'list'" class="h-full p-3">
+    <!-- Dialog: Kunden auswählen -->
+    <Dialog
+      v-model:visible="clientSearchVisible"
+      modal
+      :draggable="false"
+      header="Kunden auswählen"
+      :style="{ width: '720px' }"
+    >
+      <div class="mb-2">
+        <InputText v-model="clientSearchQuery" class="w-full" placeholder="Suche nach Name oder Nummer…" />
+      </div>
+
+      <div class="client-list-wrap">
+        <div
+          v-for="c in filteredClients"
+          :key="c.client_number"
+          class="client-row"
+          @click="selectClient(c)"
+        >
+          <div class="cr-name" v-html="renderClientRow(c)"></div>
+        </div>
+        <div v-if="!clientLoading && !filteredClients.length">Keine Ergebnisse…</div>
+        <div v-if="clientLoading">Laden…</div>
+      </div>
+
+      <div class="mt-3 flex justify-content-end">
+        <Button label="Schließen" severity="secondary" @click="clientSearchVisible = false" />
+      </div>
+    </Dialog>
+
+    <!-- ===== Grid 2 / 10 ===== -->
+    <div class="eqp-grid">
+      <!-- Sidebar (2 columnas) -->
+      <aside class="eqp-aside">
+        <Card>
+          <template #content>
             <div class="status-filter mb-2">
               <Button label="Offen" size="small" :severity="statusFilter === 'open' ? 'primary' : 'secondary'" @click="setStatusFilter('open')" />
               <Button label="Gewonnen" size="small" :severity="statusFilter === 'won' ? 'primary' : 'secondary'" @click="setStatusFilter('won')" />
@@ -124,9 +95,6 @@
             </div>
 
             <div v-if="listLoading" class="local-loader">
-              <div class="dots">
-                <span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
-              </div>
               <div class="caption">Wird geladen…</div>
             </div>
             <template v-else>
@@ -136,7 +104,7 @@
                 :options="listOptions"
                 optionLabel="label"
                 optionValue="value"
-                listStyle="max-height: 58vh"
+                listStyle="max-height: 65vh"
                 class="dark-list"
                 @change="(e) => onSelectGroup(e.value)"
               >
@@ -156,119 +124,135 @@
               </Listbox>
               <div v-else>Keine Chancen vorhanden.</div>
             </template>
-          </div>
+          </template>
+        </Card>
+      </aside>
 
-          <!-- FORM -->
-          <div v-else-if="item.type === 'form'" class="h-full p-3">
-            <template v-if="createMode || selectedGroupId">
-              <div class="form-card-body">
-                <div class="form-toprow">
-                  <div class="top-cell">
-                    <label class="lbl">Potentieller Kunde</label>
-                    <div class="inline-input">
-                      <InputText v-model="opForm.potential_client_name" class="flex-1" :disabled="isReadOnly" />
-                      <Button
-                        label="Kunde wählen"
-                        class="p-button-text p-button-sm"
-                        :disabled="isReadOnly"
-                        @click="pickExistingClient"
-                      />
-                    </div>
-                  </div>
-                  <div class="top-cell">
-                    <label class="lbl">Status</label>
-                    <Dropdown
-                      v-model="opForm.status"
-                      :options="statusOpts"
-                      optionLabel="label"
-                      optionValue="value"
-                      class="w-full"
-                      :disabled="isStatusMenuDisabled"
-                    />
-                  </div>
+      <!-- Main (10 columnas) -->
+      <main class="eqp-main">
+        <!-- Header -->
+        <Card>
+          <template #content>
+            <div class="topbar">
+              <div class="title-left">
+                <div class="eyebrow">Verkaufschance</div>
+                <div class="title-line">
+                  <strong>{{ selectedGroupId ? 'Gruppe ' + selectedGroupId : '—' }}</strong>
                 </div>
+              </div>
+              <div class="actions">
+                <Button icon="pi pi-plus" label="Neue Chance" @click="startCreateMode" />
+              </div>
+            </div>
+          </template>
+        </Card>
 
-                <div class="form-two-col">
-                  <div class="left-col">
-                    <div class="mt-1">
-                      <label class="lbl">Profitcenter</label>
+        <!-- Fila: Form (10) + Versiones (2) -->
+        <div class="row-form-extras">
+          <!-- Formulario (10) -->
+          <Card class="form-card">
+            <template #content>
+              <template v-if="createMode || selectedGroupId">
+                <div class="form-grid">
+                  <!-- Top row -->
+                  <div class="top-row">
+                    <div class="field">
+                      <label class="lbl">Potentieller Kunde</label>
+                      <div class="inline">
+                        <InputText v-model="opForm.potential_client_name" class="flex-1" :disabled="isReadOnly" />
+                        <Button label="Kunde wählen" class="p-button-text p-button-sm" :disabled="isReadOnly" @click="pickExistingClient" />
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <label class="lbl">Status</label>
                       <Dropdown
-                        v-model="opForm.profit_center_code"
-                        :options="pcOptionsForSelection"
+                        v-model="opForm.status"
+                        :options="statusOpts"
                         optionLabel="label"
                         optionValue="value"
-                        placeholder="Profitcenter…"
                         class="w-full"
-                        @change="updateAvailabilityForPc"
-                        :disabled="isReadOnly"
+                        :disabled="isStatusMenuDisabled"
                       />
-                      <small v-if="pcFilteredWarning" class="text-danger">{{ pcFilteredWarning }}</small>
-                    </div>
-
-                    <div class="mt-1">
-                      <label class="lbl">Volumen</label>
-                      <div class="vol-inline">
-                        <InputNumber
-                          v-model="opForm.volume"
-                          :min="0"
-                          :step="1"
-                          :useGrouping="true"
-                          locale="de-DE"
-                          :minFractionDigits="0"
-                          :maxFractionDigits="0"
-                          inputClass="w-full"
-                          :disabled="isReadOnly"
-                        />
-                        <span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
-                      </div>
-                    </div>
-
-                    <div class="mt-1">
-                      <label class="lbl">Start (Monat/Jahr)</label>
-                      <Calendar
-                        v-model="opMonthModel"
-                        view="month"
-                        dateFormat="mm/yy"
-                        :manualInput="false"
-                        showIcon
-                        class="w-full"
-                        @update:modelValue="syncMonthYear"
-                        :disabled="isReadOnly"
-                      />
-                    </div>
-
-                    <div class="mt-1">
-                      <label class="lbl">Wahrscheinlichkeit</label>
-                      <div class="prob-wrap">
-                        <Slider
-                          v-model="opForm.probability_pct"
-                          :min="0"
-                          :max="100"
-                          :step="10"
-                          class="flex-1"
-                          @slideend="snapProb"
-                          @change="snapProb"
-                          :disabled="isReadOnly"
-                        />
-                        <span class="pct">{{ opForm.probability_pct }}%</span>
-                      </div>
-                      <div class="tickbar" aria-hidden="true"></div>
                     </div>
                   </div>
 
-                  <div class="right-col">
-                    <div class="right-top">
-                      <label class="lbl">Kommentare</label>
-                      <Textarea
-                        v-model="opForm.comments"
-                        rows="8"
-                        autoResize
-                        class="w-full comment-box"
-                        :disabled="isReadOnly"
-                      />
+                  <!-- Two-cols -->
+                  <div class="two-cols">
+                    <div class="left">
+                      <div class="field">
+                        <label class="lbl">Profitcenter</label>
+                        <Dropdown
+                          v-model="opForm.profit_center_code"
+                          :options="pcOptionsForSelection"
+                          optionLabel="label"
+                          optionValue="value"
+                          placeholder="Profitcenter…"
+                          class="w-full"
+                          @change="updateAvailabilityForPc"
+                          :disabled="isReadOnly"
+                        />
+                        <small v-if="pcFilteredWarning" class="text-danger">{{ pcFilteredWarning }}</small>
+                      </div>
+
+                      <div class="field">
+                        <label class="lbl">Volumen</label>
+                        <div class="vol-inline">
+                          <InputNumber
+                            v-model="opForm.volume"
+                            :min="0"
+                            :step="1"
+                            :useGrouping="true"
+                            locale="de-DE"
+                            :minFractionDigits="0"
+                            :maxFractionDigits="0"
+                            inputClass="w-full"
+                            :disabled="isReadOnly"
+                          />
+                          <span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="field">
+                        <label class="lbl">Start (Monat/Jahr)</label>
+                        <Calendar
+                          v-model="opMonthModel"
+                          view="month"
+                          dateFormat="mm/yy"
+                          :manualInput="false"
+                          showIcon
+                          class="w-full"
+                          @update:modelValue="syncMonthYear"
+                          :disabled="isReadOnly"
+                        />
+                      </div>
+
+                      <div class="field">
+                        <label class="lbl">Wahrscheinlichkeit</label>
+                        <div class="prob-wrap">
+                          <Slider
+                            v-model="opForm.probability_pct"
+                            :min="0"
+                            :max="100"
+                            :step="10"
+                            class="flex-1"
+                            @slideend="snapProb"
+                            @change="snapProb"
+                            :disabled="isReadOnly"
+                          />
+                          <span class="pct">{{ opForm.probability_pct }}%</span>
+                        </div>
+                        <div class="tickbar" aria-hidden="true"></div>
+                      </div>
                     </div>
-                    <div class="right-bottom">
-                      <div class="flex gap-2 justify-content-end">
+
+                    <div class="right">
+                      <div class="field grow">
+                        <label class="lbl">Kommentare</label>
+                        <Textarea v-model="opForm.comments" rows="8" autoResize class="w-full comment-box" :disabled="isReadOnly" />
+                      </div>
+
+                      <div class="actions-right">
                         <Button
                           v-if="createMode"
                           label="Budget erstellen"
@@ -289,16 +273,16 @@
                     </div>
                   </div>
                 </div>
-              </div>
+              </template>
+              <div v-else>Bitte Chance auswählen oder „Neue Chance“ drücken…</div>
             </template>
-            <div v-else>Bitte Chance auswählen oder „Neue Chance“ drücken…</div>
-          </div>
+          </Card>
 
-          <!-- EXTRAS -->
-          <div v-else-if="item.type === 'extras'" class="h-full p-3 extras-wrap">
-            <div v-if="!selectedGroupId">Keine Auswahl.</div>
-            <template v-else>
-              <div>
+          <!-- Versiones (2) -->
+          <Card class="versions-card">
+            <template #content>
+              <div class="eyebrow mb-2">Versionen</div>
+              <template v-if="selectedGroupId">
                 <Listbox
                   v-if="versionOptions.length > 1"
                   v-model="selectedVersion"
@@ -309,21 +293,21 @@
                   @change="(e) => onSelectVersion(e.value)"
                 />
                 <div v-else>—</div>
-              </div>
-              <div class="extras-bottom text-500 text-sm">
-                <div>Aktuelle Version: <b>v{{ selectedVersion || '—' }}</b></div>
-                <div>Letztes Update: {{ latestMeta.updated_at || '—' }}</div>
-              </div>
+                <div class="versions-meta">
+                  <div>Aktuelle Version: <b>v{{ selectedVersion || '—' }}</b></div>
+                  <div>Letztes Update: {{ latestMeta.updated_at || '—' }}</div>
+                </div>
+              </template>
+              <div v-else>Keine Auswahl.</div>
             </template>
-          </div>
+          </Card>
+        </div>
 
-          <!-- TABLE -->
-          <div v-else-if="item.type === 'table'" class="h-full p-2">
+        <!-- Tabla (12) -->
+        <Card class="table-card">
+          <template #content>
             <template v-if="createMode || selectedGroupId">
               <div v-if="tableLoading" class="local-loader">
-                <div class="dots">
-                  <span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
-                </div>
                 <div class="caption">Wird geladen…</div>
               </div>
               <template v-else>
@@ -336,7 +320,7 @@
                     @edit-forecast="onEditForecastInt"
                   />
                 </div>
-                <div class="mt-2 flex gap-2 justify-content-end" v-if="selectedGroupId">
+                <div class="flex justify-end mt-3">
                   <Button
                     label="Forecast speichern"
                     icon="pi pi-check"
@@ -347,10 +331,10 @@
               </template>
             </template>
             <div v-else>Keine Tabelle.</div>
-          </div>
-        </GlassCard>
-      </GridItem>
-    </GridLayout>
+          </template>
+        </Card>
+      </main>
+    </div>
   </div>
 </template>
 
@@ -1232,283 +1216,181 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.forecast-wrapper {
-    height: 100vh;
-    width: 100%;
-    overflow: hidden;
-}
-.no-strip :deep(.card-header),
-.no-strip :deep(.glass-title),
-.no-strip :deep(.p-card-header) {
-    display: none !important;
+.eqp-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Left list */
-.status-filter {
-    display: flex;
-    gap: 6px;
-}
-.dark-list :deep(.p-listbox-list) {
-    background: transparent;
-}
-.row-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 6px;
-    border-radius: 8px;
-    width: 100%;
-    cursor: pointer;
-}
-.row-item:hover {
-    background: rgba(255, 255, 255, 0.06);
-}
-.row-item .top {
-    display: flex;
-    justify-content: space-between;
-    color: #cbd5e1;
-    font-size: 12px;
-}
-.row-item .mid {
-    color: #e5e7eb;
-    font-weight: 600;
-}
-.row-item .bot {
-    display: flex;
-    justify-content: space-between;
-    color: #cbd5e1;
-    font-size: 12px;
-}
-.dark-list :deep(.meta) {
-    color: #a3a3a3;
+/* Grid principal */
+.eqp-grid {
+  --gap: 16px;
+  display: grid;
+  grid-template-columns: 2fr 10fr;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--gap);
+  padding: 12px 16px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-/* FORM */
-.form-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    height: 100%;
-    overflow: hidden;
-}
-.form-toprow {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
-    gap: 10px;
-    align-items: start;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.top-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.inline-input {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-:deep(.p-dropdown) {
-    height: 2.5rem;
+/* Sidebar */
+.eqp-aside {
+  grid-row: 1 / span 3;
+  min-height: 0;
+  overflow: auto;
 }
 
-.form-two-col {
-    display: grid;
-    grid-template-columns: 30% 1fr;
-    gap: 12px;
-    flex: 1 1 auto;
-    min-height: 0;
-    padding-top: 8px;
-}
-.left-col {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow: hidden;
-}
-.right-col {
-    display: grid;
-    grid-template-rows: 1fr auto;
-    gap: 8px;
-    min-height: 0;
-}
-.right-top {
-    min-height: 0;
-    overflow: hidden;
-}
-.right-bottom {
-    align-self: end;
-}
-.lbl {
-    color: #cbd5e1;
-    font-weight: 600;
-}
-.comment-box {
-    min-height: 180px;
+/* Main */
+.eqp-main {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 12fr;
+  gap: var(--gap);
+  min-height: 0;
 }
 
-/* volume inline */
-.vol-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* Header */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.assigned {
-    color: #cbd5e1;
-    white-space: nowrap;
+.title-left {
+  display: flex;
+  flex-direction: column;
+}
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.eyebrow {
+  font-size: .8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
-/* Probability ticks */
-.prob-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* Fila: form (10) + versiones (2) */
+.row-form-extras {
+  display: grid;
+  grid-template-columns: 10fr 2fr;
+  gap: var(--gap);
+  min-height: 0;
 }
+
+/* Form structure */
+.form-card { min-height: 0; }
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+.top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 12px;
+  border-bottom: 1px solid var(--surface-border);
+  padding-bottom: 8px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; }
+.lbl { font-weight: 600; color: var(--text-color); }
+.inline { display: flex; align-items: center; gap: 8px; }
+
+/* Two columns */
+.two-cols {
+  display: grid;
+  grid-template-columns: 34% 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+.left { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.right { display: grid; grid-template-rows: 1fr auto; gap: 10px; min-height: 0; }
+.field.grow { min-height: 0; }
+.comment-box { min-height: 180px; }
+.actions-right { justify-self: end; }
+
+/* Profitcenter availability */
+.vol-inline { display: flex; align-items: center; gap: 8px; }
+.assigned { white-space: nowrap; color: var(--text-muted); }
+
+/* Slider ticks */
+.prob-wrap { display: flex; align-items: center; gap: 8px; }
 .tickbar {
-    width: 100%;
-    height: 6px;
-    margin-top: 4px;
-    position: relative;
+  width: 100%;
+  height: 6px;
+  margin-top: 4px;
+  position: relative;
 }
 .tickbar::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: repeating-linear-gradient(
-        to right,
-        rgba(255, 255, 255, 0.35) 0,
-        rgba(255, 255, 255, 0.35) 1px,
-        transparent 1px,
-        transparent 10%
-    );
-    opacity: 0.8;
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in oklab, var(--text-color) 35%, transparent) 0,
+    color-mix(in oklab, var(--text-color) 35%, transparent) 1px,
+    transparent 1px,
+    transparent 10%
+  );
+  opacity: .5;
 }
 
-/* EXTRAS */
-.extras-wrap {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+/* Versiones */
+.versions-card {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-.extras-wrap > *:first-child {
-    flex: 1 1 auto;
-}
-.extras-bottom {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+.versions-meta {
+  border-top: 1px solid var(--surface-border);
+  padding-top: 6px;
+  margin-top: 6px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
 }
 
-/* TABLE */
-.ctbl-wrap :deep(table) {
-    table-layout: fixed;
-    width: 100%;
+/* Tabla */
+.table-card {
+  min-height: 0;
+  overflow: hidden;
+  display: flex; flex-direction: column;
 }
-.ctbl-wrap :deep(th),
-.ctbl-wrap :deep(td) {
-    width: auto;
-}
-.ctbl-wrap :deep(tbody > tr:nth-child(1)),
-.ctbl-wrap :deep(tbody > tr:nth-child(4)) {
-    display: none !important;
-}
-.ctbl-wrap.locked {
-    pointer-events: none;
-    opacity: 0.6;
-}
+.table-card :deep(table) { table-layout: fixed; width: 100%; }
+.ctbl-wrap.locked { pointer-events: none; opacity: .6; }
 
-/* Loader */
+/* Lista izquierda */
+.status-filter { display: flex; gap: 6px; }
+.row-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px; border-radius: 8px; cursor: pointer;
+}
+.row-item:hover { background: rgba(255,255,255,.06); }
+.row-item .top { display: flex; justify-content: space-between; font-size: 12px; color: #cbd5e1; }
+.row-item .mid { font-weight: 600; color: #e5e7eb; }
+.row-item .bot { display: flex; justify-content: space-between; font-size: 12px; color: #cbd5e1; }
 
-/* Dialog: Glass + dunkle Maske + helle Inhalte */
-.glass-dialog :deep(.p-dialog-header) {
-    backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.7);
-    color: #0f172a;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+/* Cliente picker */
+.client-list-wrap { max-height: 420px; overflow: auto; }
+.client-row {
+  padding: 12px 10px; cursor: pointer; border-radius: 10px; margin-bottom: 6px;
+  border: 1px solid rgba(0,0,0,.08);
 }
-.glass-dialog :deep(.p-dialog-content) {
-    backdrop-filter: blur(14px);
-    background: rgba(255, 255, 255, 0.66);
-    color: #0f172a;
-}
-.glass-dialog :deep(.p-dialog-footer) {
-    backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.7);
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-:deep(.dark-mask) {
-    background: rgba(0, 0, 0, 0.55) !important;
-}
+.client-row:hover { background: rgba(0,0,0,.04); }
+.cr-name { font-size: 16px; font-weight: 600; }
 
-/* Kundenliste (hell) */
-.light-surface {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
-}
-.client-list-wrap {
-    max-height: 360px;
-    overflow: auto;
-    padding: 4px;
-}
-.client-loader {
-    padding: 12px;
-    color: #334155;
-}
-.client-row-click {
-    padding: 10px 12px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-.client-row-click:hover {
-    background: rgba(0, 0, 0, 0.04);
-}
-.crl-name {
-    color: #0f172a;
-    font-weight: 600;
-}
-.crl-num {
-    color: #475569;
-    font-size: 12px;
-    margin-top: 2px;
-}
+/* Loader muy simple */
+.local-loader { padding: 12px; text-align: center; color: var(--text-muted); }
 
-.lbl-dark {
-    color: #0f172a;
-    font-weight: 600;
-}
-.text-danger-dark {
-    color: #b91c1c;
-}
-.text-muted-dark {
-    color: #64748b;
-}
-.text-500-dark {
-    color: #6b7280;
-}
-.dark-text {
-    color: #111827;
-}
-
-/* Konfliktbox (hell) */
-.conflict-box-light {
-    background: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #92400e;
-    padding: 10px;
-    border-radius: 8px;
-    margin-top: 8px;
-}
-
-/* Helpers */
-.text-danger {
-    color: #ef4444;
-}
-.text-muted {
-    color: #a3a3a3;
+/* Responsive */
+@media (max-width: 1199px) {
+  .eqp-grid { grid-template-columns: 1fr; }
+  .eqp-aside { grid-row: auto; }
+  .row-form-extras { grid-template-columns: 1fr; }
 }
 </style>
