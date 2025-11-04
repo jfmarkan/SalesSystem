@@ -18,6 +18,7 @@ import Badge from 'primevue/badge'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Carousel from 'primevue/carousel'
+import Chart from 'primevue/chart'
 import Checkbox from 'primevue/checkbox'
 import Chip from 'primevue/chip'
 import Chips from 'primevue/chips'
@@ -120,6 +121,7 @@ export default function setupPrimeVue(app) {
   app.component('Button', Button)
   app.component('Card', Card)
   app.component('Carousel', Carousel)
+  app.component('Chart', Chart)
   app.component('Checkbox', Checkbox)
   app.component('Chip', Chip)
   app.component('Chips', Chips)

@@ -105,13 +105,14 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
+
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
 import DeviationItem from '@/components/elements/DeviationItem.vue'
 
 const toast = useToast()
 
-/* Estado principal */
+/* ======================== Estado principal ======================== */
 const deviations = ref([])
 const tab = ref('open')
 const loading = ref(false)
@@ -123,32 +124,18 @@ const confirmVisible = ref(false)
 const pendingChange = ref(null)
 const canSaveActive = ref(false)
 
-/* ref al hijo para invocar requestSave() */
+/* Ref al hijo para invocar requestSave() desde el topbar */
 const devItemRef = ref(null)
-
 function saveFromTopbar() {
-  const c = devItemRef.value
-  if (!c) {
-    toast.add({ severity: 'warn', summary: 'Hinweis', detail: 'Formular nicht bereit.', life: 1400 })
-    return
-  }
-  if (typeof c.requestSave === 'function') {
-    c.requestSave()
-  } else if (typeof c.getPayload === 'function') {
-    // fallback opcional si expusiste getPayload en el hijo
-    const payload = c.getPayload()
-    onSave({ id: selectedDevFull.value.id, ...payload })
-  } else {
-    toast.add({ severity: 'warn', summary: 'Hinweis', detail: 'Speichern nicht verfügbar.', life: 1400 })
-  }
+  devItemRef.value?.requestSave?.()
 }
 
-/* Derivados */
+/* ======================== Derivados ======================== */
 const openList = computed(() => deviations.value.filter((d) => !d.justified))
 const closedList = computed(() => deviations.value.filter((d) => d.justified))
-const currentList = computed(() => tab.value === 'open' ? openList.value : closedList.value)
+const currentList = computed(() => (tab.value === 'open' ? openList.value : closedList.value))
 
-/* Selección coherente */
+/* Selección coherente ante cambios de tab/lista */
 watch([tab, currentList], () => {
   if (!currentList.value.length) {
     selectedId.value = null
@@ -157,7 +144,7 @@ watch([tab, currentList], () => {
   }
 })
 
-/* Objeto completo */
+/* Objeto completo actual */
 const selectedDevFull = computed(() => {
   const id = selectedId.value
   if (id == null) return null
@@ -173,11 +160,21 @@ const selectedDevFull = computed(() => {
   }
 })
 
-/* Handlers del hijo */
-function onChildDirty(v)      { hasUnsaved.value   = !!v }
-function onChildCanSave(v)    { canSaveActive.value = !!v }
+/* Reset flags al cambiar selección efectiva */
+watch(selectedId, () => {
+  hasUnsaved.value = false
+  canSaveActive.value = false
+})
 
-/* Selección con confirmación */
+/* ======================== Handlers del hijo ======================== */
+function onChildDirty(v) {
+  hasUnsaved.value = !!v
+}
+function onChildCanSave(v) {
+  canSaveActive.value = !!v
+}
+
+/* ======================== Confirmación de cambios ======================== */
 function guardedSelect(id) {
   if (hasUnsaved.value) {
     pendingChange.value = id
@@ -189,6 +186,7 @@ function guardedSelect(id) {
 
 function saveAndApply() {
   if (!selectedDevFull.value) return
+  // dispara el guardado del hijo (doSave expuesto)
   saveFromTopbar()
   // el onSave pondrá hasUnsaved=false; por las dudas:
   hasUnsaved.value = false
@@ -208,7 +206,7 @@ function discardAndApply() {
   }
 }
 
-/* Carga desde API */
+/* ======================== Carga desde API ======================== */
 function parseMaskedInt(v) {
   if (typeof v === 'number' && Number.isFinite(v)) return Math.round(v)
   if (typeof v !== 'string') return 0
@@ -217,7 +215,7 @@ function parseMaskedInt(v) {
   const onlyDigits = beforeComma.replace(/[^\d-]/g, '')
   return onlyDigits === '' || onlyDigits === '-' ? 0 : parseInt(onlyDigits, 10)
 }
-const toNumArray = (arr) => Array.isArray(arr) ? arr.map(parseMaskedInt) : null
+const toNumArray = (arr) => (Array.isArray(arr) ? arr.map(parseMaskedInt) : null)
 
 function normalizeDev(d) {
   return {
@@ -252,24 +250,65 @@ async function loadDeviations() {
     deviations.value = Array.isArray(data) ? data.map(normalizeDev) : []
     selectedId.value = currentList.value.length ? currentList.value[0].id : null
   } catch {
-    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Abweichungen konnten nicht geladen werden', life: 2500 })
+    toast.add({
+      severity: 'error',
+      summary: 'Fehler',
+      detail: 'Abweichungen konnten nicht geladen werden',
+      life: 2500,
+    })
   } finally {
     loading.value = false
   }
 }
 
-/* Guardado desde el hijo */
+/* ======================== Normalización de fechas (Y-m-d) ======================== */
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+function formatYMDFromDate(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+function toYMD(value) {
+  if (!value) return null
+  if (typeof value === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    const tmp = new Date(value)
+    if (!isNaN(tmp)) return formatYMDFromDate(tmp)
+    return null
+  }
+  if (value instanceof Date) {
+    if (isNaN(value)) return null
+    return formatYMDFromDate(value)
+  }
+  return null
+}
+
+/* ======================== Guardado (recibe payload del hijo) ======================== */
 async function onSave(payload) {
   const { id, comment, plan, actions } = payload
   savingId.value = id
-  // IMPORTANTE: marcamos limpio ANTES de tocar listas/selección
-  hasUnsaved.value   = false
+
+  // Normalizamos fechas de acciones a 'YYYY-MM-DD' o null
+  const normActions = Array.isArray(actions)
+    ? actions.map((a) => ({
+        ...a,
+        due: toYMD(a?.due),
+      }))
+    : []
+
+  // Marcamos limpio ANTES de tocar listas/selección
+  hasUnsaved.value = false
   canSaveActive.value = false
+
   try {
     await ensureCsrf()
-    await api.put(`/api/deviations/${id}/justify`, { comment, plan, actions })
+    await api.put(`/api/deviations/${id}/justify`, {
+      comment,
+      plan,
+      actions: normActions,
+    })
 
-    // actualizamos el dev local
+    // actualizamos el dev local para no perder los textos en UI
     const idx = deviations.value.findIndex((d) => d.id === id)
     if (idx >= 0) {
       deviations.value[idx] = {
@@ -277,11 +316,16 @@ async function onSave(payload) {
         justified: true,
         comment,
         plan,
-        actions,
+        actions: normActions,
       }
     }
 
-    toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Begründung gespeichert', life: 1600 })
+    toast.add({
+      severity: 'success',
+      summary: 'Gespeichert',
+      detail: 'Begründung gespeichert',
+      life: 1600,
+    })
 
     // si estamos en "open", pasamos al siguiente abierto (no cambiamos de tab)
     if (tab.value === 'open') {
@@ -289,7 +333,12 @@ async function onSave(payload) {
       selectedId.value = next
     }
   } catch {
-    toast.add({ severity: 'error', summary: 'Fehler', detail: 'Begründung konnte nicht gespeichert werden', life: 2500 })
+    toast.add({
+      severity: 'error',
+      summary: 'Fehler',
+      detail: 'Begründung konnte nicht gespeichert werden',
+      life: 2500,
+    })
   } finally {
     savingId.value = null
   }

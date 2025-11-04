@@ -75,9 +75,9 @@
 
           <!-- Mensaje cuando forecast >= budget -->
           <template v-else-if="isForecast && !deltaNeg">
-            <div class="hint-ok">
-              Forecast liegt über dem Budget – kein Aktionsplan erforderlich.
-            </div>
+            <Message severity="info" icon="pi pi-info-circle">
+                Forecast liegt über dem Budget – kein Aktionsplan erforderlich.
+            </Message>
           </template>
         </template>
       </Card>
@@ -239,7 +239,7 @@ defineExpose({
   gap: 16px;
   width: 100%;
   height: 100%;
-  box-sizing: border-box.
+  box-sizing: border-box;
 }
 
 .left-col {

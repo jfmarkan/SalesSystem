@@ -645,6 +645,32 @@ const tableRef = ref(null)
   flex-direction: column;
   min-height: 0;
 }
+/* Hace que la Card de filtros entregue altura a su contenido */
+.filters-card :deep(.p-card),
+.filters-card :deep(.p-card-body),
+.filters-card :deep(.p-card-content) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* El wrapper directo del componente hijo: le pasa el alto */
+.selector-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* El host del componente hijo: debe crecer */
+.ff-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .filters-inner {
   flex: 1;
   display: flex;

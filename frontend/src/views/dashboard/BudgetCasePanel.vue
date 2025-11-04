@@ -1,14 +1,37 @@
 <template>
 	<Toast />
 	<div class="budget-case-grid">
-		<Dialog v-model:visible="confirmVisible" modal dismissable-mask header="Ungespeicherte Änderungen"
-			:style="{ width: '520px' }">
+		<Dialog
+			v-model:visible="confirmVisible"
+			modal
+			dismissable-mask
+			header="Ungespeicherte Änderungen"
+			:style="{ width: '520px' }"
+		>
 			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
 			<div class="flex justify-content-end gap-2">
-				<Button label="Abbrechen" severity="secondary"
-					@click="() => { confirmVisible = false; pendingChange.value = null }" />
-				<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
-				<Button label="Speichern" severity="success" icon="pi pi-save" @click="saveAndApply" />
+				<Button
+					label="Abbrechen"
+					severity="secondary"
+					@click="
+						() => {
+							confirmVisible = false
+							pendingChange.value = null
+						}
+					"
+				/>
+				<Button
+					label="Verwerfen"
+					severity="danger"
+					icon="pi pi-trash"
+					@click="discardAndApply"
+				/>
+				<Button
+					label="Speichern"
+					severity="success"
+					icon="pi pi-save"
+					@click="saveAndApply"
+				/>
 			</div>
 		</Dialog>
 
@@ -19,12 +42,18 @@
 					<div class="filters-inner">
 						<div class="field-block flex-1 min-h-0">
 							<div class="selector-host">
-								<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
-									:primary-id="primaryId" :secondary-options="secondaryOptionsWithDots"
+								<ForecastFilters
+									class="ff-host"
+									:mode="mode"
+									:primary-options="primaryOptions"
+									:primary-id="primaryId"
+									:secondary-options="secondaryOptionsWithDots"
 									:secondary-id="secondaryId"
 									@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
 									@update:primary-id="(v) => guardedChange('primary', v)"
-									@update:secondary-id="(v) => guardedChange('secondary', v)" @next="handleNext" />
+									@update:secondary-id="(v) => guardedChange('secondary', v)"
+									@next="handleNext"
+								/>
 								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
 							</div>
 						</div>
@@ -60,8 +89,13 @@
 							</div>
 						</div>
 						<div class="actions">
-							<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty"
-								:outlined="!budgetDirty" @click="saveBudgetCase" />
+							<Button
+								label="Speichern"
+								icon="pi pi-save"
+								:disabled="!budgetDirty"
+								:outlined="!budgetDirty"
+								@click="saveBudgetCase"
+							/>
 						</div>
 					</div>
 				</template>
@@ -73,9 +107,16 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<LineChartSmart v-if="hasSelection" type="cumulative" :client-id="currentClientId"
-									:profit-center-id="currentPcId" api-prefix="/api" :auto-fetch="false"
-									:cum-data="cumDataForChart" :busy="loading" />
+								<LineChartSmart
+									v-if="hasSelection"
+									type="cumulative"
+									:client-id="currentClientId"
+									:profit-center-id="currentPcId"
+									api-prefix="/api"
+									:auto-fetch="false"
+									:cum-data="cumDataForChart"
+									:busy="loading"
+								/>
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -86,10 +127,18 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<BudgetCasePanel v-if="hasSelection" :key="`${currentClientId}-${currentPcId}`"
-									ref="bcRef" :client-group-number="cgnForChild" :profit-center-code="pccForChild"
-									:disabled="false" :prefill="prefillFromDb" @dirty-change="(v) => budgetDirty = !!v"
-									@values-change="onChildValues" @simulated="onSimulated" />
+								<BudgetCasePanel
+									v-if="hasSelection"
+									:key="`${currentClientId}-${currentPcId}`"
+									ref="bcRef"
+									:client-group-number="cgnForChild"
+									:profit-center-code="pccForChild"
+									:disabled="false"
+									:prefill="prefillFromDb"
+									@dirty-change="(v) => (budgetDirty = !!v)"
+									@values-change="onChildValues"
+									@simulated="onSimulated"
+								/>
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -106,15 +155,22 @@
 								<!-- Sin botones, solo rango visible -->
 								<span class="range-label">Monate 1–12</span>
 							</div>
-							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
-								:forecast="forecast" :viewport-start="0" :viewport-size="12"
-								:is-editable-ym="() => false" @edit-forecast="() => { }" />
+							<ForecastTable
+								ref="tableRef"
+								:months="months"
+								:ventas="sales"
+								:budget="budget"
+								:forecast="forecast"
+								:viewport-start="0"
+								:viewport-size="12"
+								:is-editable-ym="() => false"
+								@edit-forecast="() => {}"
+							/>
 						</template>
 						<div v-else class="card-placeholder">Keine Auswahl</div>
 					</div>
 				</template>
 			</Card>
-
 		</main>
 	</div>
 </template>
@@ -170,8 +226,8 @@ async function loadMaster() {
 	mapClientToPC.value = resM.data?.clientToPc || {}
 	mapPCToClient.value = resM.data?.pcToClient || {}
 
-	clientById.value = Object.fromEntries(clients.value.map(c => [c.id, c]))
-	pcById.value = Object.fromEntries(profitCenters.value.map(p => [p.id, p]))
+	clientById.value = Object.fromEntries(clients.value.map((c) => [c.id, c]))
+	pcById.value = Object.fromEntries(profitCenters.value.map((p) => [p.id, p]))
 
 	// ✅ load CPC ids
 	const cpcIds = resM.data?.cpcIds || []
@@ -193,24 +249,31 @@ const loading = ref(false)
 const suspendGuard = ref(false)
 
 function normalizeMode(v) {
-	const s = String(v || '').toLowerCase().trim()
+	const s = String(v || '')
+		.toLowerCase()
+		.trim()
 	if (['client', 'cliente', 'kunde'].includes(s)) return 'client'
 	if (['pc', 'profit', 'profitcenter', 'profit center'].includes(s)) return 'pc'
 	return ''
 }
-const hasSelection = computed(() => !!mode.value && primaryId.value != null && secondaryId.value != null)
+const hasSelection = computed(
+	() => !!mode.value && primaryId.value != null && secondaryId.value != null,
+)
 
 const primaryOptions = computed(() => {
-	if (mode.value === 'client') return clients.value.map(c => ({ label: c.name, value: c.id }))
-	if (mode.value === 'pc') return profitCenters.value.map(p => ({ label: p.name, value: p.id }))
+	if (mode.value === 'client') return clients.value.map((c) => ({ label: c.name, value: c.id }))
+	if (mode.value === 'pc') return profitCenters.value.map((p) => ({ label: p.name, value: p.id }))
 	return []
 })
 
 function syncRouteQuery() {
 	const q = { ...route.query }
-	if (mode.value) q.mode = mode.value; else delete q.mode
-	if (primaryId.value != null) q.primaryId = String(primaryId.value); else delete q.primaryId
-	if (secondaryId.value != null) q.secondaryId = String(secondaryId.value); else delete q.secondaryId
+	if (mode.value) q.mode = mode.value
+	else delete q.mode
+	if (primaryId.value != null) q.primaryId = String(primaryId.value)
+	else delete q.primaryId
+	if (secondaryId.value != null) q.secondaryId = String(secondaryId.value)
+	else delete q.secondaryId
 	router.replace({ query: q })
 }
 async function restoreSelectionFromRoute() {
@@ -237,8 +300,10 @@ watch([mode, primaryId, secondaryId], () => syncRouteQuery())
    Fiscal year rule
 ---------------------------------------------------- */
 function budgetYearByToday() {
-	const d = new Date(), m = d.getMonth() + 1, y = d.getFullYear()
-	return (m >= 4 && m <= 12) ? y + 1 : y
+	const d = new Date(),
+		m = d.getMonth() + 1,
+		y = d.getFullYear()
+	return m >= 4 && m <= 12 ? y + 1 : y
 }
 const budgetFiscalYear = ref(budgetYearByToday())
 
@@ -246,15 +311,25 @@ const budgetFiscalYear = ref(budgetYearByToday())
    Current selection helpers
 ---------------------------------------------------- */
 function toNumberSafe(...vals) {
-	for (const v of vals) { const n = Number(v); if (Number.isFinite(n)) return n }
+	for (const v of vals) {
+		const n = Number(v)
+		if (Number.isFinite(n)) return n
+	}
 	return null
 }
-const currentClientId = computed(() => mode.value === 'client' ? primaryId.value : secondaryId.value)
-const currentPcId = computed(() => mode.value === 'client' ? secondaryId.value : primaryId.value)
+const currentClientId = computed(() =>
+	mode.value === 'client' ? primaryId.value : secondaryId.value,
+)
+const currentPcId = computed(() => (mode.value === 'client' ? secondaryId.value : primaryId.value))
 
 const currentCGN = computed(() => {
 	const c = clientById.value[currentClientId.value]
-	const v = toNumberSafe(c?.client_group_number, c?.group_number, c?.clientGroupNumber, c?.client_group)
+	const v = toNumberSafe(
+		c?.client_group_number,
+		c?.group_number,
+		c?.clientGroupNumber,
+		c?.client_group,
+	)
 	if (Number.isFinite(v)) return v
 	const fb = Number(mode.value === 'client' ? primaryId.value : secondaryId.value)
 	return Number.isFinite(fb) ? fb : null
@@ -266,8 +341,12 @@ const currentPCC = computed(() => {
 	const fb = Number(mode.value === 'client' ? secondaryId.value : primaryId.value)
 	return Number.isFinite(fb) ? fb : null
 })
-const cgnForChild = computed(() => Number.isFinite(Number(currentCGN.value)) ? Number(currentCGN.value) : null)
-const pccForChild = computed(() => Number.isFinite(Number(currentPCC.value)) ? Number(currentPCC.value) : null)
+const cgnForChild = computed(() =>
+	Number.isFinite(Number(currentCGN.value)) ? Number(currentCGN.value) : null,
+)
+const pccForChild = computed(() =>
+	Number.isFinite(Number(currentPCC.value)) ? Number(currentPCC.value) : null,
+)
 
 /* ---------------------------------------------------
    CPC id resolution and ready flags (✓)
@@ -321,7 +400,9 @@ async function refreshCaseFlagsForSecondary() {
 		const found = new Set()
 		for (const cpcId of cpcIds) {
 			try {
-				const { data } = await api.get('/api/budget-cases', { params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value } })
+				const { data } = await api.get('/api/budget-cases', {
+					params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value },
+				})
 				if (data?.data) found.add(cpcId)
 			} catch (e) {
 				if (e?.response?.status !== 404) {
@@ -332,7 +413,6 @@ async function refreshCaseFlagsForSecondary() {
 		hasCaseCpcSet.value = found
 	}
 }
-
 
 /* Prefill */
 const prefillFromDb = ref({ best_case: null, worst_case: null })
@@ -348,7 +428,9 @@ async function loadBudgetCasePrefill() {
 	try {
 		await ensureCsrf()
 		if (Number.isFinite(cpcId) && cpcId > 0) {
-			const { data } = await api.get('/api/budget-cases', { params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value } })
+			const { data } = await api.get('/api/budget-cases', {
+				params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value },
+			})
 			if (data?.data) {
 				const b = Number(data.data.best_case) || 0
 				const w = Number(data.data.worst_case) || 0
@@ -360,9 +442,16 @@ async function loadBudgetCasePrefill() {
 				prefillFromDb.value = { best_case: null, worst_case: null }
 			}
 		} else {
-			const cgn = Number(cgnForChild.value), pcc = Number(pccForChild.value)
+			const cgn = Number(cgnForChild.value),
+				pcc = Number(pccForChild.value)
 			if (Number.isFinite(cgn) && Number.isFinite(pcc)) {
-				const { data } = await api.get('/api/budget-cases', { params: { client_group_number: cgn, profit_center_code: pcc, fiscal_year: budgetFiscalYear.value } })
+				const { data } = await api.get('/api/budget-cases', {
+					params: {
+						client_group_number: cgn,
+						profit_center_code: pcc,
+						fiscal_year: budgetFiscalYear.value,
+					},
+				})
 				if (data?.data) {
 					const b = Number(data.data.best_case) || 0
 					const w = Number(data.data.worst_case) || 0
@@ -391,16 +480,22 @@ const secondaryOptions = computed(() => {
 	if (!mode.value || primaryId.value == null) return []
 	if (mode.value === 'client') {
 		const ids = mapClientToPC.value[primaryId.value] || []
-		return ids.map(id => {
-			const p = pcById.value[id]; if (!p) return null
-			return { label: `${p.code} — ${p.name}`, value: p.id }
-		}).filter(Boolean)
+		return ids
+			.map((id) => {
+				const p = pcById.value[id]
+				if (!p) return null
+				return { label: `${p.code} — ${p.name}`, value: p.id }
+			})
+			.filter(Boolean)
 	} else {
 		const ids = mapPCToClient.value[primaryId.value] || []
-		return ids.map(id => {
-			const c = clientById.value[id]; if (!c) return null
-			return { label: c.name, value: c.id }
-		}).filter(Boolean)
+		return ids
+			.map((id) => {
+				const c = clientById.value[id]
+				if (!c) return null
+				return { label: c.name, value: c.id }
+			})
+			.filter(Boolean)
 	}
 })
 
@@ -408,7 +503,7 @@ const decoratedSecondaryOptions = computed(() => {
 	const list = secondaryOptions.value
 	if (!list.length || !mode.value) return list
 
-	return list.map(opt => {
+	return list.map((opt) => {
 		const clientId = mode.value === 'client' ? primaryId.value : opt.value
 		const pcId = mode.value === 'client' ? opt.value : primaryId.value
 		const cpcId = cpcIdFor(clientId, pcId)
@@ -418,7 +513,7 @@ const decoratedSecondaryOptions = computed(() => {
 })
 
 const secondaryOptionsWithDots = computed(() => {
-	return decoratedSecondaryOptions.value.map(opt => {
+	return decoratedSecondaryOptions.value.map((opt) => {
 		const iconClass = opt.hasCase ? 'pi pi-check-circle' : 'pi pi-circle'
 		return { ...opt, label: `<i class="${iconClass}"></i>${opt.label}` }
 	})
@@ -428,14 +523,18 @@ const secondaryOptionsWithDots = computed(() => {
    Series (chart/table)
 ---------------------------------------------------- */
 function genMonths(n) {
-	const out = [], base = new Date(); base.setDate(1)
+	const out = [],
+		base = new Date()
+	base.setDate(1)
 	for (let i = 0; i < n; i++) {
 		const d = new Date(base.getFullYear(), base.getMonth() + i, 1)
 		out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
 	}
 	return out
 }
-function fillZeros(n) { return Array(n).fill(0) }
+function fillZeros(n) {
+	return Array(n).fill(0)
+}
 
 const months = ref(genMonths(18))
 const sales = ref(fillZeros(18))
@@ -451,13 +550,21 @@ async function loadSeries() {
 		await ensureCsrf()
 		const clientId = mode.value === 'client' ? primaryId.value : secondaryId.value
 		const profitCenterId = mode.value === 'client' ? secondaryId.value : primaryId.value
-		const { data } = await api.get('/api/forecast/series', { params: { clientId, profitCenterId } })
-		months.value = Array.isArray(data.months) && data.months.length ? data.months : genMonths(18)
+		const { data } = await api.get('/api/forecast/series', {
+			params: { clientId, profitCenterId },
+		})
+		months.value =
+			Array.isArray(data.months) && data.months.length ? data.months : genMonths(18)
 		sales.value = Array.isArray(data.sales) && data.sales.length ? data.sales : fillZeros(18)
-		budget.value = Array.isArray(data.budget) && data.budget.length ? data.budget : fillZeros(18)
-		forecast.value = Array.isArray(data.forecast) && data.forecast.length ? data.forecast : fillZeros(18)
-		orders.value = Array.isArray(data.orders) && data.orders.length ? data.orders : fillZeros(18)
-		originalForecast.value = Array.isArray(data.forecast) ? data.forecast.slice(0, 12) : fillZeros(12)
+		budget.value =
+			Array.isArray(data.budget) && data.budget.length ? data.budget : fillZeros(18)
+		forecast.value =
+			Array.isArray(data.forecast) && data.forecast.length ? data.forecast : fillZeros(18)
+		orders.value =
+			Array.isArray(data.orders) && data.orders.length ? data.orders : fillZeros(18)
+		originalForecast.value = Array.isArray(data.forecast)
+			? data.forecast.slice(0, 12)
+			: fillZeros(12)
 	} finally {
 		loading.value = false
 	}
@@ -467,23 +574,41 @@ async function loadSeries() {
    Chart overlays
 ---------------------------------------------------- */
 function cumulateToLen(arr, len) {
-	const out = []; let s = 0
-	for (let i = 0; i < len; i++) { s += Number(arr?.[i] ?? 0); out.push(s) }
+	const out = []
+	let s = 0
+	for (let i = 0; i < len; i++) {
+		s += Number(arr?.[i] ?? 0)
+		out.push(s)
+	}
 	return out
 }
 const overlayBest = ref([])
 const overlayWorst = ref([])
 
-function toCum(arr) { const out = []; let s = 0; for (let i = 0; i < arr.length; i++) { s += Number(arr[i] || 0); out.push(s) } return out }
+function toCum(arr) {
+	const out = []
+	let s = 0
+	for (let i = 0; i < arr.length; i++) {
+		s += Number(arr[i] || 0)
+		out.push(s)
+	}
+	return out
+}
 function onSimulated(payload) {
 	const t = Array.isArray(payload?.seriesTarget) ? payload.seriesTarget : []
-	const bestC = toCum(t.map(x => Number(x?.best || 0)))
-	const worstC = toCum(t.map(x => Number(x?.worst || 0)))
+	const bestC = toCum(t.map((x) => Number(x?.best || 0)))
+	const worstC = toCum(t.map((x) => Number(x?.worst || 0)))
 	const len = months.value?.length || 0
-	const dest = Math.min(12, len), start = Math.max(0, len - dest)
-	const B = Array(len).fill(0), W = Array(len).fill(0)
-	for (let i = 0; i < dest; i++) { B[start + i] = bestC[i] ?? 0; W[start + i] = worstC[i] ?? 0 }
-	overlayBest.value = B; overlayWorst.value = W
+	const dest = Math.min(12, len),
+		start = Math.max(0, len - dest)
+	const B = Array(len).fill(0),
+		W = Array(len).fill(0)
+	for (let i = 0; i < dest; i++) {
+		B[start + i] = bestC[i] ?? 0
+		W[start + i] = worstC[i] ?? 0
+	}
+	overlayBest.value = B
+	overlayWorst.value = W
 }
 const liveCumData = computed(() => {
 	if (!hasSelection.value) return null
@@ -492,10 +617,17 @@ const liveCumData = computed(() => {
 	const budgetCum = cumulateToLen(budget.value, len)
 	const forecastCum = cumulateToLen(forecast.value, len)
 	const fy = budgetCum.length ? Number(budgetCum[budgetCum.length - 1] || 0) : 0
-	return { months: months.value || [], sales_cum: salesCum, budget_cum: budgetCum, forecast_cum: forecastCum, budget_fy_line: Array(len).fill(fy) }
+	return {
+		months: months.value || [],
+		sales_cum: salesCum,
+		budget_cum: budgetCum,
+		forecast_cum: forecastCum,
+		budget_fy_line: Array(len).fill(fy),
+	}
 })
 const cumDataForChart = computed(() => {
-	const base = liveCumData.value; if (!base) return null
+	const base = liveCumData.value
+	if (!base) return null
 	const out = { ...base }
 	if (overlayBest.value.length === base.months.length) out.overlay_best = overlayBest.value
 	if (overlayWorst.value.length === base.months.length) out.overlay_worst = overlayWorst.value
@@ -520,9 +652,13 @@ function onChildValues({ best_case, worst_case }) {
 	const w = Number(worst_case) || 0
 	bestLatest.value = b
 	worstLatest.value = w
-	budgetDirty.value = (round4(b) !== round4(savedBest.value)) || (round4(w) !== round4(savedWorst.value))
+	budgetDirty.value =
+		round4(b) !== round4(savedBest.value) || round4(w) !== round4(savedWorst.value)
 }
-function sanitize(v, fb = 0) { const n = Number(v); return Number.isFinite(n) ? n : (Number(fb) || 0) }
+function sanitize(v, fb = 0) {
+	const n = Number(v)
+	return Number.isFinite(n) ? n : Number(fb) || 0
+}
 
 async function saveBudgetCase() {
 	if (!bcRef.value) return
@@ -545,7 +681,12 @@ async function saveBudgetCase() {
 			payload.client_profit_center_id = cpcId
 		} else {
 			if (!Number.isFinite(cgn) || !Number.isFinite(pcc)) {
-				toast.add({ severity: 'warn', summary: 'Hinweis', detail: 'Zuordnung (CGN/PCC) fehlt', life: 2500 })
+				toast.add({
+					severity: 'warn',
+					summary: 'Hinweis',
+					detail: 'Zuordnung (CGN/PCC) fehlt',
+					life: 2500,
+				})
 				return
 			}
 			payload.client_group_number = cgn
@@ -564,7 +705,12 @@ async function saveBudgetCase() {
 		savedWorst.value = worst
 		budgetDirty.value = false
 		bcRef.value?.markSaved?.()
-		toast.add({ severity: 'success', summary: 'Gespeichert', detail: 'Budget Case gespeichert', life: 2200 })
+		toast.add({
+			severity: 'success',
+			summary: 'Gespeichert',
+			detail: 'Budget Case gespeichert',
+			life: 2200,
+		})
 
 		await refreshCaseFlagsForSecondary()
 	} catch (e) {
@@ -584,9 +730,12 @@ function clearAll() {
 	forecast.value = fillZeros(18)
 	orders.value = fillZeros(18)
 	originalForecast.value = fillZeros(12)
-	overlayBest.value = []; overlayWorst.value = []
-	bestLatest.value = 0; worstLatest.value = 0
-	savedBest.value = 0; savedWorst.value = 0
+	overlayBest.value = []
+	overlayWorst.value = []
+	bestLatest.value = 0
+	worstLatest.value = 0
+	savedBest.value = 0
+	savedWorst.value = 0
 	prefillFromDb.value = { best_case: null, worst_case: null }
 	budgetDirty.value = false
 	bcRef.value?.hardReset?.()
@@ -594,18 +743,27 @@ function clearAll() {
 
 async function applyChange(kind, value) {
 	if (kind === 'mode') {
-		mode.value = value; primaryId.value = null; secondaryId.value = null; clearAll()
+		mode.value = value
+		primaryId.value = null
+		secondaryId.value = null
+		clearAll()
 	} else if (kind === 'primary') {
-		primaryId.value = value; secondaryId.value = null; clearAll();
+		primaryId.value = value
+		secondaryId.value = null
+		clearAll()
 		await refreshCaseFlagsForSecondary()
 	} else if (kind === 'secondary') {
-		secondaryId.value = value; clearAll()
+		secondaryId.value = value
+		clearAll()
 	}
 	await Promise.all([loadSeries(), loadBudgetCasePrefill()])
 }
 
 function guardedChange(kind, value) {
-	if (suspendGuard.value) { applyChange(kind, value); return }
+	if (suspendGuard.value) {
+		applyChange(kind, value)
+		return
+	}
 	if (hasUnsaved.value) {
 		pendingChange.value = { kind, value }
 		confirmVisible.value = true
@@ -614,10 +772,12 @@ function guardedChange(kind, value) {
 	}
 }
 async function saveAndApply() {
-	try { if (hasUnsaved.value) await saveBudgetCase() }
-	finally {
+	try {
+		if (hasUnsaved.value) await saveBudgetCase()
+	} finally {
 		confirmVisible.value = false
-		if (pendingChange.value) await applyChange(pendingChange.value.kind, pendingChange.value.value)
+		if (pendingChange.value)
+			await applyChange(pendingChange.value.kind, pendingChange.value.value)
 		pendingChange.value = null
 		bcRef.value?.hardReset?.()
 	}
@@ -631,8 +791,9 @@ async function discardAndApply() {
 }
 
 function handleNext() {
-	const list = secondaryOptions.value; if (!list?.length) return
-	const idx = list.findIndex(o => o.value === secondaryId.value)
+	const list = secondaryOptions.value
+	if (!list?.length) return
+	const idx = list.findIndex((o) => o.value === secondaryId.value)
 	const n = (idx >= 0 ? idx + 1 : 0) % list.length
 	guardedChange('secondary', list[n].value)
 }
@@ -643,7 +804,10 @@ function handleNext() {
 watch([mode, primaryId], () => {
 	if (primaryId.value != null) refreshCaseFlagsForSecondary()
 })
-watch(secondaryId, () => { loadSeries(); loadBudgetCasePrefill() })
+watch(secondaryId, () => {
+	loadSeries()
+	loadBudgetCasePrefill()
+})
 
 onMounted(async () => {
 	budgetFiscalYear.value = budgetYearByToday()
@@ -699,7 +863,7 @@ const selectedPCName = computed(() => {
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	gap: .75rem;
+	gap: 0.75rem;
 }
 
 .filters-footer {
@@ -781,47 +945,101 @@ const selectedPCName = computed(() => {
 
 /* Charts */
 .charts-row {
-	display: contents;
-}
-
-.chart-card {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-	min-height: 0;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gap);
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
 }
 
 .chart-lg {
-	grid-column: span 9;
+  grid-column: span 9;
 }
 
 .chart-sm {
-	grid-column: span 3;
+  grid-column: span 3;
 }
 
-.chart-pad {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	height: 100%;
+/* El contenedor del Card ocupa todo y permite que el body crezca */
+.chart-card {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
+/* PrimeVue Card: header fijo, body estirable */
+.chart-card :deep(.p-card) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.chart-card :deep(.p-card-header) {
+  flex: 0 0 auto;
+}
+.chart-card :deep(.p-card-body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  /* si querés margen interno, ajustá aquí: */
+  padding: 8px 10px;
+}
+.chart-card :deep(.p-card-content) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* Tus wrappers internos también llenan el alto */
+.chart-pad,
 .chart-body {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* El lienzo del chart ocupa 100% del espacio disponible */
+.chart-card :deep(canvas),
+.chart-card :deep(svg) {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+}
+
+.chart-card :deep(.p-card-header) {
+  padding: .25rem .5rem !important;   /* lo que pediste */
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+
+  /* toques suaves opcionales (no rompen nada) */
+  font-weight: 600;
+  font-size: .95rem;
+  color: var(--text, #334155);
+  background: color-mix(in oklab, var(--surface) 94%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--border, #e5e7eb) 70%, transparent);
+}
+
+/* Si incluís iconos en el header en algún momento */
+.chart-card :deep(.p-card-header .pi) {
+  margin-right: .25rem;
 }
 
 /* Table */
 .table-card {
 	grid-column: 1 / -1;
+	height: clamp(240px, 25vh, 360px);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 }
 
 .table-pad {
-	padding: .15rem;
+	padding: 0.15rem;
 }
 
 .nav-bar {

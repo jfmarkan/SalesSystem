@@ -4,22 +4,46 @@
 		<aside class="aside-col">
 			<Card class="flat-card tree-card">
 				<template #content>
-					<Tree :value="nodes" :expandedKeys="expandedKeys" v-model:selectionKeys="selectionKeys"
-						selectionMode="single" filter filterMode="lenient" :filterBy="'label'"
-						v-model:filterValue="treeFilter" class="w-full p-0" @node-expand="onNodeExpand"
-						@node-select="onNodeSelect" @node-unselect="onNodeUnselect"
-						@update:selectionKeys="onSelectionUpdate">
+					<Tree
+						:value="nodes"
+						:expandedKeys="expandedKeys"
+						v-model:selectionKeys="selectionKeys"
+						selectionMode="single"
+						filter
+						filterMode="lenient"
+						:filterBy="'label'"
+						v-model:filterValue="treeFilter"
+						class="w-full p-0"
+						@node-expand="onNodeExpand"
+						@node-select="onNodeSelect"
+						@node-unselect="onNodeUnselect"
+						@update:selectionKeys="onSelectionUpdate"
+					>
 						<template #default="{ node }">
-							<div class="flex align-items-center gap-2">
-								<i v-if="node.data?.type === 'company'" class="pi pi-home text-primary"></i>
-								<i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500"></i>
+							<div class="tree-node-content">
+								<i
+									v-if="node.data?.type === 'company'"
+									class="pi pi-home text-primary"
+								></i>
+								<i
+									v-else-if="node.data?.type === 'team'"
+									class="pi pi-sitemap text-500"
+								></i>
 								<i v-else-if="node.data?.type === 'user'" class="pi pi-user"></i>
-								<i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500"></i>
+								<i
+									v-else-if="node.data?.type === 'pc'"
+									class="pi pi-database text-500"
+								></i>
 
 								<!-- Cliente: sin icono, letra con color + 'LETRA - Nombre' -->
 								<template v-else-if="node.data?.type === 'client'">
-									<span class="classification-badge"
-										:class="'class-' + (node.data.classification || 'x').toLowerCase()">
+									<span
+										class="classification-badge"
+										:class="
+											'class-' +
+											(node.data.classification || 'x').toLowerCase()
+										"
+									>
 										{{ node.data.classification }}
 									</span>
 								</template>
@@ -37,8 +61,13 @@
 			<div class="header-grid">
 				<Card class="flat-card header-card">
 					<template #content>
-						<AnalyticsBreadcrumb :nodes="nodes" :selectedKey="selectedKey" @navigate="selectByKey"
-							class="w-full p-0" />
+						<div class="breadcrumb-wrapper">
+							<AnalyticsBreadcrumb
+								:nodes="nodes"
+								:selectedKey="selectedKey"
+								@navigate="selectByKey"
+							/>
+						</div>
 					</template>
 				</Card>
 
@@ -47,16 +76,24 @@
 						<div class="fy-switch">
 							<Button icon="pi pi-angle-left" text @click="prevFY" />
 							<span class="fy-text">{{ fyLabel }}</span>
-							<Button icon="pi pi-angle-right" text @click="nextFY"
-								:disabled="fyStart >= currentFYStart" />
+							<Button
+								icon="pi pi-angle-right"
+								text
+								@click="nextFY"
+								:disabled="fyStart >= currentFYStart"
+							/>
 						</div>
 					</template>
 				</Card>
 
 				<Card class="flat-card unit-card">
 					<template #content>
-						<SelectButton v-model="unitMode" :options="unitOptions" optionLabel="label"
-							optionValue="value" />
+						<SelectButton
+							v-model="unitMode"
+							:options="unitOptions"
+							optionLabel="label"
+							optionValue="value"
+						/>
 					</template>
 				</Card>
 			</div>
@@ -64,21 +101,37 @@
 			<div class="charts-grid">
 				<Card class="flat-card line-card" :class="{ wide: !showStacked }">
 					<template #content>
-						<Chart v-if="series" type="line" :data="chartData" :options="chartOptions" class="chart" />
+						<Chart
+							v-if="series"
+							type="line"
+							:data="chartData"
+							:options="chartOptions"
+							class="chart"
+						/>
 					</template>
 				</Card>
 
 				<Card v-if="series && showStacked" class="flat-card stack-card">
 					<template #content>
-						<Chart type="bar" :data="stackedData" :options="stackedOptions" class="chart" />
+						<Chart
+							type="bar"
+							:data="stackedData"
+							:options="stackedOptions"
+							class="chart"
+						/>
 					</template>
 				</Card>
 			</div>
 
 			<Card class="flat-card table-card">
 				<template #content>
-					<ForecastTable v-if="series" :months="months" :sales="salesArr" :budget="budgetArr"
-						:forecast="fcstArr" />
+					<ForecastTable
+						v-if="series"
+						:months="months"
+						:sales="salesArr"
+						:budget="budgetArr"
+						:forecast="fcstArr"
+					/>
 				</template>
 			</Card>
 		</main>
@@ -87,11 +140,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import Card from 'primevue/card'
-import Tree from 'primevue/tree'
-import Button from 'primevue/button'
-import SelectButton from 'primevue/selectbutton'
-import Chart from 'primevue/chart'
 import api from '@/plugins/axios'
 import AnalyticsBreadcrumb from '@/components/analytics/CompanyBreadcrumb.vue'
 import ForecastTable from '@/components/analytics/AnalyticsTable.vue'
@@ -113,14 +161,14 @@ const series = ref(null)
 const unitOptions = computed(() =>
 	series.value?.unit_mode_allowed
 		? [
-			{ label: 'm³', value: 'm3' },
-			{ label: '€', value: 'euro' },
-			{ label: 'VK-EH', value: 'units' },
-		]
+				{ label: 'm³', value: 'm3' },
+				{ label: '€', value: 'euro' },
+				{ label: 'VK-EH', value: 'units' },
+			]
 		: [
-			{ label: 'm³', value: 'm3' },
-			{ label: '€', value: 'euro' },
-		],
+				{ label: 'm³', value: 'm3' },
+				{ label: '€', value: 'euro' },
+			],
 )
 
 // helpers numéricos
@@ -164,9 +212,7 @@ const budgetArr = computed(() => {
 	const wonTotal = toNum(s?.extra_breakdown?.won?.[k]) || 0
 	const remaining = toNum(s?.extra_quotas?.[k] ?? 0)
 
-	const delta = (assignedTotal > 0 || wonTotal > 0)
-		? (assignedTotal - wonTotal)
-		: remaining
+	const delta = assignedTotal > 0 || wonTotal > 0 ? assignedTotal - wonTotal : remaining
 
 	return distributeProportional(base, delta)
 })
@@ -295,7 +341,7 @@ const chartData = computed(() => {
 			{
 				label: 'Sales (acum.)',
 				data: cum(sales),
-				borderColor: '#2563eb',
+				borderColor: '#6E8DA8',
 				backgroundColor: '#2563eb33',
 				fill: false,
 				tension: 0.3,
@@ -303,7 +349,7 @@ const chartData = computed(() => {
 			{
 				label: 'Budget (acum.)',
 				data: cum(budget),
-				borderColor: '#16a34a',
+				borderColor: '#7AA488',
 				backgroundColor: '#16a34a33',
 				fill: false,
 				tension: 0.4,
@@ -311,7 +357,7 @@ const chartData = computed(() => {
 			{
 				label: 'Forecast (acum.)',
 				data: cum(fcst),
-				borderColor: '#f59e0b',
+				borderColor: '#B3A45B',
 				backgroundColor: '#f59e0b33',
 				fill: false,
 				tension: 0.4,
@@ -319,7 +365,7 @@ const chartData = computed(() => {
 			{
 				label: 'Budget FY',
 				data: fyLine,
-				borderColor: '#64748b',
+				borderColor: '#64748B',
 				borderDash: [6, 6],
 				fill: false,
 				tension: 0,
@@ -352,8 +398,8 @@ const stackedData = computed(() => {
 	return {
 		labels: ['FY'],
 		datasets: [
-			{ label: 'Budget base', data: [base], backgroundColor: '#16a34a' },
-			{ label: 'Extra quota', data: [extra], backgroundColor: '#7c3aed' },
+			{ label: 'Budget base', data: [base], backgroundColor: '#7AA488' },
+			{ label: 'Extra quota', data: [extra], backgroundColor: '#A47A96' },
 		],
 	}
 })
@@ -362,7 +408,9 @@ const stackedOptions = computed(() => ({
 	responsive: true,
 	plugins: {
 		legend: { position: 'bottom' },
-		tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtThousand(ctx.parsed.y)}` } },
+		tooltip: {
+			callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtThousand(ctx.parsed.y)}` },
+		},
 	},
 	scales: {
 		x: { stacked: true },
@@ -370,7 +418,9 @@ const stackedOptions = computed(() => ({
 	},
 }))
 
-onMounted(() => { loadRoot() })
+onMounted(() => {
+	loadRoot()
+})
 </script>
 
 <style scoped>
@@ -403,10 +453,17 @@ onMounted(() => { loadRoot() })
 	overflow-y: auto;
 }
 
+.tree-node-content {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
 /* === MAIN === */
 .main-col {
-	display: flex;
+	display: grid;
 	flex-direction: column;
+	grid-template-rows: auto 1fr auto;
 	gap: 12px;
 	min-height: 0;
 }
@@ -417,7 +474,10 @@ onMounted(() => { loadRoot() })
 	gap: 12px;
 }
 
-.header-card,
+.header-card{
+    font-size: .85rem;
+}
+
 .fy-card,
 .unit-card {
 	min-height: 46px;
@@ -441,7 +501,7 @@ onMounted(() => { loadRoot() })
 .charts-grid {
 	display: grid;
 	grid-template-columns: 9fr 3fr;
-	gap: 12px;
+	gap: 16px;
 	min-height: 0;
 }
 
@@ -452,6 +512,7 @@ onMounted(() => { loadRoot() })
 .chart {
 	height: 480px;
 	width: 100%;
+    padding: 1rem;
 }
 
 @media (max-width: 1024px) {
@@ -465,13 +526,9 @@ onMounted(() => { loadRoot() })
 }
 
 .table-card {
-	flex: 1 1 auto;
-	overflow: auto;
-	padding-bottom: 4px;
-}
-
-.table-card :deep(.p-card-content) {
-	padding: 0.4rem 0.6rem !important;
+	flex: 0 0 auto;
+	overflow: visible;
+	padding: 0.5rem;
 }
 
 .flat-card :deep(.p-card-body) {
@@ -496,37 +553,36 @@ onMounted(() => { loadRoot() })
 }
 
 .class-a {
-	background-color: #668C73;
+	background-color: #668c73;
 }
 
 /* Azul */
 .class-b {
-	background-color: #59768E;
+	background-color: #59768e;
 }
 
 /* Verde */
 .class-c {
-	background-color: #978B4B;
+	background-color: #978b4b;
 }
 
 /* Amarillo */
 .class-d {
-	background-color: #A3535B;
+	background-color: #a3535b;
 }
 
 /* Rojo */
 .class-x {
-	background-color: #8C8C8C;
+	background-color: #8c8c8c;
 }
 
 /* Gris */
 .class-pa {
-	background-color: #91B79D;
+	background-color: #91b79d;
 }
 
 /* Violeta */
 .class-pb {
-	background-color: #86A2BD;
+	background-color: #86a2bd;
 }
-
 </style>

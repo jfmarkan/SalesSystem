@@ -3,7 +3,6 @@
 /* English code & comments; UI strings German */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import Button from 'primevue/button'
 import api from '@/plugins/axios'
 
 const props = defineProps({

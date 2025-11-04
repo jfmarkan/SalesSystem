@@ -160,16 +160,25 @@ function setMode(v) {
   width: 100%;
 }
 
-/* el wrapper interno que contiene la <ul> */
+.listbox-grow :deep(.p-listbox) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
+}
 .listbox-grow :deep(.p-listbox-list-wrapper) {
   flex: 1 1 auto;
   overflow-y: auto;
   min-height: 0;
+  max-height: none;
 }
 
 /* anulá el alto predeterminado del tema */
 .listbox-grow :deep(.p-listbox-list) {
   height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none !important;
 }
 
