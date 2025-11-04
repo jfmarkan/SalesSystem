@@ -16,7 +16,6 @@ import Avatar from 'primevue/avatar'
 import AvatarGroup from 'primevue/avatargroup'
 import Badge from 'primevue/badge'
 import Button from 'primevue/button'
-import Calendar from 'primevue/calendar'
 import Card from 'primevue/card'
 import Carousel from 'primevue/carousel'
 import Checkbox from 'primevue/checkbox'
@@ -28,8 +27,8 @@ import ConfirmPopup from 'primevue/confirmpopup'
 import ContextMenu from 'primevue/contextmenu'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import DatePicker from 'primevue/datepicker' // nuevo en v4 reciente
 import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
 import Editor from 'primevue/editor' // verifica versión si usas v4 reciente
 import Fieldset from 'primevue/fieldset'
 import FileUpload from 'primevue/fileupload'
@@ -56,6 +55,7 @@ import RadioButton from 'primevue/radiobutton'
 import Rating from 'primevue/rating'
 import ScrollPanel from 'primevue/scrollpanel'
 import ScrollTop from 'primevue/scrolltop'
+import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import Sidebar from 'primevue/sidebar'
 import Skeleton from 'primevue/skeleton'
@@ -118,7 +118,6 @@ export default function setupPrimeVue(app) {
   app.component('AvatarGroup', AvatarGroup)
   app.component('Badge', Badge)
   app.component('Button', Button)
-  app.component('Calendar', Calendar)
   app.component('Card', Card)
   app.component('Carousel', Carousel)
   app.component('Checkbox', Checkbox)
@@ -129,9 +128,9 @@ export default function setupPrimeVue(app) {
   app.component('ConfirmPopup', ConfirmPopup)
   app.component('ContextMenu', ContextMenu)
   app.component('DataTable', DataTable)
+  app.component('DatePicker', DatePicker)
   app.component('Column', Column)
   app.component('Dialog', Dialog)
-  app.component('Dropdown', Dropdown)
   app.component('Editor', Editor)
   app.component('Fieldset', Fieldset)
   app.component('FileUpload', FileUpload)
@@ -158,6 +157,7 @@ export default function setupPrimeVue(app) {
   app.component('Rating', Rating)
   app.component('ScrollPanel', ScrollPanel)
   app.component('ScrollTop', ScrollTop)
+  app.component('Select', Select)
   app.component('SelectButton', SelectButton)
   app.component('Sidebar', Sidebar)
   app.component('Skeleton', Skeleton)

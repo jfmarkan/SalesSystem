@@ -205,7 +205,6 @@ const EmptyState = defineComponent({
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	gap: var(--gap);
-	padding: var(--pad-y) var(--pad-x);
 	min-height: 100%;
 	box-sizing: border-box;
 }
@@ -224,7 +223,7 @@ const EmptyState = defineComponent({
 /* KPIs */
 .left-col {
 	display: grid;
-	grid-template-rows: auto auto;
+	grid-template-rows: auto 1fr;
 	gap: var(--gap);
 	min-height: 0;
 }
@@ -233,6 +232,7 @@ const EmptyState = defineComponent({
 	display: grid;
 	grid-template-columns: repeat(12, minmax(0, 1fr));
 	gap: var(--gap);
+	max-height: 150px;
 }
 
 .kpi-row>.kpi {
@@ -247,17 +247,55 @@ const EmptyState = defineComponent({
 }
 
 .main-row .col-8 {
-	grid-column: span 7;
+	grid-column: span 6;
 }
 
 .main-row .col-4 {
-	grid-column: span 5;
+	grid-column: span 6;
 }
 
 .main-row .col-8>.p-card,
 .main-row .col-4>.p-card {
-	max-height: 320px;
 	overflow: hidden;
+}
+
+.main-row .col-8 {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.main-row .col-8 > .p-card {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.main-row .col-8 > .p-card :deep(.p-card-body) {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 8px 10px !important;
+}
+
+.main-row .col-8 > .p-card :deep(.widget) {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100% !important;
+}
+
+/* Asegura que el radar use todo el alto */
+:deep(.chart-area) {
+	flex: 1;
+	height: 100% !important;
+	min-height: 0;
+	display: flex;
 }
 
 .main-row .p-card .widget {

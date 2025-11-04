@@ -1,10 +1,11 @@
 <template>
+	<Toast />
 	<div class="budget-case-grid">
 		<Dialog v-model:visible="confirmVisible" modal dismissable-mask header="Ungespeicherte Änderungen"
 			:style="{ width: '520px' }">
 			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
 			<div class="flex justify-content-end gap-2">
-				<Button label="Abbrechen" severity="secondary" 
+				<Button label="Abbrechen" severity="secondary"
 					@click="() => { confirmVisible = false; pendingChange.value = null }" />
 				<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
 				<Button label="Speichern" severity="success" icon="pi pi-save" @click="saveAndApply" />
@@ -124,7 +125,6 @@ import { useRoute, useRouter } from 'vue-router'
 import Toast from 'primevue/toast'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import Badge from 'primevue/badge'
 import { useToast } from 'primevue/usetoast'
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
@@ -372,17 +372,19 @@ async function loadBudgetCasePrefill() {
 				}
 			}
 		}
-	} catch { }
+	} catch {
+		// ignore
+	}
 	budgetDirty.value = false
 	await nextTick()
 	budgetDirty.value = false
 }
 
-const hasCaseForSelection = computed(() => {
-	if (!hasSelection.value) return false
-	const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
-	return Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
-})
+// const hasCaseForSelection = computed(() => {
+// 	if (!hasSelection.value) return false
+// 	const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
+// 	return Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
+// })
 
 /* Secondary options + icons */
 const secondaryOptions = computed(() => {

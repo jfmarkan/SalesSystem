@@ -340,7 +340,6 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { GridLayout, GridItem } from 'vue3-grid-layout'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import Dialog from 'primevue/dialog'
@@ -355,28 +354,10 @@ import Calendar from 'primevue/calendar'
 
 import api from '@/plugins/axios'
 import { ensureCsrf } from '@/plugins/csrf'
-import GlassCard from '@/components/ui/GlassCard.vue'
 import ComponentTable from '@/components/tables/ComponentTable.vue'
 import WonChanceModal from '@/components/modals/WonChanceModal.vue'
 
 const toast = useToast()
-
-/* Layout */
-const layout = ref([
-  { i: 'filters', x: 0, y: 0, w: 2, h: 47, static: true, type: 'list' },
-  { i: 'title', x: 2, y: 0, w: 10, h: 4, static: true, type: 'title' },
-  { i: 'chart', x: 2, y: 4, w: 7, h: 26, static: true, type: 'form' },
-  { i: 'chart2', x: 9, y: 4, w: 3, h: 26, static: true, type: 'extras' },
-  { i: 'table', x: 2, y: 30, w: 10, h: 17, static: true, type: 'table' },
-])
-function getTitle(item) {
-  if (item.type === 'title') return ''
-  if (item.type === 'list') return 'Chancen'
-  if (item.type === 'form') return 'Chance bearbeiten / erstellen'
-  if (item.type === 'extras') return 'Versionen'
-  if (item.type === 'table') return 'Tabelle'
-  return ''
-}
 
 /* Helpers */
 const confirmVisible = ref(false)
@@ -611,8 +592,6 @@ async function selectClient(client) {
   await fetchClientTakenPcsIfPossible()
 }
 
-/* Base form */
-const creating = ref(false)
 const opMonthModel = ref(null)
 const suppressStatusWatch = ref(false)
 
@@ -720,7 +699,9 @@ async function getSeasonalityForPc(code, fy) {
     const { data } = await api.get('/api/extra-quota/profit-centers/seasonality', { params: { profit_center_code: Number(code), fiscal_year: fy } })
     const arr = parsePayload(data)
     if (arr.some((v) => v > 0)) return arr
-  } catch {}
+  } catch {
+	// ignore
+  }
   return Array(12).fill(1)
 }
 

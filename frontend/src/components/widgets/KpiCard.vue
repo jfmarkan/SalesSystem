@@ -1,99 +1,99 @@
 <template>
-  <div class="kpi-root">
-    <div class="kpi-title">{{ current.label }}</div>
+	<div class="kpi-root">
+		<div class="kpi-title">{{ current.label }}</div>
 
-    <div class="kpi-main">
-      <div class="kpi-value">
-        <span v-if="current.unit === '%'">{{ formatPercent(current.value) }}</span>
-        <span v-else>{{ formatNumber(current.value) }}</span>
-      </div>
-      <div class="kpi-icon" :style="iconStyle">
-        <i :class="['pi', iconName]" />
-      </div>
-    </div>
+		<div class="kpi-main">
+			<div class="kpi-value">
+				<span v-if="current.unit === '%'">{{ formatPercent(current.value) }}</span>
+				<span v-else>{{ formatNumber(current.value) }}</span>
+			</div>
+			<div class="kpi-icon" :style="iconStyle">
+				<i :class="['pi', iconName]" />
+			</div>
+		</div>
 
-    <div class="kpi-foot">
-      <div class="kpi-sub" v-if="subnote">{{ subnote }}</div>
+		<div class="kpi-foot">
+			<div class="kpi-sub" v-if="subnote">{{ subnote }}</div>
 
-      <div class="kpi-selector" v-if="editable">
-        <label>KPIs:</label>
-        <select :value="modelValue" @change="$emit('update:modelValue', $event.target.value)">
-          <option v-for="(v, key) in kpis" :key="key" :value="key">{{ v.label }}</option>
-        </select>
-      </div>
-    </div>
-  </div>
+			<div class="kpi-selector" v-if="editable">
+				<label>KPIs:</label>
+				<select :value="modelValue" @change="$emit('update:modelValue', $event.target.value)">
+					<option v-for="(v, key) in kpis" :key="key" :value="key">{{ v.label }}</option>
+				</select>
+			</div>
+		</div>
+	</div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 
 const props = defineProps({
-  modelValue: { type: String, required: true },
-  kpis:       { type: Object, required: true },
-  unit:       { type: String, default: 'VK-EH' },
-  editable:   { type: Boolean, default: false },
-  icon:       { type: String, default: '' },
-  accent:     { type: String, default: '' },
-  note:       { type: String, default: '' }
+	modelValue: { type: String, required: true },
+	kpis: { type: Object, required: true },
+	unit: { type: String, default: 'VK-EH' },
+	editable: { type: Boolean, default: false },
+	icon: { type: String, default: '' },
+	accent: { type: String, default: '' },
+	note: { type: String, default: '' }
 })
 defineEmits(['update:modelValue'])
 
 const current = computed(() => props.kpis[props.modelValue] ?? { label: 'KPI', value: 0, unit: '' })
 
 function formatNumber(n) {
-  const num = Number(n) || 0
-  const abs = Math.abs(num)
-  const sign = num < 0 ? '-' : ''
+	const num = Number(n) || 0
+	const abs = Math.abs(num)
+	const sign = num < 0 ? '-' : ''
 
-  if (abs >= 1_000_000) {
-    return sign + new Intl.NumberFormat('de-DE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(abs / 1_000_000) + ' M'
-  }
+	if (abs >= 1_000_000) {
+		return sign + new Intl.NumberFormat('de-DE', {
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2
+		}).format(abs / 1_000_000) + ' M'
+	}
 
-  if (abs >= 1_000) {
-    return sign + new Intl.NumberFormat('de-DE', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1
-    }).format(abs / 1_000) + ' k'
-  }
+	if (abs >= 1_000) {
+		return sign + new Intl.NumberFormat('de-DE', {
+			minimumFractionDigits: 1,
+			maximumFractionDigits: 1
+		}).format(abs / 1_000) + ' k'
+	}
 
-  return sign + new Intl.NumberFormat('de-DE', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(abs)
+	return sign + new Intl.NumberFormat('de-DE', {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 2
+	}).format(abs)
 }
 
 function formatPercent(p) {
-  const v = Number(p) || 0
-  return new Intl.NumberFormat('de-DE', {
-    style: 'percent',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1
-  }).format(v / 100)
+	const v = Number(p) || 0
+	return new Intl.NumberFormat('de-DE', {
+		style: 'percent',
+		minimumFractionDigits: 1,
+		maximumFractionDigits: 1
+	}).format(v / 100)
 }
 
 const defaultIconByKpi = {
-  ist_vs_prognose: 'pi-chart-line',
-  ist_vs_budget: 'pi-wallet',
-  diff_ist_budget_m3: 'pi-database',
-  umsatz_eur: 'pi-euro'
+	ist_vs_prognose: 'pi-chart-line',
+	ist_vs_budget: 'pi-wallet',
+	diff_ist_budget_m3: 'pi-database',
+	umsatz_eur: 'pi-euro'
 }
 const defaultAccentByKpi = {
-  ist_vs_prognose: 'cyan',
-  ist_vs_budget: 'orange',
-  diff_ist_budget_m3: 'slate',
-  umsatz_eur: 'violet'
+	ist_vs_prognose: 'cyan',
+	ist_vs_budget: 'orange',
+	diff_ist_budget_m3: 'slate',
+	umsatz_eur: 'violet'
 }
 const gradientByAccent = {
-  cyan:   'linear-gradient(to bottom, #22d3ee, #0891b2)',
-  orange: 'linear-gradient(to bottom, #fb923c, #ea580c)',
-  slate:  'linear-gradient(to bottom, #94a3b8, #475569)',
-  violet: 'linear-gradient(to bottom, #a78bfa, #7c3aed)',
-  emerald:'linear-gradient(to bottom, #34d399, #059669)',
-  rose:   'linear-gradient(to bottom, #fb7185, #e11d48)'
+	cyan: 'linear-gradient(to bottom, #22d3ee, #0891b2)',
+	orange: 'linear-gradient(to bottom, #fb923c, #ea580c)',
+	slate: 'linear-gradient(to bottom, #94a3b8, #475569)',
+	violet: 'linear-gradient(to bottom, #a78bfa, #7c3aed)',
+	emerald: 'linear-gradient(to bottom, #34d399, #059669)',
+	rose: 'linear-gradient(to bottom, #fb7185, #e11d48)'
 }
 
 const kpiId = computed(() => props.modelValue)
@@ -105,31 +105,59 @@ const subnote = computed(() => props.note || (current.value.unit && current.valu
 </script>
 
 <style scoped>
-.kpi-root{
-  display:flex; flex-direction:column; height:100%;
-  gap:.75rem;
+.kpi-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: .75rem;
 }
 
-.kpi-title{
-  font-size:.9rem; line-height:1.2; font-weight:500; color:#334155;
+.kpi-title {
+	font-size: .9rem;
+	line-height: 1.2;
+	font-weight: 500;
+	color: #334155;
 }
 
-.kpi-main{
-  display:flex; align-items:center; justify-content:space-between; gap:1rem;
-}
-.kpi-value{
-  font-size:2.25rem; line-height:1; font-weight:800; color:#0f172a;
+.kpi-main {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
 }
 
-.kpi-icon{
-  width:2.75rem; height:2.75rem; border-radius:.8rem; color:#fff;
-  display:flex; align-items:center; justify-content:center;
+.kpi-value {
+	font-size: 2.25rem;
+	line-height: 1;
+	font-weight: 800;
+	color: #0f172a;
 }
-.kpi-icon .pi{ font-size:1.25rem; line-height:1; }
 
-.kpi-foot{
-  margin-top:.25rem;
-  display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+.kpi-icon {
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: .8rem;
+	color: #fff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
-.kpi-sub{ color:#64748b; font-weight:500; }
+
+.kpi-icon .pi {
+	font-size: 1.25rem;
+	line-height: 1;
+}
+
+.kpi-foot {
+	margin-top: .25rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .5rem;
+}
+
+.kpi-sub {
+	color: #64748b;
+	font-weight: 500;
+}
 </style>

@@ -314,7 +314,7 @@ function onChangeDueDate(ev, val) { if (!ev || ev.type !== 'action' || !val) ret
 <style scoped>
 /* shell */
 .cal {
-	padding: 12px;
+
 	display: grid;
 	gap: 10px;
 	position: relative;
@@ -332,11 +332,11 @@ function onChangeDueDate(ev, val) { if (!ev || ev.type !== 'action' || !val) ret
 }
 
 .btn {
-	background: transparent;
-	border: 1px solid rgba(0,0,0, 0.25);
-	color: #e5e7eb;
+	background: #737373;
+	border: 1px solid #737373;
+	color: #fff;
 	border-radius: 8px;
-	padding: 4px 8px;
+	padding: 4px 4px;
 	cursor: pointer;
 }
 

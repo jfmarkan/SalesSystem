@@ -10,7 +10,7 @@ use App\Models\Assignment;
 class DetectDeviations extends Command
 {
     protected $signature = 'deviations:detect {--user_id=}';
-    protected $description = 'Detect deviations per user & profit center (Forecast vs Budget next 6 months (FY Apr–Mar), Sales vs Budget previous month)';
+    protected $description = 'Detect deviations per user & profit center (Forecast vs Budget ventana inteligente FY Apr–Mar, Sales vs Budget mes anterior)';
 
     /** caches */
     private array $seasonalityCache = [];   // key: hash(cpcIds,fystart) => [1..12] = weight
@@ -19,11 +19,6 @@ class DetectDeviations extends Command
     public function handle(): int
     {
         $now = Carbon::now();
-
-    //    if ($now->day < 4) {
-    //        $this->info('Skipping: day < 4.');
-    //        return self::SUCCESS;
-    //    }
 
         $onlyUserId = $this->option('user_id') ? (int)$this->option('user_id') : null;
 
@@ -52,7 +47,7 @@ class DetectDeviations extends Command
 
                 if (!$cpcIds) continue;
 
-                // A) FORECAST vs BUDGET (próximos 6 meses, EXCLUYENDO mes actual) + VENTAS
+                // A) FORECAST vs BUDGET (mes en curso + 5; si cruza de FY y el mes no tiene budget -> corto la ventana)
                 $fw = $this->buildForecastWindowSeries(
                     cpcIds: $cpcIds,
                     pcCode: (string)$pcCode,
@@ -71,11 +66,11 @@ class DetectDeviations extends Command
                             m:                (int)$now->month,
                             type:             'FORECAST',
                             percent:          round($ratioF * 100, 6),
-                            sales:            (float)array_sum($fw['sales_series']),  // 👈 ventas agregadas
+                            sales:            (float)array_sum($fw['sales_series']),
                             budget:           (float)$fw['total_budget'],
                             forecast:         (float)$fw['total_forecast'],
                             months:           $fw['months'],
-                            salesSeries:      $fw['sales_series'],                    // 👈 serie de ventas
+                            salesSeries:      $fw['sales_series'],
                             budgetSeries:     $fw['budget_series'],
                             forecastSeries:   $fw['forecast_series'],
                         );
@@ -144,21 +139,29 @@ class DetectDeviations extends Command
         $totalBudget = 0.0;
         $totalForecast = 0.0;
 
-        $cursor = $start->copy()->addMonth(); // siguiente mes
+        // incluir mes actual
+        $cursor = $start->copy();
+        $refFyStart = $this->fyStartFor((int)$cursor->year, (int)$cursor->month);
 
         for ($i = 0; $i < $monthsCount; $i++) {
             $y = (int)$cursor->year;   // año calendario del mes
             $m = (int)$cursor->month;  // 1..12
             $fyStart = $this->fyStartFor($y, $m);
 
-            $months[] = sprintf('%04d-%02d', $y, $m);
-
-            // Budget base (calendario) + cuota extra mensual
+            // Budget base del mes (calendario)
             $bBase = (float) DB::table('budgets')
                 ->whereIn('client_profit_center_id', $cpcIds)
                 ->where('fiscal_year', $y)->where('month', $m)
                 ->sum('volume');
 
+            // Si cruzo a un FY nuevo y el mes no tiene budget base, corto la ventana
+            if ($fyStart > $refFyStart && $bBase <= 0.0) {
+                break;
+            }
+
+            $months[] = sprintf('%04d-%02d', $y, $m);
+
+            // cuota extra mensual distribuida por estacionalidad del FY correspondiente
             $bEqa = $this->assignmentMonthlyShareFY(
                 pcCode: $pcCode,
                 userId: $userId,
@@ -202,7 +205,7 @@ class DetectDeviations extends Command
                 ->sum('volume');
 
             $budgetSeries[]   = $b;
-            $forecastSeries[] = $fBase + $fEq; // ⬅️ incluye EQF
+            $forecastSeries[] = $fBase + $fEq; // incluye EQF
             $salesSeries[]    = $s;
 
             $totalBudget  += $b;
@@ -298,7 +301,6 @@ class DetectDeviations extends Command
         $key = $pcCode . '|' . $userId . '|' . $fyStart;
         if (isset($this->assignmentEffCache[$key])) return $this->assignmentEffCache[$key];
 
-        // ⚠️ tabla SEGÚN tu modelo: extra_quota_assignments (singular)
         $assigned = (float) DB::table('extra_quota_assignments')
             ->where('profit_center_code', $pcCode)
             ->where('user_id', $userId)
@@ -306,7 +308,6 @@ class DetectDeviations extends Command
             ->where('fiscal_year', $fyStart)
             ->sum('volume');
 
-        // Descuenta oportunidades ganadas del FY
         $won = (float) DB::table('sales_opportunities')
             ->where('profit_center_code', $pcCode)
             ->where('user_id', $userId)
@@ -417,9 +418,9 @@ class DetectDeviations extends Command
             'month'              => $m,
             'user_id'            => $userId,
 
-            'sales'              => $sales,        // 👈 poblado en FORECAST (suma ventana)
+            'sales'              => $sales,
             'budget'             => $budget,
-            'forecast'           => $forecast,     // null en SALES
+            'forecast'           => $forecast,
             'delta_abs'          => $deltaAbs,
             'delta_pct'          => $deltaPct,
             'deviation_ratio'    => round($percent, 6),
