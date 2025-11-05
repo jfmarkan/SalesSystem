@@ -477,16 +477,16 @@ class ExtraQuotaController extends Controller
         ]);
     }
 
-    public function finalizeOpportunity(Request $req, int $group, int $version)
-    {
-        $uid    = $req->user()->id;
+    public function finalizeOpportunity(Request $req, int $group, int $version) {
+        $uid    = (int)$req->user()->id;
         $status = strtolower((string)$req->input('status')); // 'won' | 'lost'
         $cgn    = trim((string) $req->input('client_group_number', ''));
         $classI = $req->has('classification_id') ? (int)$req->input('classification_id') : null;
 
-        if (!in_array($status, ['won','lost'])) abort(422, 'invalid status');
+        if (!in_array($status, ['won','lost'])) {
+            abort(422, 'invalid status');
+        }
 
-        // Validación de rango de número de cliente si viene
         if ($status === 'won') {
             if (!preg_match('/^\d+$/', $cgn)) abort(422, 'client_group_number must be numeric');
             $n = (int)$cgn;
@@ -498,44 +498,52 @@ class ExtraQuotaController extends Controller
                 ->where('opportunity_group_id', $group)
                 ->where('version', $version)
                 ->where('user_id', $uid)
-                ->lockForUpdate()->first();
+                ->lockForUpdate()
+                ->first();
+
             if (!$op) abort(404, 'Opportunity version not found');
 
+            // LOST → cerrar y salir
             if ($status === 'lost') {
                 DB::table('sales_opportunities')
-                ->where('opportunity_group_id',$group)
-                ->where('version',$version)
-                ->update(['status'=>'lost','updated_at'=>now()]);
+                    ->where('opportunity_group_id',$group)
+                    ->where('version',$version)
+                    ->update(['status'=>'lost','updated_at'=>now()]);
                 return response()->noContent();
             }
 
-            // 🟢 WON
+            // ====================== WON ======================
             if ($cgn === '') abort(422, 'client_group_number required');
+
             $clientNameReq = (string) $req->input('client_name', $op->potential_client_name ?? '—');
 
-            // Buscar cliente por client_group_number (preferente); fallback a id por compatibilidad
-            $client = Client::withTrashed()->where('client_group_number', (int)$cgn)->first();
+            // Cliente por CGN (o id por compatibilidad)
+            $client = \App\Models\Client::withTrashed()
+                ->where('client_group_number', (int)$cgn)
+                ->first();
             if (!$client) {
-                $client = Client::withTrashed()->find((int)$cgn);
+                $client = \App\Models\Client::withTrashed()->find((int)$cgn);
             }
 
             if (!$client) {
-                $client = Client::create([
+                // Crear cliente nuevo (si viene clasificación 6/7, guardarla)
+                $client = \App\Models\Client::create([
                     'client_group_number' => (int)$cgn,
                     'client_name'         => $clientNameReq,
                     'classification_id'   => ($classI && in_array($classI,[6,7])) ? $classI : null,
                 ]);
             } else {
-                // Actualizar nombre si está vacío y clasificación si viene
+                // Completar nombre si faltara
                 if (!$client->client_name) $client->client_name = $clientNameReq;
+                // Si viene classification_id (cuando el cliente NO existía en el modal), se actualiza
                 if ($classI && in_array($classI,[6,7])) {
                     $client->classification_id = $classI;
                 }
                 $client->save();
             }
 
-            // Vinculación cliente–PC
-            $cpc = ClientProfitCenter::withTrashed()->firstOrCreate([
+            // Vinculación Cliente–PC
+            $cpc = \App\Models\ClientProfitCenter::withTrashed()->firstOrCreate([
                 'client_group_number' => (int)$cgn,
                 'profit_center_code'  => (int)$op->profit_center_code,
             ]);
@@ -543,15 +551,15 @@ class ExtraQuotaController extends Controller
                 $cpc->restore();
             }
 
-            // TeamId por user
-            $teamId = TeamMember::query()
+            // Team del usuario dueño de la oportunidad
+            $teamId = \App\Models\TeamMember::query()
                 ->where('user_id', $op->user_id)
                 ->orderByDesc('updated_at')
                 ->value('team_id');
             if (!$teamId) abort(422, 'team not found for user');
 
-            // Assignment
-            DB::table('assignments')->insert([
+            // Assignment: no reasignar si ya existe (no cambiar “propiedad”)
+            DB::table('assignments')->insertOrIgnore([
                 'client_profit_center_id' => $cpc->id,
                 'team_id'                 => $teamId,
                 'user_id'                 => $op->user_id,
@@ -559,70 +567,141 @@ class ExtraQuotaController extends Controller
                 'updated_at'              => now(),
             ]);
 
-            // Mover presupuesto/forecast extra → permanentes
+            // Helper: sólo meses FUTUROS (excluye mes actual)
+            $isFuture = function (int $fy, int $mon): bool {
+                $dt  = \Carbon\Carbon::create($fy, $mon, 1)->startOfMonth();
+                $now = \Carbon\Carbon::now()->startOfMonth();
+                return $dt->gt($now); // estrictamente futuro
+            };
+
+            // ====== MERGE BUDGET (sumar o crear) SOLO FUTURO ======
             $bud = DB::table('extra_quota_budgets')
                 ->where('opportunity_group_id',$group)
                 ->where('version',$version)
                 ->get();
+
+            // 1) Acumular por (fy,mon) para evitar múltiplos si hubiera filas duplicadas
+            $accB = [];
             foreach ($bud as $r) {
-                DB::table('budgets')->insert([
-                    'client_profit_center_id' => $cpc->id,
-                    'fiscal_year'             => $r->fiscal_year,
-                    'month'                   => $r->month,
-                    'volume'                  => $r->volume,
-                    'created_at'              => now(),
-                    'updated_at'              => now(),
-                ]);
+                $fy  = (int)$r->fiscal_year;
+                $mon = (int)$r->month;
+                $vol = (int)$r->volume;
+                if ($vol <= 0) continue;
+                if (!$isFuture($fy, $mon)) continue;
+                $k = $fy . '-' . $mon;
+                $accB[$k] = ($accB[$k] ?? 0) + $vol;
             }
 
+            // 2) Un solo upsert por mes: lock + update (suma) o insert
+            foreach ($accB as $k => $vol) {
+                [$fy, $mon] = array_map('intval', explode('-', $k));
+                $existing = DB::table('budgets')
+                    ->where('client_profit_center_id', $cpc->id)
+                    ->where('fiscal_year', $fy)
+                    ->where('month', $mon)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    DB::table('budgets')
+                        ->where('id', $existing->id)
+                        ->update([
+                            'volume'     => (int)$existing->volume + $vol,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    DB::table('budgets')->insert([
+                        'client_profit_center_id' => $cpc->id,
+                        'fiscal_year'             => $fy,
+                        'month'                   => $mon,
+                        'volume'                  => $vol,
+                        'created_at'              => now(),
+                        'updated_at'              => now(),
+                    ]);
+                }
+            }
+
+            // ====== MERGE FORECAST (sumar o crear) SOLO FUTURO ======
             $fc = DB::table('extra_quota_forecasts')
                 ->where('opportunity_group_id',$group)
                 ->where('version',$version)
                 ->get();
+
+            $accF = [];
             foreach ($fc as $r) {
-                DB::table('forecasts')->insert([
-                    'client_profit_center_id' => $cpc->id,
-                    'fiscal_year'             => $r->fiscal_year,
-                    'month'                   => $r->month,
-                    'volume'                  => $r->volume,
-                    'user_id'                 => $op->user_id,
-                    'created_at'              => now(),
-                    'updated_at'              => now(),
-                ]);
+                $fy  = (int)$r->fiscal_year;
+                $mon = (int)$r->month;
+                $vol = (int)$r->volume;
+                if ($vol <= 0) continue;
+                if (!$isFuture($fy, $mon)) continue;
+                $k = $fy . '-' . $mon;
+                $accF[$k] = ($accF[$k] ?? 0) + $vol;
             }
 
-            // marcar la versión actual como WON
-            DB::table('sales_opportunities')
-            ->where('opportunity_group_id',$group)
-            ->where('version',$version)
-            ->update([
-                'status' => 'won',
-                'client_group_number' => $cgn,
-                'updated_at' => now(),
-            ]);
+            foreach ($accF as $k => $vol) {
+                [$fy, $mon] = array_map('intval', explode('-', $k));
 
-            // otras versiones a draft
+                // Tomamos cualquier fila existente para ese CPC+FY+MES (independiente del user)
+                $existing = DB::table('forecasts')
+                    ->where('client_profit_center_id', $cpc->id)
+                    ->where('fiscal_year', $fy)
+                    ->where('month', $mon)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    DB::table('forecasts')
+                        ->where('id', $existing->id)
+                        ->update([
+                            'volume'     => (int)$existing->volume + $vol,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    DB::table('forecasts')->insert([
+                        'client_profit_center_id' => $cpc->id,
+                        'fiscal_year'             => $fy,
+                        'month'                   => $mon,
+                        'volume'                  => $vol,
+                        'user_id'                 => $op->user_id, // dueño de la oportunidad
+                        'created_at'              => now(),
+                        'updated_at'              => now(),
+                    ]);
+                }
+            }
+
+            // Marcar versión actual como WON + CGN y el resto como draft
             DB::table('sales_opportunities')
-            ->where('opportunity_group_id',$group)
-            ->where('version','<>',$version)
-            ->update(['status'=>'draft','updated_at'=>now()]);
+                ->where('opportunity_group_id',$group)
+                ->where('version',$version)
+                ->update([
+                    'status' => 'won',
+                    'client_group_number' => $cgn,
+                    'updated_at' => now(),
+                ]);
+
+            DB::table('sales_opportunities')
+                ->where('opportunity_group_id',$group)
+                ->where('version','<>',$version)
+                ->update(['status'=>'draft','updated_at'=>now()]);
 
             return response()->noContent();
         });
     }
 
-    private function fiscalYear(Request $req): int 
+
+
+    private function fiscalYear(Request $req): int
     {
         $raw = $req->query('fiscal_year', $req->query('fy', $req->query('year', date('Y'))));
         return (int)preg_replace('/\D+/', '', (string)$raw);
     }
 
-    private function hasConv(): bool 
+    private function hasConv(): bool
     {
         return Schema::hasTable('unit_conversions');
     }
 
-    private function convFactorExpr(string $alias = 'uc'): string 
+    private function convFactorExpr(string $alias = 'uc'): string
     {
         foreach (['factor_to_m3','factos_to_m3','to_m3_factor','factor_m3'] as $c) {
             if (Schema::hasColumn('unit_conversions', $c)) return "COALESCE($alias.$c,1)";
@@ -630,7 +709,7 @@ class ExtraQuotaController extends Controller
         return '1';
     }
 
-    private function sumAssignmentsM3(int $userId, int $fy, ?string $pcCode = null): float 
+    private function sumAssignmentsM3(int $userId, int $fy, ?string $pcCode = null): float
     {
         $q = DB::table('extra_quota_assignments as a')
             ->where('a.user_id', $userId)
@@ -649,7 +728,7 @@ class ExtraQuotaController extends Controller
         return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
     }
 
-    private function sumOpportunitiesM3(int $userId, int $fy, array $statuses, ?string $pcCode = null): float 
+    private function sumOpportunitiesM3(int $userId, int $fy, array $statuses, ?string $pcCode = null): float
     {
         $lv = DB::table('sales_opportunities')
             ->select('opportunity_group_id', DB::raw('MAX(version) AS max_version'))
@@ -676,7 +755,7 @@ class ExtraQuotaController extends Controller
         return (float) ($q->selectRaw("$sql AS m3")->value('m3') ?? 0.0);
     }
 
-    private function buildPcMixM3(int $userId, int $fy): array 
+    private function buildPcMixM3(int $userId, int $fy): array
     {
         $q = DB::table('extra_quota_assignments as a')
             ->where('a.user_id', $userId)
@@ -1164,4 +1243,78 @@ class ExtraQuotaController extends Controller
             return response()->json(['status'=>'ok','merged'=>count($data['items'])]);
         });
     }
+
+    public function mergeBudget(Request $req)
+{
+    $data = $req->validate([
+        'client_group_number' => 'required|integer|min:10000|max:19999',
+        'profit_center_code'  => 'required',
+        'fiscal_year'         => 'required|integer', // por simetría (aunque no se usa directo)
+        'items'               => 'required|array|min:1',
+        'items.*.month'       => 'required|integer|min:1|max:12',
+        'items.*.fiscal_year' => 'required|integer',
+        'items.*.volume'      => 'required|integer|min:0',
+        'classification_id'   => 'nullable|integer|in:6,7',
+    ]);
+
+    $num = (int)$data['client_group_number'];
+    $pc  = (string)$data['profit_center_code'];
+
+    return DB::transaction(function () use ($data, $num, $pc) {
+        // Asegurar cliente (y setear clasificación si viene y no tenía)
+        $client = Client::where('client_group_number', $num)->lockForUpdate()->first();
+        if (!$client) {
+            $client = Client::create([
+                'client_group_number' => $num,
+                'client_name'         => '—',
+                'classification_id'   => $data['classification_id'] ?? null,
+            ]);
+        } elseif (!empty($data['classification_id']) && $client->classification_id === null) {
+            $client->classification_id = (int)$data['classification_id'];
+            $client->save();
+        }
+
+        // Asegurar ClientProfitCenter
+        $cpc = ClientProfitCenter::firstOrCreate([
+            'client_group_number' => $num,
+            'profit_center_code'  => $pc,
+        ]);
+
+        // Merge en budgets: sumar si existe, insertar si no
+        $now = now();
+        foreach ($data['items'] as $it) {
+            $fy  = (int)$it['fiscal_year'];
+            $mon = (int)$it['month'];
+            $vol = (int)$it['volume'];
+
+            $existing = DB::table('budgets')
+                ->where('client_profit_center_id', $cpc->id)
+                ->where('fiscal_year', $fy)
+                ->where('month', $mon)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                DB::table('budgets')
+                    ->where('id', $existing->id)
+                    ->update([
+                        'volume'     => (int)$existing->volume + $vol,
+                        'updated_at' => $now,
+                    ]);
+            } else {
+                DB::table('budgets')->insert([
+                    'client_profit_center_id' => $cpc->id,
+                    'fiscal_year'             => $fy,
+                    'month'                   => $mon,
+                    'volume'                  => $vol,
+                    'created_at'              => $now,
+                    'updated_at'              => $now,
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'ok', 'merged' => count($data['items'])]);
+    });
+}
+
 }

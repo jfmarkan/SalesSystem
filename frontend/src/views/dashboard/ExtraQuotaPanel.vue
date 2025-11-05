@@ -3,39 +3,20 @@
 	<Toast />
 
 	<!-- Confirmación de cambios sin guardar -->
-	<Dialog
-		v-model:visible="confirmVisible"
-		modal
-		:draggable="false"
-		:dismissableMask="true"
-		header="Ungespeicherte Änderungen"
-		:style="{ width: '520px' }"
-	>
+	<Dialog v-model:visible="confirmVisible" modal :draggable="false" :dismissableMask="true"
+		header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
 		<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
 		<div class="flex justify-content-end gap-2">
-			<Button
-				label="Abbrechen"
-				severity="secondary"
-				@click="((confirmVisible = false), (pendingChange = null))"
-			/>
-			<Button
-				label="Verwerfen"
-				severity="danger"
-				icon="pi pi-trash"
-				@click="discardAndApply"
-			/>
+			<Button label="Abbrechen" severity="secondary"
+				@click="((confirmVisible = false), (pendingChange = null))" />
+			<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
 			<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
 		</div>
 	</Dialog>
 
 	<!-- Das ist Forecast (vor Erstellung) -->
-	<Dialog
-		v-model:visible="preCreateConflictVisible"
-		modal
-		:draggable="false"
-		header="Das ist Forecast"
-		:style="{ width: '520px' }"
-	>
+	<Dialog v-model:visible="preCreateConflictVisible" modal :draggable="false" header="Das ist Forecast"
+		:style="{ width: '520px' }">
 		<p>
 			Der ausgewählte Kunde ist bereits mit dem gewählten Profitcenter verknüpft. Das ist
 			<b>Forecast</b> – neue Chance nicht erlaubt.
@@ -47,42 +28,20 @@
 	</Dialog>
 
 	<!-- Modal: Chance gewonnen -->
-	<WonChanceModal
-		v-model:visible="wonDialogVisible"
-		:lookupClientByNumber="lookupClientByNumber"
-		:checkClientPcExists="checkClientPcExists"
-		:initialClientNumber="opForm.client_group_number"
-		:initialClientName="opForm.potential_client_name"
-		:initialClassificationId="null"
-		:profitCenterCode="opForm.profit_center_code"
-		:fiscalYear="opForm.fiscal_year"
-		@finalize="onModalFinalize"
-		@merge-forecast="onModalMerge"
-	/>
+	<WonChanceModal v-model:visible="wonDialogVisible" :lookupClientByNumber="lookupClientByNumber"
+		:initialClientNumber="opForm.client_group_number" :initialClientName="opForm.potential_client_name"
+		:profitCenterCode="opForm.profit_center_code" :fiscalYear="opForm.fiscal_year" @finalize="onModalFinalize" />
+
 
 	<!-- Dialog: Kunden auswählen -->
-	<Dialog
-		v-model:visible="clientSearchVisible"
-		modal
-		:draggable="false"
-		header="Kunden auswählen"
-		:style="{ width: '720px' }"
-	>
+	<Dialog v-model:visible="clientSearchVisible" modal :draggable="false" header="Kunden auswählen"
+		:style="{ width: '720px' }">
 		<div class="mb-2">
-			<InputText
-				v-model="clientSearchQuery"
-				class="w-full"
-				placeholder="Suche nach Name oder Nummer…"
-			/>
+			<InputText v-model="clientSearchQuery" class="w-full" placeholder="Suche nach Name oder Nummer…" />
 		</div>
 
 		<div class="client-list-wrap">
-			<div
-				v-for="c in filteredClients"
-				:key="c.client_number"
-				class="client-row"
-				@click="selectClient(c)"
-			>
+			<div v-for="c in filteredClients" :key="c.client_number" class="client-row" @click="selectClient(c)">
 				<div class="cr-name" v-html="renderClientRow(c)"></div>
 			</div>
 			<div v-if="!clientLoading && !filteredClients.length">Keine Ergebnisse…</div>
@@ -101,24 +60,14 @@
 			<Card class="aside-card">
 				<template #content>
 					<div class="status-filter">
-						<Button
-							label="Offen"
-							size="small"
-							:severity="statusFilter === 'open' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('open')"
-						/>
-						<Button
-							label="Gewonnen"
-							size="small"
+						<Button label="Offen" size="small" :severity="statusFilter === 'open' ? 'primary' : 'secondary'"
+							@click="setStatusFilter('open')" />
+						<Button label="Gewonnen" size="small"
 							:severity="statusFilter === 'won' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('won')"
-						/>
-						<Button
-							label="Verloren"
-							size="small"
+							@click="setStatusFilter('won')" />
+						<Button label="Verloren" size="small"
 							:severity="statusFilter === 'lost' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('lost')"
-						/>
+							@click="setStatusFilter('lost')" />
 					</div>
 
 					<div v-if="listLoading" class="local-loader">
@@ -127,14 +76,8 @@
 
 					<template v-else>
 						<div class="listbox-flex">
-							<Listbox
-								v-if="listOptions.length"
-								v-model="selectedGroupId"
-								:options="listOptions"
-								optionLabel="label"
-								optionValue="value"
-								@change="(e) => onSelectGroup(e.value)"
-							>
+							<Listbox v-if="listOptions.length" v-model="selectedGroupId" :options="listOptions"
+								optionLabel="label" optionValue="value" @change="(e) => onSelectGroup(e.value)">
 								<template #option="slotProps">
 									<div class="row-item">
 										<div class="top">
@@ -175,11 +118,7 @@
 							</div>
 						</div>
 						<div class="actions">
-							<Button
-								icon="pi pi-plus"
-								label="Neue Chance"
-								@click="startCreateMode"
-							/>
+							<Button icon="pi pi-plus" label="Neue Chance" @click="startCreateMode" />
 						</div>
 					</div>
 				</template>
@@ -197,30 +136,18 @@
 									<div class="field">
 										<label class="lbl">Potentieller Kunde</label>
 										<div class="inline">
-											<InputText
-												v-model="opForm.potential_client_name"
-												class="client-input"
-												:disabled="isReadOnly"
-											/>
-											<Button
-												label="Kunde wählen"
-												class="p-button-text p-button-sm"
-												:disabled="isReadOnly"
-												@click="pickExistingClient"
-											/>
+											<InputText v-model="opForm.potential_client_name" class="client-input"
+												:disabled="isReadOnly" />
+											<Button label="Kunde wählen" class="p-button-text p-button-sm"
+												:disabled="isReadOnly" @click="pickExistingClient" />
 										</div>
 									</div>
 
 									<div class="field">
 										<label class="lbl">Status</label>
-										<Select
-											v-model="opForm.status"
-											:options="statusOpts"
-											optionLabel="label"
-											optionValue="value"
-											class="w-full status-select"
-											:disabled="isStatusMenuDisabled"
-										/>
+										<Select v-model="opForm.status" :options="statusOpts" optionLabel="label"
+											optionValue="value" class="w-full status-select"
+											:disabled="isStatusMenuDisabled" />
 									</div>
 								</div>
 
@@ -229,16 +156,10 @@
 									<div class="left">
 										<div class="field">
 											<label class="lbl">Profitcenter</label>
-											<Select
-												v-model="opForm.profit_center_code"
-												:options="pcOptionsForSelection"
-												optionLabel="label"
-												optionValue="value"
-												placeholder="Profitcenter…"
-												class="w-full pc-select"
-												@change="updateAvailabilityForPc"
-												:disabled="isReadOnly"
-											/>
+											<Select v-model="opForm.profit_center_code" :options="pcOptionsForSelection"
+												optionLabel="label" optionValue="value" placeholder="Profitcenter…"
+												class="w-full pc-select" @change="updateAvailabilityForPc"
+												:disabled="isReadOnly" />
 											<small v-if="pcFilteredWarning" class="text-danger">{{
 												pcFilteredWarning
 											}}</small>
@@ -247,53 +168,27 @@
 										<div class="field">
 											<label class="lbl">Volumen</label>
 											<div class="vol-inline">
-												<InputNumber
-													v-model="opForm.volume"
-													:min="0"
-													:step="1"
-													:useGrouping="true"
-													locale="de-DE"
-													:minFractionDigits="0"
-													:maxFractionDigits="0"
-													inputClass="w-full"
-													:disabled="isReadOnly"
-												/>
-												<span class="assigned"
-													>/ {{ fmtInt(availableForSelected) }}</span
-												>
+												<InputNumber v-model="opForm.volume" :min="0" :step="1"
+													:useGrouping="true" locale="de-DE" :minFractionDigits="0"
+													:maxFractionDigits="0" inputClass="w-full" :disabled="isReadOnly" />
+												<span class="assigned">/ {{ fmtInt(availableForSelected) }}</span>
 											</div>
 										</div>
 
 										<div class="field">
 											<label class="lbl">Start (Monat/Jahr)</label>
-											<DatePicker
-												v-model="opMonthModel"
-												view="month"
-												dateFormat="mm/yy"
-												:manualInput="false"
-												showIcon
-												class="w-full"
-												@update:modelValue="syncMonthYear"
-												:disabled="isReadOnly"
-											/>
+											<DatePicker v-model="opMonthModel" view="month" dateFormat="mm/yy"
+												:manualInput="false" showIcon class="w-full"
+												@update:modelValue="syncMonthYear" :disabled="isReadOnly" />
 										</div>
 
 										<div class="field">
 											<label class="lbl">Wahrscheinlichkeit</label>
 											<div class="prob-wrap">
-												<Slider
-													v-model="opForm.probability_pct"
-													:min="0"
-													:max="100"
-													:step="10"
-													class="prob-slider"
-													@slideend="snapProb"
-													@change="snapProb"
-													:disabled="isReadOnly"
-												/>
-												<span class="pct"
-													>{{ opForm.probability_pct }}%</span
-												>
+												<Slider v-model="opForm.probability_pct" :min="0" :max="100" :step="10"
+													class="prob-slider" @slideend="snapProb" @change="snapProb"
+													:disabled="isReadOnly" />
+												<span class="pct">{{ opForm.probability_pct }}%</span>
 											</div>
 											<div class="tickbar" aria-hidden="true"></div>
 										</div>
@@ -302,35 +197,26 @@
 									<div class="right">
 										<div class="field grow">
 											<label class="lbl">Kommentare</label>
-											<Textarea
-												v-model="opForm.comments"
-												rows="8"
-												autoResize
-												class="w-full comment-box"
-												:disabled="isReadOnly"
-											/>
+											<Textarea v-model="opForm.comments" rows="8" autoResize
+												class="w-full comment-box" :disabled="isReadOnly" />
 										</div>
-
 										<div class="actions-right">
-											<Button
-												v-if="createMode"
-												label="Budget erstellen"
-												icon="pi pi-table"
-												class="p-button-outlined"
-												:disabled="isReadOnly || !canCreateBudget"
-												@click="onGenerateBudget"
-											/>
-											<Button
-												v-else
-												label="Aktualisieren"
-												icon="pi pi-save"
-												class="p-button-outlined"
-												:disabled="isReadOnly || !opDirty"
-												@click="saveNewVersion"
-											/>
+											<Button v-if="createMode" label="Budget erstellen" icon="pi pi-table"
+												class="p-button-outlined" :disabled="isReadOnly || !canCreateBudget"
+												@click="onGenerateBudget" />
+											<Button v-else label="Aktualisieren" icon="pi pi-save"
+												class="p-button-outlined" :disabled="isReadOnly || !opDirty"
+												@click="saveNewVersion" />
 										</div>
 									</div>
 								</div>
+								<Message v-if="clientPcExistsNow" severity="info" :closable="false" class="mt-2"
+									icon="pi pi-info-circle">
+									Für diesen Kunden existiert in der Datenbank bereits eine Verknüpfung mit diesem
+									Profitcenter. <b>Budget</b> und <b>Forecast</b> dieser Chance werden zu den bereits
+									vorhandenen Werten addiert – <u>nur für zukünftige Monate</u>.
+								</Message>
+
 							</div>
 						</template>
 						<div v-else>Bitte Chance auswählen oder „Neue Chance“ drücken…</div>
@@ -342,15 +228,9 @@
 					<template #content>
 						<div class="eyebrow mb-2">Versionen</div>
 						<template v-if="selectedGroupId">
-							<Listbox
-								v-if="versionOptions.length > 1"
-								v-model="selectedVersion"
-								:options="versionOptions"
-								optionLabel="label"
-								optionValue="value"
-								class="w-full dark-list"
-								@change="(e) => onSelectVersion(e.value)"
-							/>
+							<Listbox v-if="versionOptions.length > 1" v-model="selectedVersion"
+								:options="versionOptions" optionLabel="label" optionValue="value"
+								class="w-full dark-list" @change="(e) => onSelectVersion(e.value)" />
 							<div v-else>—</div>
 							<div class="versions-meta">
 								<div>
@@ -373,21 +253,12 @@
 						</div>
 						<template v-else>
 							<div class="ctbl-wrap" :class="{ locked: isReadOnly }">
-								<ComponentTable
-									:months="months"
-									:ventas="sales"
-									:budget="budget"
-									:forecast="forecast"
-									@edit-forecast="onEditForecastInt"
-								/>
+								<ComponentTable :months="months" :ventas="sales" :budget="budget" :forecast="forecast"
+									@edit-forecast="onEditForecastInt" />
 							</div>
 							<div class="flex justify-end mt-3">
-								<Button
-									label="Forecast speichern"
-									icon="pi pi-check"
-									:disabled="isReadOnly || changedForecastCount === 0"
-									@click="saveForecast()"
-								/>
+								<Button label="Forecast speichern" icon="pi pi-check"
+									:disabled="isReadOnly || changedForecastCount === 0" @click="saveForecast()" />
 							</div>
 						</template>
 					</template>
@@ -447,15 +318,15 @@ function applyListFilter() {
 			const pcName =
 				r.profit_center_name ??
 				r.pc_name ??
-				r.name ?? // por si el backend manda "name"
+				r.name ??
 				(codeNum ? `PC ${codeNum}` : 'Profit Center')
 
 			const client = r.client_name ?? r.potential_client_name ?? r.name ?? '—'
 
 			return {
 				value: Number(r.opportunity_group_id),
-				label: client, // no se usa para render pero queda coherente
-				pc: String(codeNum), // por si lo necesitás en otro lado
+				label: client,
+				pc: String(codeNum),
 				pcName,
 				client,
 				version: Number(r.version || 1),
@@ -574,10 +445,8 @@ async function loadAssignedPcs() {
 
 function onlyPcName(label = '') {
 	let s = String(label).trim()
-	// si vino "123 — Nombre" o "123 - Nombre", quedate con el nombre
 	const m = s.match(/^\s*\d+\s*[—-]\s*(.+)$/)
 	if (m) s = m[1].trim()
-	// si es un fallback tipo "PC 123", no es nombre real
 	if (/^PC\s*\d+$/i.test(s)) return ''
 	return s
 }
@@ -599,11 +468,8 @@ const headerPc = computed(() => {
 	const code = Number(
 		opForm.value?.profit_center_code || latestMeta.value?.profit_center_code || 0,
 	)
-	// 1) preferimos el nombre que ya está en el dropdown del usuario
 	const fromOptions = pcNameFromOptions(code)
 	if (fromOptions) return fromOptions
-
-	// 2) fallback a lo que venga del backend en meta
 	const fromMeta = onlyPcName(
 		latestMeta.value?.profit_center_name || latestMeta.value?.pc_name || '',
 	)
@@ -625,27 +491,22 @@ async function updateAvailabilityForPc() {
 const clientTakenPcs = ref([])
 const pcFilteredWarning = ref('')
 const pcOptionsForSelection = computed(() => {
-	if (!clientTakenPcs.value.length) return assignedPcOptions.value
-	const takenSet = new Set(clientTakenPcs.value.map((v) => String(v)))
-	const out = assignedPcOptions.value.filter((o) => !takenSet.has(String(o.value)))
-	pcFilteredWarning.value =
-		out.length !== assignedPcOptions.value.length
-			? 'Profitcenter, die der Kunde bereits hat, wurden ausgeblendet.'
-			: ''
-	if (opForm.value.profit_center_code && takenSet.has(String(opForm.value.profit_center_code))) {
-		opForm.value.profit_center_code = null
-	}
-	return out
+  return assignedPcOptions.value   // SIEMPRE todos los PCs asignados al usuario
 })
+
+
 async function fetchClientTakenPcsIfPossible() {
-	const num = parseInt(opForm.value.client_group_number || 0, 10)
-	if (num >= 10000 && num <= 19999) {
-		await ensureCsrf()
-		const { data } = await api.get(`/api/extra-quota/clients/${num}/profit-centers`)
-		clientTakenPcs.value = Array.isArray(data) ? data : []
-	} else {
-		clientTakenPcs.value = []
-	}
+  const num = parseInt(opForm.value.client_group_number || 0, 10)
+  if (num >= 10000 && num <= 19999) {
+    await ensureCsrf()
+    const { data } = await api.get(`/api/extra-quota/clients/${num}/profit-centers`)
+    const arr = Array.isArray(data?.profit_centers)
+      ? data.profit_centers
+      : (Array.isArray(data) ? data : [])
+    clientTakenPcs.value = arr
+  } else {
+    clientTakenPcs.value = []
+  }
 }
 
 /* Form */
@@ -732,7 +593,6 @@ function pickExistingClient() {
 }
 
 async function selectClient(client) {
-	// Picker → existierender Kunde
 	opForm.value.potential_client_name = client.name || ''
 	opForm.value.client_group_number = client.client_number || ''
 	clientSearchVisible.value = false
@@ -814,7 +674,6 @@ watch(
 		if (!selectedGroupId.value && !createMode.value) return
 		if (st === 'won') {
 			opForm.value.probability_pct = 100
-			await rebuildBudgetFromForm()
 			wonDialogVisible.value = true
 			return
 		}
@@ -1005,17 +864,28 @@ const preCreateConflictVisible = ref(false)
 async function onGenerateBudget() {
 	if (!canCreateBudget.value) return
 
-	const cgNum = parseInt(opForm.value.client_group_number || 0, 10)
-	const pc = Number(opForm.value.profit_center_code)
-	if (cgNum >= 10000 && cgNum <= 19999 && pc) {
-		await ensureCsrf()
-		const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', {
-			params: { client_group_number: cgNum, profit_center_code: pc },
-		})
-		if (data?.exists) {
-			preCreateConflictVisible.value = true
-			return
+	// ✅ ya no bloqueamos creación si el cliente ya compra el PC
+	// Solo mostramos un aviso informativo (no cambia estilos/markup)
+	try {
+		const cgNum = parseInt(opForm.value.client_group_number || 0, 10)
+		const pc = Number(opForm.value.profit_center_code)
+		if (cgNum >= 10000 && cgNum <= 19999 && pc) {
+			await ensureCsrf()
+			const { data } = await api.get('/api/extra-quota/clients/exists-in-pc', {
+				params: { client_group_number: cgNum, profit_center_code: pc },
+			})
+			if (data?.exists) {
+				toast.add({
+					severity: 'info',
+					summary: 'Forecast',
+					detail:
+						'Das ist Forecast — beim Gewinnen wird zum bestehenden Forecast addiert.',
+					life: 5000,
+				})
+			}
 		}
+	} catch {
+		/* no-op: si falla el aviso, no bloqueamos nada */
 	}
 
 	await rebuildBudgetFromForm()
@@ -1264,6 +1134,13 @@ async function checkClientPcExists(cgNum, pc) {
 		return false
 	}
 }
+
+const clientPcExistsNow = computed(() => {
+  const pc = String(opForm.value.profit_center_code ?? '')
+  if (!pc) return false
+  return clientTakenPcs.value.map(String).includes(pc)
+})
+
 function scaleForecastForWinning() {
 	const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
 	const oldPct = Math.max(0, Math.round(num0(opBaseline.value?.probability_pct ?? 0)))
@@ -1290,132 +1167,141 @@ function scaleForecastForWinning() {
 	forecast.value = base
 }
 
-/* Handlers de eventos del modal */
-async function onModalFinalize({ client_group_number, client_name, classification_id }) {
-	if (!selectedGroupId.value || !selectedVersion.value) {
-		toast.add({
-			severity: 'error',
-			summary: 'Fehler',
-			detail: 'Gruppe/Version fehlt.',
-			life: 1800,
-		})
-		return
-	}
-	finalizing.value = true
-	try {
-		// Escalar forecast a 100% y versionar si corresponde
-		const mustVersion =
-			opBaseline.value.volume !== opForm.value.volume ||
-			100 !== opBaseline.value.probability_pct ||
-			opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
+function scaleBudgetForWinning() {
+  const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
+  const oldPct = Math.max(
+    0,
+    Math.round(num0(opBaseline.value?.probability_pct ?? opForm.value.probability_pct ?? 0)),
+  )
+  const newAmt = Math.max(0, Math.round(num0(opForm.value.volume)))
+  const oldExp = oldAmt * (oldPct / 100)
+  const newExp = newAmt // won → 100%
 
-		scaleForecastForWinning()
+  if (oldExp <= 0) {
+    // Sin baseline útil: no forzamos nada (opcionalmente podrías reconstruir
+    // con seasonality si querés, pero eso cambia la forma).
+    return
+  }
 
-		if (mustVersion) {
-			await ensureCsrf()
-			const payload = {
-				fiscal_year: opForm.value.fiscal_year,
-				profit_center_code: Number(opForm.value.profit_center_code),
-				volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
-				probability_pct: 100,
-				estimated_start_date: opForm.value.estimated_start_date,
-				comments: opForm.value.comments,
-				potential_client_name: opForm.value.potential_client_name,
-				client_group_number: opForm.value.client_group_number,
-				status: opBaseline.value.status || 'open',
-			}
-			const { data } = await api.post(
-				`/api/extra-quota/opportunities/${selectedGroupId.value}/version`,
-				payload,
-			)
-			selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
-			maxVersion.value = selectedVersion.value
-			await saveBudget({ silent: true })
-			await saveForecast({ silent: true })
-			opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
-		}
+  const r = newExp / oldExp
+  const raw = budget.value.map((v, i) => (isPastYM(months.value[i]) ? v : v * r))
+  const base = raw.map((v) => Math.floor(v))
+  let rest =
+    Math.round(raw.reduce((a, b) => a + b, 0)) -
+    base.reduce((a, b) => a + b, 0)
 
-		// Finaliza como WON
-		await ensureCsrf()
-		await api.post(
-			`/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
-			{
-				status: 'won',
-				client_group_number,
-				client_name,
-				classification_id,
-			},
-		)
+  const order = raw
+    .map((v, i) => ({ i, frac: v - base[i] }))
+    .filter((o) => !isPastYM(months.value[o.i]))
+    .sort((a, b) => b.frac - a.frac)
 
-		// Refrescos UI
-		suppressStatusWatch.value = true
-		opForm.value.status = 'won'
-		await nextTick()
-		suppressStatusWatch.value = false
-
-		wonDialogVisible.value = false
-		opBaseline.value = cloneDeep(opForm.value)
-		baseBudget.value = [...budget.value]
-		baseForecast.value = [...forecast.value]
-
-		toast.add({
-			severity: 'success',
-			summary: 'Überführt',
-			detail: 'In Stamm-Budget übernommen',
-			life: 1600,
-		})
-		await loadList()
-		selectedGroupId.value = null
-		selectedVersion.value = null
-		enterCreateMode()
-	} catch (e) {
-		const msg =
-			e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
-		toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
-	} finally {
-		finalizing.value = false
-	}
+  for (let k = 0; k < order.length && rest > 0; k++, rest--) base[order[k].i] += 1
+  budget.value = base
 }
 
-async function onModalMerge({ client_group_number }) {
-	try {
-		const cgNum = Number(client_group_number)
-		const pc = Number(opForm.value.profit_center_code)
-		const fy = Number(opForm.value.fiscal_year)
 
-		const items = months.value
-			.map((ymStr, i) => {
-				const [y, m] = ymStr.split('-').map((n) => parseInt(n, 10))
-				return { month: m, fiscal_year: y, volume: Number(forecast.value[i] || 0) }
-			})
-			.filter((r) => !isPastYM(ym(r.fiscal_year, r.month)) && r.volume > 0)
+/* Handlers de eventos del modal */
+async function onModalFinalize({ client_group_number, client_name, classification_id }) {
+  if (!selectedGroupId.value || !selectedVersion.value) {
+    toast.add({
+      severity: 'error',
+      summary: 'Fehler',
+      detail: 'Gruppe/Version fehlt.',
+      life: 1800,
+    })
+    return
+  }
 
-		if (!items.length) throw new Error('Kein zukünftiger Forecast zum Addieren.')
+  if (finalizing.value) return
+  finalizing.value = true
 
-		await ensureCsrf()
-		await api.post('/api/extra-quota/forecast/merge', {
-			client_group_number: cgNum,
-			profit_center_code: pc,
-			fiscal_year: fy,
-			items,
-		})
+  try {
+    // ¿Debemos versionar?
+    const mustVersion =
+      opBaseline.value.volume !== opForm.value.volume ||
+      100 !== opBaseline.value.probability_pct ||
+      opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
 
-		toast.add({
-			severity: 'success',
-			summary: 'Forecast',
-			detail: 'Forecast zum bestehenden Kunden hinzugefügt.',
-			life: 1600,
-		})
-		wonDialogVisible.value = false
-		suppressStatusWatch.value = true
-		opForm.value.status = 'open'
-		await nextTick()
-		suppressStatusWatch.value = false
-	} catch (e) {
-		const msg =
-			e?.response?.data?.message || e?.message || 'Fehler beim Hinzufügen des Forecasts'
-		toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
-	}
+    // 🔥 Escalar ambos (preserva forma + respeta meses pasados)
+    scaleBudgetForWinning()
+    scaleForecastForWinning()
+
+    if (mustVersion) {
+      await ensureCsrf()
+      const payload = {
+        fiscal_year: opForm.value.fiscal_year,
+        profit_center_code: Number(opForm.value.profit_center_code),
+        volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
+        probability_pct: 100,
+        estimated_start_date: opForm.value.estimated_start_date,
+        comments: opForm.value.comments,
+        potential_client_name: opForm.value.potential_client_name,
+        client_group_number: opForm.value.client_group_number,
+        status: opBaseline.value.status || 'open',
+      }
+      const { data } = await api.post(
+        `/api/extra-quota/opportunities/${selectedGroupId.value}/version`,
+        payload,
+      )
+      selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
+      maxVersion.value = selectedVersion.value
+
+      // Guardamos extra_quota_* para ESTA versión
+      await saveBudget({ silent: true })
+      await saveForecast({ silent: true })
+
+      // baseline (prob=100)
+      opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
+    } else {
+      // Sin versionar, igual persistimos lo que ves en pantalla
+      if (changedBudgetCount.value > 0) await saveBudget({ silent: true })
+      if (changedForecastCount.value > 0) await saveForecast({ silent: true })
+    }
+
+    // Finalizar → backend mergea desde extra_quota_*
+    const finalizePayload = {
+      status: 'won',
+      client_group_number,
+      client_name,
+    }
+    if (classification_id !== null && classification_id !== undefined) {
+      finalizePayload.classification_id = classification_id
+    }
+
+    await ensureCsrf()
+    await api.post(
+      `/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
+      finalizePayload,
+    )
+
+    // UI
+    suppressStatusWatch.value = true
+    opForm.value.status = 'won'
+    await nextTick()
+    suppressStatusWatch.value = false
+
+    wonDialogVisible.value = false
+    opBaseline.value = JSON.parse(JSON.stringify(opForm.value))
+    baseBudget.value = [...budget.value]
+    baseForecast.value = [...forecast.value]
+
+    toast.add({
+      severity: 'success',
+      summary: 'Überführt',
+      detail: 'Budget und Forecast zum bestehenden Kunden hinzugefügt.',
+      life: 1600,
+    })
+
+    await loadList()
+    selectedGroupId.value = null
+    selectedVersion.value = null
+    enterCreateMode()
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
+    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
+  } finally {
+    finalizing.value = false
+  }
 }
 
 /* Lost flow */
@@ -1573,7 +1459,8 @@ onMounted(async () => {
 .eqp-aside {
 	display: flex;
 	min-height: 0;
-	height: 100%; /* crítico para que los hijos puedan scrollear */
+	height: 100%;
+	/* crítico para que los hijos puedan scrollear */
 }
 
 .eqp-aside :deep(.p-card) {
@@ -1593,22 +1480,28 @@ onMounted(async () => {
 
 /* El header de filtros no crece */
 .status-filter {
-	--sf-gap: 8px; /* un único valor para todo */
+	--sf-gap: 8px;
+	/* un único valor para todo */
 	display: grid;
-	grid-template-columns: repeat(3, 1fr); /* 3 columnas iguales */
-	gap: var(--sf-gap); /* separación entre botones */
-	margin-bottom: var(--sf-gap); /* misma separación con la lista */
+	grid-template-columns: repeat(3, 1fr);
+	/* 3 columnas iguales */
+	gap: var(--sf-gap);
+	/* separación entre botones */
+	margin-bottom: var(--sf-gap);
+	/* misma separación con la lista */
 }
 
 .status-filter :deep(.p-button) {
-	width: 100%; /* que cada botón llene su columna */
+	width: 100%;
+	/* que cada botón llene su columna */
 }
 
 /* Contenedor que ocupa el resto y scrollea */
 .eqp-aside .listbox-flex {
 	flex: 1 1 auto;
 	min-height: 0;
-	overflow: auto; /* scroll acá */
+	overflow: auto;
+	/* scroll acá */
 }
 
 /* Asegurar que la Listbox use el alto del contenedor y su UL scrollee bien */
@@ -1618,7 +1511,8 @@ onMounted(async () => {
 
 .eqp-aside .listbox-flex :deep(.p-listbox-list-wrapper) {
 	height: 100%;
-	max-height: none; /* evita quedar atado a 65vh */
+	max-height: none;
+	/* evita quedar atado a 65vh */
 	overflow: auto;
 }
 
@@ -1637,15 +1531,18 @@ onMounted(async () => {
 	align-items: center;
 	justify-content: space-between;
 }
+
 .title-left {
 	display: flex;
 	flex-direction: column;
 }
+
 .title-line {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 }
+
 .eyebrow {
 	font-size: 0.8rem;
 	color: var(--text-muted);
@@ -1669,6 +1566,7 @@ onMounted(async () => {
 .form-card {
 	min-height: 0;
 }
+
 .form-grid {
 	display: flex;
 	flex-direction: column;
@@ -1676,6 +1574,7 @@ onMounted(async () => {
 	height: 100%;
 	min-height: 0;
 }
+
 .top-row {
 	display: grid;
 	grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
@@ -1683,15 +1582,18 @@ onMounted(async () => {
 	border-bottom: 1px solid var(--surface-border);
 	padding-bottom: 8px;
 }
+
 .field {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
+
 .lbl {
 	font-weight: 600;
 	color: var(--text-color);
 }
+
 .inline {
 	display: flex;
 	align-items: center;
@@ -1705,24 +1607,29 @@ onMounted(async () => {
 	gap: 12px;
 	min-height: 0;
 }
+
 .left {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
 	min-height: 0;
 }
+
 .right {
 	display: grid;
 	grid-template-rows: 1fr auto;
 	gap: 10px;
 	min-height: 0;
 }
+
 .field.grow {
 	min-height: 0;
 }
+
 .comment-box {
 	min-height: 180px;
 }
+
 .actions-right {
 	justify-self: end;
 }
@@ -1733,6 +1640,7 @@ onMounted(async () => {
 	align-items: center;
 	gap: 8px;
 }
+
 .assigned {
 	white-space: nowrap;
 	color: var(--text-muted);
@@ -1761,13 +1669,11 @@ onMounted(async () => {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background-image: repeating-linear-gradient(
-		to right,
-		color-mix(in oklab, var(--text-color) 35%, transparent) 0,
-		color-mix(in oklab, var(--text-color) 35%, transparent) 1px,
-		transparent 1px,
-		transparent 10%
-	);
+	background-image: repeating-linear-gradient(to right,
+			color-mix(in oklab, var(--text-color) 35%, transparent) 0,
+			color-mix(in oklab, var(--text-color) 35%, transparent) 1px,
+			transparent 1px,
+			transparent 10%);
 	opacity: 0.5;
 }
 
@@ -1777,6 +1683,7 @@ onMounted(async () => {
 	display: flex;
 	flex-direction: column;
 }
+
 .versions-meta {
 	border-top: 1px solid var(--surface-border);
 	padding-top: 6px;
@@ -1793,10 +1700,12 @@ onMounted(async () => {
 	display: flex;
 	flex-direction: column;
 }
+
 .table-card :deep(table) {
 	table-layout: fixed;
 	width: 100%;
 }
+
 .ctbl-wrap.locked {
 	pointer-events: none;
 	opacity: 0.6;
@@ -1807,12 +1716,14 @@ onMounted(async () => {
 	display: flex;
 	gap: 6px;
 }
+
 .row-item {
 	display: flex;
 	flex-direction: column;
 	border-radius: 8px;
 	cursor: pointer;
 }
+
 .row-item:hover {
 	background: rgba(255, 255, 255, 0.06);
 }
@@ -1841,6 +1752,7 @@ onMounted(async () => {
 	max-height: 420px;
 	overflow: auto;
 }
+
 .client-row {
 	padding: 12px 10px;
 	cursor: pointer;
@@ -1848,9 +1760,11 @@ onMounted(async () => {
 	margin-bottom: 6px;
 	border: 1px solid rgba(0, 0, 0, 0.08);
 }
+
 .client-row:hover {
 	background: rgba(0, 0, 0, 0.04);
 }
+
 .cr-name {
 	font-size: 16px;
 	font-weight: 600;
@@ -1868,9 +1782,11 @@ onMounted(async () => {
 	.eqp-grid {
 		grid-template-columns: 1fr;
 	}
+
 	.eqp-aside {
 		grid-row: auto;
 	}
+
 	.row-form-extras {
 		grid-template-columns: 1fr;
 	}

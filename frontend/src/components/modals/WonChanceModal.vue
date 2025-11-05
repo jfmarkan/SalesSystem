@@ -1,313 +1,265 @@
-<!-- WonChanceModal.vue -->
 <template>
-  <Dialog
-    v-model:visible="innerVisible"
-    :modal="true"
-    :draggable="false"
-    header="Chance gewonnen"
-    :style="{ width: '560px' }"
-  >
-    <div style="min-height: 240px;">
-      <!-- Klassifizierung -->
-      <div class="field mb-2">
-        <label class="lbl">Kundenartikelklassifizierung</label>
-        <Dropdown
-          v-model="localClassificationId"
-          :options="visibleClassificationOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="w-full"
-          :disabled="clientFound"
-          placeholder="Bitte wählen…"
-        />
-        <small v-if="clientFound" class="text-muted">
-          Klassifizierung des bestehenden Kunden wird übernommen.
-        </small>
-      </div>
+	<Dialog v-model:visible="internalVisible" :draggable="false" modal :pt="{
+		root: { class: '!border-0 !bg-transparent' },
+		mask: { class: 'backdrop-blur-sm' }
+	}">
+		<template #container>
+			<div class="wc-card">
+				<div class="wc-head">
+					<div class="wc-icon">
+						<i class="pi pi-check"></i>
+					</div>
+					<div class="wc-title">Chance finalisieren</div>
+					<div class="wc-sub">Bitte Daten vervollständigen, um in Budget/Forecast zu übernehmen</div>
+				</div>
 
-      <!-- Kundennummer -->
-      <div class="field mb-2">
-        <label class="lbl">Kundennummer</label>
-        <InputText
-          v-model="numInput"
-          class="w-full"
-          placeholder="z. B. 12345"
-          :class="{ 'p-invalid': !!wonError }"
-        />
-        <small v-if="wonError" class="text-danger">{{ wonError }}</small>
-        <small v-else class="text-muted">Nur 10000–19999.</small>
-      </div>
+				<div class="wc-body">
+					<div class="wc-field">
+						<label class="wc-label">Kundenname</label>
+						<InputText v-model="clientName" class="w-full" :disabled="true" />
+						<small class="wc-help">Wird aus dem potenziellen Kunden der Chance übernommen.</small>
+					</div>
 
-      <!-- Kundenname -->
-      <div class="field mb-2">
-        <label class="lbl">Kundenname</label>
-        <InputText
-          v-model="nameInput"
-          class="w-full"
-          placeholder="Firmenname"
-          :disabled="clientFound"
-        />
-      </div>
+					<div class="wc-field">
+						<label class="wc-label">Kundennummer (Client Group Number)</label>
+						<InputText v-model.trim="clientNumber" class="w-full" placeholder="z. B. 12345"
+							@blur="checkExisting" />
+						<small v-if="isExistingClient" class="wc-help">
+							Kunde vorhanden. Klassifizierung: <b>{{ existingClassificationLabel || '—' }}</b>.
+							Die Auswahl ist deaktiviert.
+						</small>
+						<small v-else class="wc-help">
+							Falls der Kunde nicht existiert, wähle seine Klassifizierung (Potenzial A/B).
+						</small>
+					</div>
 
-      <!-- Konfliktbox -->
-      <div v-if="wonConflict" class="conflict-box">
-        <span class="pi pi-exclamation-triangle mr-2"></span>
-        Kunde + Profitcenter existieren bereits. Das ist <b>Forecast</b>.
-      </div>
-    </div>
+					<div class="wc-field">
+						<label class="wc-label">Klassifizierung</label>
+						<Select v-model="classificationId" :options="classificationOptions" optionLabel="label"
+							optionValue="value" class="w-full" :disabled="isExistingClient"
+							placeholder="Klassifizierung wählen…" />
+						<small v-if="!isExistingClient" class="wc-help">
+							Nur „Potenzial A (6)“ oder „Potenzial B (7)“.
+						</small>
+					</div>
+				</div>
 
-    <!-- Fußleiste -->
-    <template #footer>
-      <div class="flex align-items-center justify-content-between w-full" style="gap: 10px;">
-        <div />
-        <div class="flex gap-2">
-          <Button label="Abbrechen" severity="secondary" @click="emit('update:visible', false)" />
-          <Button
-            v-if="wonConflict"
-            label="+ Forecast"
-            icon="pi pi-plus"
-            severity="warning"
-            :loading="mergeLoading"
-            @click="onMerge"
-          />
-          <Button
-            v-else
-            label="Übernehmen"
-            icon="pi pi-check"
-            :loading="finalizing"
-            :disabled="finalizeDisabled"
-            @click="onFinalize"
-          />
-        </div>
-      </div>
-    </template>
-  </Dialog>
+				<div class="wc-actions">
+					<Button label="Abbrechen" severity="secondary" @click="close" />
+					<Button label="Bestätigen" icon="pi pi-check" @click="emitFinalize" />
+				</div>
+			</div>
+		</template>
+	</Dialog>
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
-import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 
-/** PROPS */
 const props = defineProps({
-  visible: { type: Boolean, default: false },
-  lookupClientByNumber: { type: Function, required: true },   // (num)=>Promise<{name, classification_id} | null>
-  checkClientPcExists: { type: Function, required: true },     // (num,pc)=>Promise<boolean>
-  initialClientNumber: { type: [String, Number], default: '' },
-  initialClientName:   { type: String, default: '' },
-  initialClassificationId: { type: [Number, null], default: null },
-  profitCenterCode: { type: [Number, String], default: null },
-  fiscalYear: { type: [Number, String], default: null },
-  /** lista completa 1..7 */
-  classificationOptions: {
-    type: Array,
-    default: () => ([
-      { label: 'A Kunde',     value: 1 },
-      { label: 'B Kunde',     value: 2 },
-      { label: 'C Kunde',     value: 3 },
-      { label: 'D Kunde',     value: 4 },
-      { label: 'X Kunde',     value: 5 },
-      { label: 'Potenzial A', value: 6 },
-      { label: 'Potenzial B', value: 7 },
-    ]),
-  },
+	visible: { type: Boolean, default: false },
+	lookupClientByNumber: { type: Function, required: true },
+	initialClientNumber: { type: [String, Number], default: '' },
+	initialClientName: { type: String, default: '' },
+	profitCenterCode: { type: [String, Number], default: null },
+	fiscalYear: { type: [String, Number], default: null },
+})
+const emit = defineEmits(['update:visible', 'finalize'])
+
+const internalVisible = ref(props.visible)
+watch(() => props.visible, v => (internalVisible.value = v))
+watch(internalVisible, v => emit('update:visible', v))
+
+const clientNumber = ref('')
+const clientName = ref('')
+
+// Sólo disponibles si NO existe el cliente
+const classificationOptions = ref([
+	{ label: 'Potenzial A', value: 6 },
+	{ label: 'Potenzial B', value: 7 },
+])
+const classificationId = ref(null)
+
+const isExistingClient = ref(false)
+const existingClassificationId = ref(null)
+
+const existingClassificationLabel = computed(() => {
+	const id = Number(existingClassificationId.value ?? 0)
+	if (!id) return ''
+	if (id === 1) return 'A'
+	if (id === 2) return 'B'
+	if (id === 3) return 'C'
+	if (id === 6) return 'Potenzial A'
+	if (id === 7) return 'Potenzial B'
+	return `ID ${id}`
 })
 
-const emit = defineEmits(['update:visible', 'finalize', 'merge-forecast'])
-
-/* State */
-const innerVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
-})
-const numInput = ref(String(props.initialClientNumber || ''))
-const nameInput = ref(props.initialClientName || '')
-const localClassificationId = ref(props.initialClassificationId ?? null)
-
-const clientFound = ref(false)
-const dbClassificationId = ref(null)
-const wonConflict = ref(false)
-const wonError = ref('')
-
-const finalizing = ref(false)
-const mergeLoading = ref(false)
-
-/* Cache para no perder el nombre manual del usuario */
-const initialName = props.initialClientName || ''
-const lastManualName = ref(initialName)
-watch(nameInput, (v) => { if (!clientFound.value) lastManualName.value = v })
-
-/* Helpers */
-const isValidClientNumber = (val) => {
-  const s = String(val || '').trim()
-  if (!/^\d{5}$/.test(s)) return false
-  const n = Number(s)
-  return n >= 10000 && n <= 19999
-}
-function resetValidation() {
-  wonConflict.value = false
-  wonError.value = ''
+function close() {
+	internalVisible.value = false
 }
 
-/* Klassifizierungs-Options sichtbare */
-const visibleClassificationOptions = computed(() => {
-  // Kunde existiert → mostrar solo su clase (una opción)
-  if (clientFound.value && dbClassificationId.value != null) {
-    const opt = props.classificationOptions.find(o => o.value === Number(dbClassificationId.value))
-    return opt ? [opt] : []
-  }
-  // Nuevo cliente → sólo potencial A/B
-  return props.classificationOptions.filter(o => o.value === 6 || o.value === 7)
+// ---- Sincronizar props al ABRIR el modal
+function syncFromProps() {
+	clientName.value = String(props.initialClientName || '')
+	clientNumber.value = String(props.initialClientNumber || '')
+	// reset de estado
+	isExistingClient.value = false
+	existingClassificationId.value = null
+	classificationId.value = null
+	// si vino número, verificamos
+	if (clientNumber.value.trim()) {
+		checkExisting()
+	}
+}
+
+watch(internalVisible, (v) => {
+	if (v) syncFromProps()
 })
 
-/* Habilitar botón: reglas mínimas */
-const finalizeDisabled = computed(() => {
-  if (!isValidClientNumber(numInput.value)) return true
-  if (!String(nameInput.value || '').trim()) return true
-  if (wonConflict.value) return true
-  // nuevo cliente: debe elegir Potencial A/B (mostramos sólo esas 2)
-  if (!clientFound.value && ![6,7].includes(Number(localClassificationId.value))) return true
-  // existente: no bloquear; tomamos clasificación de DB (si no hay, impedir)
-  if (clientFound.value && dbClassificationId.value == null) return true
-  return false
+// Mantener datos preparados si cambian las props con el modal cerrado
+watch(() => props.initialClientName, (v) => {
+	if (!internalVisible.value) clientName.value = String(v || '')
+})
+watch(() => props.initialClientNumber, (v) => {
+	if (!internalVisible.value) clientNumber.value = String(v || '')
 })
 
-/* Al abrir: reset limpio */
-watch(
-  () => props.visible,
-  (vis) => {
-    if (!vis) return
-    numInput.value = String(props.initialClientNumber || '')
-    nameInput.value = props.initialClientName || ''
-    lastManualName.value = nameInput.value || initialName
-    localClassificationId.value = props.initialClassificationId ?? null
-    clientFound.value = false
-    dbClassificationId.value = null
-    resetValidation()
-    if (numInput.value) runLookupDebounced()
-  },
-  { immediate: true },
-)
+// ---- Debounce al escribir el número
+let numTimer = null
+watch(clientNumber, (val) => {
+	const v = (val || '').trim()
+	if (numTimer) clearTimeout(numTimer)
+	if (!v) {
+		// si está vacío, NO es existente y habilitamos el select
+		isExistingClient.value = false
+		existingClassificationId.value = null
+		return
+	}
+	numTimer = setTimeout(() => checkExisting(), 300)
+})
 
-/* Lookup + PC-Konflikt (debounced) */
-let timer = null
-watch(numInput, () => runLookupDebounced())
-function runLookupDebounced() {
-  resetValidation()
-  if (timer) clearTimeout(timer)
-  timer = setTimeout(async () => {
-    const s = String(numInput.value || '').trim()
-    if (!s) {
-      clientFound.value = false
-      dbClassificationId.value = null
-      localClassificationId.value = null
-      nameInput.value = lastManualName.value || initialName
-      return
-    }
-    if (!isValidClientNumber(s)) {
-      clientFound.value = false
-      dbClassificationId.value = null
-      localClassificationId.value = null
-      wonError.value = 'Die Nummer muss zwischen 10000 und 19999 liegen.'
-      nameInput.value = lastManualName.value || initialName
-      return
-    }
-
-    const cgNum = Number(s)
-    // buscar cliente
-    const c = await props.lookupClientByNumber(cgNum)
-    // Sólo considerar "existente" si realmente hay datos de DB
-    const exists = !!(c && (c.client_group_number != null || c.id != null))
-    if (exists) {
-      clientFound.value = true
-      dbClassificationId.value = c.classification_id ?? null
-      localClassificationId.value = dbClassificationId.value // para que el dropdown muestre la opción única
-      if (String(c.name || '').trim()) {
-        nameInput.value = String(c.name).trim()    // bloquear con nombre de DB
-      }
-      // conflicto cliente+pc
-      const pc = Number(props.profitCenterCode || 0)
-      if (pc) {
-        const existsRel = await props.checkClientPcExists(cgNum, pc)
-        if (existsRel) {
-          wonConflict.value = true
-          wonError.value = 'Kunde + Profitcenter existieren bereits. Das ist Forecast.'
-        }
-      }
-    } else {
-      // no existe: liberar edición y restaurar el último nombre manual
-      clientFound.value = false
-      dbClassificationId.value = null
-      localClassificationId.value = null
-      nameInput.value = lastManualName.value || initialName
-    }
-  }, 220)
+async function checkExisting() {
+	const num = (clientNumber.value || '').trim()
+	if (!num) {
+		isExistingClient.value = false
+		existingClassificationId.value = null
+		return
+	}
+	try {
+		const data = await props.lookupClientByNumber(num)
+		if (data && data.client_number) {
+			// Existe → bloquear clasificación y limpiar cualquier selección previa
+			isExistingClient.value = true
+			existingClassificationId.value = data.classification_id ?? null
+			classificationId.value = null
+			if (data.name && !clientName.value) clientName.value = data.name
+		} else {
+			// No existe → habilitar selección
+			isExistingClient.value = false
+			existingClassificationId.value = null
+			// mantenemos lo que el usuario haya elegido
+		}
+	} catch {
+		// en caso de error de red, no bloqueamos
+		isExistingClient.value = false
+		existingClassificationId.value = null
+	}
 }
 
-/* Actions */
-async function onFinalize() {
-  finalizing.value = true
-  try {
-    const numStr = String(numInput.value || '').trim()
-    if (!isValidClientNumber(numStr)) throw new Error('Kundennummer muss zwischen 10000 und 19999 liegen.')
-    const cgNum = Number(numStr)
-    const cn = String(nameInput.value || '').trim()
-    if (!cn) throw new Error('Kundenname erforderlich.')
-
-    const cls = clientFound.value ? (dbClassificationId.value ?? null) : (localClassificationId.value ?? null)
-    if (!clientFound.value && ![6, 7].includes(Number(cls))) throw new Error('Bitte Potenzial (A/B) auswählen.')
-    if (clientFound.value && cls == null) throw new Error('Klassifizierung des bestehenden Kunden fehlt.')
-
-    // asegurar no-conflicto last-second
-    const pc = Number(props.profitCenterCode || 0)
-    if (pc) {
-      const conflict = await props.checkClientPcExists(cgNum, pc)
-      if (conflict) {
-        wonConflict.value = true
-        throw new Error('Kunde+Profitcenter existieren bereits. Das ist Forecast.')
-      }
-    }
-
-    emit('finalize', {
-      client_group_number: cgNum,
-      client_name: cn,
-      classification_id: clientFound.value ? dbClassificationId.value : localClassificationId.value,
-      clientFound: clientFound.value,
-    })
-  } catch (e) {
-    wonError.value = e?.message || 'Fehler beim Finalisieren'
-  } finally {
-    finalizing.value = false
-  }
+function emitFinalize() {
+	const out = {
+		client_group_number: clientNumber.value,
+		client_name: clientName.value,
+		// Si existe el cliente, NO mandamos clasificación; si no existe, enviamos 6/7 (o null si no eligió)
+		classification_id: isExistingClient.value ? null : (classificationId.value ?? null),
+	}
+	emit('finalize', out)
+	close()
 }
 
-async function onMerge() {
-  mergeLoading.value = true
-  try {
-    const s = String(numInput.value || '').trim()
-    if (!isValidClientNumber(s)) throw new Error('Ungültige Nummer (10000–19999).')
-    emit('merge-forecast', { client_group_number: Number(s) })
-  } catch (e) {
-    wonError.value = e?.message || 'Fehler beim Hinzufügen des Forecasts'
-  } finally {
-    mergeLoading.value = false
-  }
-}
+onMounted(() => {
+	// por si el modal ya abre visible con datos
+	if (internalVisible.value) syncFromProps()
+})
 </script>
 
 <style scoped>
-.lbl { color: #0f172a; font-weight: 600; }
-.text-danger { color: #b91c1c; }
-.text-muted { color: #64748b; }
-.conflict-box {
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #92400e;
-  padding: 10px;
-  border-radius: 8px;
-  margin-top: 8px;
+.wc-card {
+	width: min(520px, 92vw);
+	border-radius: 16px;
+	background: var(--surface-card, #fff);
+	box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+	display: flex;
+	flex-direction: column;
+	padding: 20px;
+}
+
+.wc-head {
+	text-align: center;
+	margin-bottom: 12px;
+}
+
+.wc-icon {
+	width: 56px;
+	height: 56px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--p-primary-500) 15%, transparent);
+	color: var(--p-primary-600);
+}
+
+.wc-icon .pi {
+	font-size: 20px;
+}
+
+.wc-title {
+	margin-top: 10px;
+	font-weight: 800;
+	font-size: 1.1rem;
+}
+
+.wc-sub {
+	margin-top: 4px;
+	font-size: .9rem;
+	opacity: .7;
+}
+
+.wc-body {
+	display: grid;
+	gap: 10px;
+	margin-top: 10px;
+}
+
+.wc-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.wc-label {
+	font-weight: 600;
+}
+
+.wc-help {
+	font-size: .85rem;
+	opacity: .75;
+}
+
+.wc-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+/* blur del backdrop */
+:deep(.backdrop-blur-sm) {
+	backdrop-filter: blur(6px);
 }
 </style>

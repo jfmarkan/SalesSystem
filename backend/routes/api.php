@@ -132,10 +132,11 @@ Route::middleware('auth:sanctum')->group(function () {
 // Finalize (won|lost)
         Route::post     ('/opportunities/{groupId}/{version}/finalize', [ExtraQuotaController::class, 'finalizeOpportunity'])->whereNumber('groupId')->whereNumber('version');
 // ===== Checks y utilidades Extra-Quota =====
-        Route::get('/clients', [ExtraQuotaController::class, 'listClients']);
-        Route::get('/clients/by-number/{num}', [ExtraQuotaController::class, 'getClientByNumber'])->whereNumber('num');
-        Route::get('/clients/{cgn}/profit-centers', [ExtraQuotaController::class, 'clientProfitCenters'])->whereNumber('cgn');
+        Route::get      ('/clients', [ExtraQuotaController::class, 'listClients']);
+        Route::get      ('/clients/by-number/{num}', [ExtraQuotaController::class, 'getClientByNumber'])->whereNumber('num');
+        Route::get      ('/clients/{cgn}/profit-centers', [ExtraQuotaController::class, 'clientProfitCenters'])->whereNumber('cgn');
         Route::get      ('/clients/exists-in-pc', [ExtraQuotaController::class, 'clientExistsInPc']);
+        Route::post     ('/budget/merge', [ExtraQuotaController::class, 'mergeBudget']);
         Route::post     ('/forecast/merge',       [ExtraQuotaController::class, 'mergeForecast']);
     });
 
@@ -170,6 +171,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Tools / flags
         Route::post('/tools/rebuild-sales', [ToolsAdminController::class, 'rebuildSales']);
         Route::post('/tools/generate-budget', [ToolsAdminController::class, 'generateBudget']);
+        Route::post('/tools/clients-update', [ToolsAdminController::class, 'clientsUpdate']);
         Route::post('/flags/budget-season', [ToolsAdminController::class, 'setBudgetSeason']);
 
         // KPIs and Progress
