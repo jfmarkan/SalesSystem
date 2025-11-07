@@ -64,18 +64,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
     });
 
-    Route::prefix('sales-force')->group(function () {
+     Route::prefix('sales-force')->group(function () {
         Route::get('/users',        [UserAdministrationController::class, 'index']);
-        Route::get('/roles',        [UserAdministrationController::class, 'roles']);
-        Route::get('/teams',        [UserAdministrationController::class, 'teams']);
-        Route::get('/clients',      [UserAdministrationController::class, 'clients']); // ?userId=
-
-        Route::patch('/users/{id}/block',  [UserAdministrationController::class, 'block']);
-        Route::patch('/users/{id}/roles',  [UserAdministrationController::class, 'updateRole']);
-        Route::patch('/users/{id}/teams',  [UserAdministrationController::class, 'updateTeams']);
-
-        Route::post('/users/{id}/transfer', [UserAdministrationController::class, 'transfer']);
-        Route::get('/users/{id}/logs',       [UserAdministrationController::class, 'logs']); // opcional
     });
 
     Route::prefix('analytics')->group(function () {
@@ -145,9 +135,18 @@ Route::middleware('auth:sanctum')->group(function () {
         // Users
         Route::get('/users', [UserAdminController::class, 'index']);
         Route::post('/users', [UserAdminController::class, 'store']);
-        Route::post('/users/{id}/block', [UserAdminController::class, 'block']);
-        Route::post('/users/{id}/unblock', [UserAdminController::class, 'unblock']);
+        // Route::post('/users/{id}/block', [UserAdminController::class, 'block']);
+        // Route::post('/users/{id}/unblock', [UserAdminController::class, 'unblock']);
+        Route::patch('/users/{id}/block',  [UserAdministrationController::class, 'block']);
         Route::post('/users/{id}/kick', [UserAdminController::class, 'kick']);
+        Route::get('/roles',        [UserAdministrationController::class, 'roles']);
+        Route::get('/teams',        [UserAdministrationController::class, 'teams']);
+        Route::get('/clients',      [UserAdministrationController::class, 'clients']); // ?userId=
+//      Route::patch('/users/{id}/roles',  [UserAdministrationController::class, 'updateRole']);
+        Route::patch('/users/{id}/teams',  [UserAdministrationController::class, 'updateTeams']);
+
+//      Route::post('/users/{id}/transfer', [UserAdministrationController::class, 'transfer']);
+//      Route::get('/users/{id}/logs',       [UserAdministrationController::class, 'logs']); // opcional
 
         // Sessions / online
         Route::get('/sessions/online', [SessionAdminController::class, 'online']);

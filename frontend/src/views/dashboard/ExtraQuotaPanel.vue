@@ -1501,6 +1501,7 @@ onMounted(async () => {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: auto;
+	height: 100%;
 	/* scroll acá */
 }
 
@@ -1509,7 +1510,7 @@ onMounted(async () => {
 	height: 100%;
 }
 
-.eqp-aside .listbox-flex :deep(.p-listbox-list-wrapper) {
+.eqp-aside .listbox-flex :deep(.p-listbox-list-container) {
 	height: 100%;
 	max-height: none;
 	/* evita quedar atado a 65vh */

@@ -9,7 +9,7 @@ import './assets/scss/theme.scss'
 import './assets/scss/main.scss'     // deja aquí tus tokens: --p-font-family, etc.
 
 // Iconos extra opcionales
-import '@fortawesome/fontawesome-free/css/all.min.css'
+//import '@fortawesome/fontawesome-free/css/all.min.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

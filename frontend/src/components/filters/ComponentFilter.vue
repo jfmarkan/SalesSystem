@@ -1,4 +1,3 @@
-<!-- src/components/filters/ComponentFilter.vue -->
 <script setup>
 import { computed } from 'vue'
 
@@ -9,7 +8,7 @@ const props = defineProps({
   secondaryOptions: { type: Array, required: true },
   secondaryId: { type: [Number, String, null], required: true },
 })
-const emit = defineEmits(['update:mode', 'update:primary-id', 'update:secondary-id', 'next'])
+const emit = defineEmits(['update:mode', 'update:primary-id', 'update:secondary-id'])
 
 const m = computed({ get: () => props.mode, set: (v) => emit('update:mode', v) })
 const pid = computed({ get: () => props.primaryId, set: (v) => emit('update:primary-id', v) })
@@ -26,25 +25,23 @@ function setMode(v) {
 
 <template>
   <div class="filter-wrap">
+    <!-- Botones de modo -->
     <div class="mode-toggle">
       <Button
         type="button"
         :class="['m-btn', m === 'client' && 'active']"
         :aria-pressed="m === 'client'"
         @click="setMode('client')"
-      >
-        Kunde
-      </Button>
+      >Kunde</Button>
       <Button
         type="button"
         :class="['m-btn', m === 'pc' && 'active']"
         :aria-pressed="m === 'pc'"
         @click="setMode('pc')"
-      >
-        Profit Center
-      </Button>
+      >Profit Center</Button>
     </div>
 
+    <!-- Select primario -->
     <div class="select-row">
       <Select
         v-model="pid"
@@ -57,19 +54,20 @@ function setMode(v) {
       />
     </div>
 
+    <!-- Lista secundaria con scroll -->
     <div class="list-wrap">
       <label class="list-caption">
         {{ m === 'client' ? 'Profit Center pro Kunde' : 'Kunden im Profit Center' }}
       </label>
 
-      <!-- 👇 OJO: la clase cae en el MISMO div que .p-listbox -->
       <Listbox
-        class="listbox-grow"
         v-model="sid"
         :options="secondaryOptions"
         optionLabel="label"
         optionValue="value"
+		class="w-full h-full"
         :disabled="!m || pid == null"
+		:listStyle="{ height: '100%' }"
       >
         <template #option="{ option }">
           <span v-html="option.label"></span>
@@ -80,26 +78,22 @@ function setMode(v) {
 </template>
 
 <style scoped>
-/* ====== LAYOUT BASE ====== */
 .filter-wrap {
-  height: 100%;
-  width: 100%;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 10px;
-  min-width: 0;
-  min-height: 0; /* ✅ clave para que el hijo pueda calcular alto */
-}
-.filter-wrap > * {
-  min-width: 0;
+  min-height:0;
+  height: 100%;
 }
 
-/* ====== BOTONES SUPERIORES ====== */
+/* Botones modo */
 .mode-toggle {
   display: flex;
   gap: 8px;
-  flex: 0 0 auto;
 }
+
 .m-btn {
   flex: 1;
   padding: 8px 12px;
@@ -107,79 +101,40 @@ function setMode(v) {
   border: 1px solid var(--input-border);
   font-weight: 500;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
 .m-btn.active {
   background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
   color: white;
   border: none;
 }
 
-/* ====== SELECT (ancho 100% fijo) ====== */
+/* Select primario */
 .select-row {
   flex: 0 0 auto;
-  width: 100%;
-  overflow: hidden;
-}
-.select-full {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  box-sizing: border-box;
-}
-:deep(.p-select) {
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;          /* evita ensanche */
 }
 
-:deep(.p-select .p-select-label) {
-  display: block;
+.select-full {
+  width: 100% !important;
+}
+
+.select-full :deep(.p-select-label) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-:deep(.p-select-panel) {
-  max-width: 100vw;          /* opcional: evita paneles más anchos que la ventana */
-}
-
-/* ====== LISTA (llena el resto del alto) ====== */
+/* Scroll interno del listbox SOLAMENTE */
 .list-wrap {
   flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* el root de Listbox */
-.listbox-grow {
-  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  width: 100%;
-}
-
-.listbox-grow :deep(.p-listbox) {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto !important;
-}
-.listbox-grow :deep(.p-listbox-list-wrapper) {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  min-height: 0;
-  max-height: none;
-}
-
-/* anulá el alto predeterminado del tema */
-.listbox-grow :deep(.p-listbox-list) {
   height: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none !important;
+  overflow: hidden; /* 💡 clave para el scroll interno */
 }
 
 .list-caption {
@@ -188,10 +143,40 @@ function setMode(v) {
   flex: 0 0 auto;
 }
 
-/* ====== BOTÓN INFERIOR ====== */
-.btn-next {
-  margin-top: auto;
-  width: 100%;
+/* Listbox con scroll interno */
+.listbox {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  height: 100%;
+}
+
+.listbox :deep(.p-listbox) {
+  height: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height:0;
+}
+.listbox :deep(.p-listbox-list-container) {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.listbox :deep(.p-listbox-list) {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Botón footer siempre visible */
+.btn-footer {
   flex: 0 0 auto;
+}
+
+.btn-next {
+  width: 100%;
 }
 </style>

@@ -5,10 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+
+// existentes
 use App\Services\BudgetingService;
 use App\Services\ForecastingService;
 
-class ToolsAdminController extends Controller
+// nuevos
+use App\Services\ClientsSynchronizer;
+use App\Jobs\ClientsUpdateJob;
+
+class ToolsController extends Controller
 {
     public function rebuildSales(Request $request)
     {
@@ -19,7 +25,7 @@ class ToolsAdminController extends Controller
         return response()->json(['queued' => true], 202);
     }
 
-public function generateBudget(Request $request, BudgetingService $svc)
+    public function generateBudget(Request $request, BudgetingService $svc)
     {
         $data = $request->validate([
             'fiscal_year' => 'required|integer',
@@ -57,5 +63,19 @@ public function generateBudget(Request $request, BudgetingService $svc)
         ]);
         Cache::forever('flags:budget-season', (bool)$data['enabled']);
         return response()->json(['ok' => true, 'enabled' => (bool)$data['enabled']]);
+    }
+
+    // App\Http\Controllers\Admin\ToolsAdminController.php
+    public function clientsUpdate(Request $request, \App\Services\ClientsSynchronizer $svc)
+    {
+        $data  = $request->validate(['queued' => 'sometimes|boolean','dry_run' => 'sometimes|boolean']);
+        $apply = !$request->boolean('dry_run', false); // GET dry-run si quieres, POST aplica
+
+        if ($request->boolean('queued', false)) {
+            \App\Jobs\ClientsUpdateJob::dispatch(['apply' => $apply]);
+            return response()->json(['queued' => true], 202);
+        }
+
+        return response()->json($svc->clientsUpdate(['apply' => $apply]));
     }
 }

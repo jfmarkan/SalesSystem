@@ -34,8 +34,10 @@ import Editor from 'primevue/editor' // verifica versión si usas v4 reciente
 import Fieldset from 'primevue/fieldset'
 import FileUpload from 'primevue/fileupload'
 import FloatLabel from 'primevue/floatlabel'
+import IconField from 'primevue/iconfield'
 import Image from 'primevue/image'
 import InlineMessage from 'primevue/inlinemessage'
+import InputIcon from 'primevue/inputicon'
 import InputMask from 'primevue/inputmask'
 import InputNumber from 'primevue/inputnumber'
 import InputOtp from 'primevue/inputotp'
@@ -61,6 +63,7 @@ import SelectButton from 'primevue/selectbutton'
 import Sidebar from 'primevue/sidebar'
 import Skeleton from 'primevue/skeleton'
 import Slider from 'primevue/slider'
+import SpeedDial from 'primevue/speeddial'
 import SplitButton from 'primevue/splitbutton'
 import Steps from 'primevue/steps'
 import TabMenu from 'primevue/tabmenu'
@@ -137,8 +140,10 @@ export default function setupPrimeVue(app) {
   app.component('Fieldset', Fieldset)
   app.component('FileUpload', FileUpload)
   app.component('FloatLabel', FloatLabel)
+  app.component('IconField', IconField)
   app.component('Image', Image)
   app.component('InlineMessage', InlineMessage)
+  app.component('InputIcon', InputIcon)
   app.component('InputMask', InputMask)
   app.component('InputNumber', InputNumber)
   app.component('InputOtp', InputOtp)
@@ -164,6 +169,7 @@ export default function setupPrimeVue(app) {
   app.component('Sidebar', Sidebar)
   app.component('Skeleton', Skeleton)
   app.component('Slider', Slider)
+  app.component('SpeedDial', SpeedDial)
   app.component('SplitButton', SplitButton)
   app.component('Steps', Steps)
   app.component('TabMenu', TabMenu)

@@ -151,10 +151,6 @@
 				<template #content>
 					<div class="table-pad">
 						<template v-if="hasSelection">
-							<div class="nav-bar flex items-center justify-end gap-8 mb-2">
-								<!-- Sin botones, solo rango visible -->
-								<span class="range-label">Monate 1–12</span>
-							</div>
 							<ForecastTable
 								ref="tableRef"
 								:months="months"
@@ -1032,7 +1028,7 @@ const selectedPCName = computed(() => {
 /* Table */
 .table-card {
 	grid-column: 1 / -1;
-	height: clamp(240px, 25vh, 360px);
+	height: clamp(200px, 20vh, 360px);
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
@@ -1040,11 +1036,6 @@ const selectedPCName = computed(() => {
 
 .table-pad {
 	padding: 0.15rem;
-}
-
-.nav-bar {
-	padding: 2px 6px;
-	margin-bottom: 8px;
 }
 
 .table-card :deep(input),

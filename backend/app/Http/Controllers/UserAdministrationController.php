@@ -35,8 +35,13 @@ class UserAdministrationController extends Controller
     }
 
     public function roles(){
-        return response()->json(SpatieRole::orderBy('name')->pluck('name'));
+        // Spatie roles -> id + name (guard_name si necesitás)
+        return response()->json(
+            \Spatie\Permission\Models\Role::orderBy('name')
+                ->get(['id','name'])
+        );
     }
+
 
     public function teams(){
         return response()->json(Team::select('id','name')->orderBy('name')->get());
@@ -138,13 +143,26 @@ class UserAdministrationController extends Controller
     }
 
     public function updateRole($id, Request $request){
-        $request->validate(['role'=>['required','string']]);
-        $role = SpatieRole::where('name', $request->input('role'))->firstOrFail();
+        $request->validate([
+            'role_id' => ['sometimes','integer','exists:roles,id'],
+            'role'    => ['sometimes','string', Rule::exists('roles','name')],
+        ]);
 
         $user = User::findOrFail($id);
-        $user->syncRoles([$role->name]);
 
-        activity('user')->performedOn($user)->withProperties(['role'=>$role->name])->log('CHANGE_ROLE');
+        if ($request->filled('role_id')) {
+            $role = SpatieRole::findOrFail((int)$request->input('role_id'));
+        } else {
+            $role = SpatieRole::where('name', $request->input('role'))->firstOrFail();
+        }
+
+        $user->syncRoles([$role->name]);
+        $user->role_id = $role->id;  // 👈 mantené tu columna sincronizada
+        $user->save();
+
+        activity('user')->performedOn($user)
+            ->withProperties(['role'=>$role->name])
+            ->log('CHANGE_ROLE');
 
         return response()->json($this->serialize($user));
     }
@@ -228,5 +246,43 @@ class UserAdministrationController extends Controller
             'roles'=>$u->getRoleNames()->values(),
             'teamIds'=>TeamMember::where('user_id',$u->id)->pluck('team_id')->values(),
         ];
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'first_name' => ['required','string','max:100'],
+            'last_name'  => ['required','string','max:100'],
+            'username'   => ['required','string','max:100','unique:users,username'],
+            'email'      => ['required','string','email','max:255','unique:users,email'],
+            'password'   => ['required','string','min:6'],
+            'role_id'    => ['required','integer','exists:roles,id'], // 👈 ID de Spatie role
+            'disabled'   => ['sometimes','boolean'],
+        ]);
+
+        $user = null;
+
+        DB::transaction(function () use (&$user, $data) {
+            /** @var \App\Models\User $user */
+            $user = \App\Models\User::create([
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'username'   => $data['username'],
+                'email'      => $data['email'],
+                'password'   => $data['password'],          // hashed por casts()
+                'role_id'    => $data['role_id'],           // 👈 guardás el id en tu columna
+                'disabled'   => $data['disabled'] ?? false,
+            ]);
+
+            // Sincronizá Spatie por nombre pero usando el id
+            $role = SpatieRole::findOrFail($data['role_id']);
+            $user->syncRoles([$role->name]);
+
+            activity('user')->performedOn($user)
+                ->withProperties(['created' => true, 'role' => $role->name])
+                ->log('CREATE');
+        });
+
+        return response()->json($this->serialize($user), 201);
     }
 }

@@ -35,12 +35,22 @@
 
     <div v-if="loading" class="loading">Wird berechnet…</div>
     <template v-else>
-      <div v-if="summary" class="summary">
-        <div class="kpi"><span class="k">Sales YTD (Basis)</span><span class="v">{{ fmt(summary.totalSalesYTD) }}</span></div>
-        <div class="kpi"><span class="k">Saison-Anteil YTD</span><span class="v">{{ fmt(summary.ytdPct) }} %</span></div>
-        <div class="kpi"><span class="k">Basis-Prognose (0%)</span><span class="v">{{ fmt(summary.baseForecast) }}</span></div>
-        <div class="kpi"><span class="k">Best Case (gesamt)</span><span class="v good">{{ fmt(summary.totalBest) }}</span></div>
-        <div class="kpi"><span class="k">Worst Case (gesamt)</span><span class="v bad">{{ fmt(summary.totalWorst) }}</span></div>
+      <div v-if="summary" class="flex">
+		<div class="summary">
+			<div class="kpi"><span class="k">Sales CYTLFM (Basis)</span><span class="v">{{ fmt(summary.totalSalesYTD) }}</span></div>
+			<div class="kpi"><span class="k">Saison-Anteil CYTLFM</span><span class="v">{{ fmt(summary.ytdPct) }} %</span></div>
+			<div class="kpi"><span class="k">Basis-Prognose</span><span class="v">{{ fmt(summary.baseForecast) }}</span></div>
+			<div class="kpi"><span class="k">Best Case (gesamt)</span><span class="v good">{{ fmt(summary.totalBest) }}</span></div>
+			<div class="kpi"><span class="k">Worst Case (gesamt)</span><span class="v bad">{{ fmt(summary.totalWorst) }}</span></div>
+		</div>
+		<div class="legend">
+			<div>
+				CYTLFM = Kalenderjahr bis zum letzten vollen Monat
+			</div>
+			<div>
+				BYTLFM = Wirtschaftsjahr bis zum letzten vollen Monat
+			</div>
+		</div>
       </div>
       <div v-else class="placeholder"><em>Wähle Client & Profit Center und klicke „Simulieren“.</em></div>
     </template>
@@ -197,12 +207,14 @@ defineExpose({ getValues, markSaved, hardReset })
 .actions{ display:flex; justify-content:flex-end; }
 .sep{ height:1px; background: rgba(0,0,0,.08); margin:4px 0; }
 .loading{ color:#475569; }
-.summary{ display:grid; gap:8px; }
+.flex{display: flex; flex-direction: column; justify-content: space-between; height: 100%;}
+.summary{ display:grid; gap:8px;}
 .kpi{ display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:rgba(255,255,255,.3); border:solid 1px ;border-radius:8px; }
 .kpi .k{ color:#334155; }
 .kpi .v{ font-weight:700; }
 .kpi .v.good{ color:#16a34a; }
-.kpi .v.bad{ color:#dc2626; }
+.kpi .v.bad{ color:#dc2626;}
 .placeholder{ color:#6b7280; }
 .err{ color:#dc2626; }
+.legend{ font-size: .75rem; font-weight: 300;}
 </style>

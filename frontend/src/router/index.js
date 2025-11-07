@@ -19,6 +19,7 @@ import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
 import QuotaByUser from '@/views/dashboard/admin/settings/QuotaByUser.vue';
 import AdminDashboard from '@/views/dashboard/admin/AdminDashboard.vue';
 import SalesForceAnalytics from '@/views/dashboard/manager/SalesForceAnalytics.vue';
+import UsersPanel from '@/views/dashboard/admin/settings/UsersPanel.vue';
 
 const routes = [
     {
@@ -102,10 +103,17 @@ const routes = [
                 component: AdminDashboard,
                 meta: {
                     requiresAuth: true
-                }
+                },
+            },
+			{
+                path: '/users',
+                component: UsersPanel,
+                meta: {
+                    requiresAuth: true
+                },
             },
             {
-                path: '/settings/extra-quotas/user/:userId',
+                path: '/extra-quotas/user/:userId',
                 component: QuotaByUser,
                 meta: {
                     requiresAuth: true
@@ -132,16 +140,7 @@ const routes = [
                     requiresAuth: true
                 }
             },
-            {
-            path: '/admin',
-            component: AdminDashboard,
-            meta: { requiresAuth: true }
-            },
-// {
-//   path: '/admin/users',
-//   component: () => import('@/views/admin/users/UsersIndex.vue'),
-//   meta: { requiresAuth: true }
-// },
+
 // {
 //   path: '/admin/clients',
 //   component: () => import('@/views/admin/clients/ClientsIndex.vue'), // opcional futuro
