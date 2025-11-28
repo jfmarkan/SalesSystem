@@ -16,10 +16,13 @@ import ActionPlanPanel from '@/views/dashboard/ActionPlanPanel.vue';
 import ReportGenerator from '@/views/dashboard/manager/ProfitCenterAnalytics.vue';
 import CompanyAnalytics from '@/views/dashboard/manager/CompanyAnalytics.vue';
 import ExtraQuotaAnalysis from '@/views/dashboard/ExtraQuotaAnalysis.vue';
-import QuotaByUser from '@/views/dashboard/admin/settings/QuotaByUser.vue';
 import AdminDashboard from '@/views/dashboard/admin/AdminDashboard.vue';
 import SalesForceAnalytics from '@/views/dashboard/manager/SalesForceAnalytics.vue';
 import UsersPanel from '@/views/dashboard/admin/settings/UsersPanel.vue';
+import ClientsIndex from '@/views/dashboard/admin/clients/ClientsIndex.vue';
+import ProfitCentersIndex from '@/views/dashboard/admin/profit-centers/ProfitCentersIndex.vue';
+import OrganizationPanel from '@/views/dashboard/admin/settings/OrganizationPanel.vue';
+import BudgetingOverview from '@/views/dashboard/admin/budgeting/BudgetingOverview.vue';
 
 const routes = [
     {
@@ -106,15 +109,36 @@ const routes = [
                 },
             },
 			{
-                path: '/users',
+                path: '/settings/users',
                 component: UsersPanel,
                 meta: {
                     requiresAuth: true
                 },
             },
             {
-                path: '/extra-quotas/user/:userId',
-                component: QuotaByUser,
+                path: '/settings/clients',
+                component: ClientsIndex,
+                meta: {
+                    requiresAuth: true
+                }
+            },
+			{
+                path: '/settings/profit-center',
+                component: ProfitCentersIndex,
+                meta: {
+                    requiresAuth: true
+                }
+            },
+			{
+                path: '/settings/company',
+                component: OrganizationPanel,
+                meta: {
+                    requiresAuth: true
+                }
+            },
+			{
+                path: '/settings/budgeting',
+                component: BudgetingOverview,
                 meta: {
                     requiresAuth: true
                 }

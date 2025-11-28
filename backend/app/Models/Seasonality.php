@@ -14,7 +14,33 @@ class Seasonality extends Model
     protected $fillable = [
         'profit_center_code',
         'fiscal_year',
-        'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar',
+        'apr',
+        'may',
+        'jun',
+        'jul',
+        'aug',
+        'sep',
+        'oct',
+        'nov',
+        'dec',
+        'jan',
+        'feb',
+        'mar',
+    ];
+
+    protected $casts = [
+        'apr' => 'float',
+        'may' => 'float',
+        'jun' => 'float',
+        'jul' => 'float',
+        'aug' => 'float',
+        'sep' => 'float',
+        'oct' => 'float',
+        'nov' => 'float',
+        'dec' => 'float',
+        'jan' => 'float',
+        'feb' => 'float',
+        'mar' => 'float',
     ];
 
     public function profitCenters()

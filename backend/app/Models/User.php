@@ -56,11 +56,25 @@ class User extends Authenticatable
 
     public function clients()
     {
-        return $this->belongsToMany(\App\Models\Client::class); 
+        return $this->belongsToMany(\App\Models\Client::class);
     }
 
     public function profitCenters()
-    { 
-        return $this->belongsToMany(\App\Models\ProfitCenter::class); 
+    {
+        return $this->belongsToMany(\App\Models\ProfitCenter::class);
+    }
+
+    public function teams()
+    {
+        return $this->belongsToMany(Team::class, 'team_members')
+            ->withPivot('role')
+            ->withTimestamps()
+            ->whereNull('team_members.deleted_at');
+    }
+
+    // Team where the user is manager
+    public function managedTeam()
+    {
+        return $this->hasOne(Team::class, 'manager_user_id');
     }
 }

@@ -18,4 +18,8 @@ class UnitConversion extends Model
         'factor_to_euro'
     ];
 
+    protected $casts = [
+        'factor_to_m3' => 'float',
+        'factor_to_euro' => 'float',
+    ];
 }

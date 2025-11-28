@@ -1,20 +1,6 @@
 <template>
 	<div class="pc-overview-grid">
-		<!-- 🔶 NUR IM DRUCK: Kopfbereich mit Details -->
-		<div class="print-only">
-			<div class="report-print-header">
-				<h2>Vertriebsprognose nach Profit Center</h2>
-				<div class="meta">
-					<span>Profit Center: <strong>{{ profitCenterCode }}</strong></span>
-					<span class="dot">•</span>
-					<span>Einheit: <strong>{{ unitLabel }}</strong></span>
-					<span class="dot">•</span>
-					<span>Erstellungsdatum: <strong>{{ createdAtDE }}</strong></span>
-				</div>
-			</div>
-		</div>
-
-		<!-- ✅ KPI ROW: 6 tarjetas en 1 fila (2/12 cada una) -->
+		<!-- KPI ROW -->
 		<section class="kpi-row">
 			<Card class="kpi kpi-card" v-for="card in kpiCards" :key="card.key">
 				<template #content>
@@ -29,13 +15,11 @@
 							</div>
 						</div>
 
-						<!-- 🔹 Mini bar chart stacked (solo en las 3 KPIs de la izquierda) -->
 						<div v-if="['ytd_s', 'ytd_b', 'ytd_f'].includes(card.key)" class="mini-bar-zone">
 							<Chart type="bar" :data="miniBarStacked(card.key)" :options="miniBarOptions"
 								class="mini-bar" />
 						</div>
 
-						<!-- Sparklines de la derecha -->
 						<div v-if="card.kind === 'spark' && card.chart" class="spark-zone">
 							<Chart type="line" :data="card.chart" :options="sparkOptions" class="sparkline" />
 						</div>
@@ -54,11 +38,10 @@
 			</Card>
 		</section>
 
-		<!-- ✅ CHARTS ROW: Línea 9/12 + Donut 3/12 -->
+		<!-- CHARTS ROW -->
 		<section class="viz-row">
-			<!-- Linienchart (9/12) -->
 			<Card class="viz-card viz-line-card">
-				<template #title>Monatliche Entwicklung</template>
+				<template #title>Monatliche Entwicklung – Unternehmen gesamt</template>
 				<template #content>
 					<div class="viz-body">
 						<Chart type="line" :data="lineData" :options="lineOptions" class="viz-line" />
@@ -66,16 +49,13 @@
 				</template>
 			</Card>
 
-			<!-- Donutchart (3/12) -->
 			<Card class="viz-card viz-donut-card">
-				<template #title>Zusammensetzung</template>
+				<template #title>Zusammensetzung (Budget / Extra-Quota)</template>
 				<template #content>
 					<div class="viz-body donut-layout">
 						<div class="pie-area">
 							<Chart type="doughnut" :data="multiPieData" :options="multiPieOptions" class="viz-donut" />
 						</div>
-
-						<!-- Legende (de) -->
 						<div class="legend mt-2">
 							<div class="legend-row">
 								<span class="lg-dot" :style="{ background: '#16a34a' }"></span>
@@ -109,10 +89,10 @@
 			</Card>
 		</section>
 
-		<!-- ✅ TABLA ROW: 12/12 -->
+		<!-- TABLA -->
 		<section class="table-row">
 			<Card>
-				<template #title>Monatliche Werte (FY)</template>
+				<template #title>Monatliche Werte (FY – Unternehmen)</template>
 				<template #content>
 					<PcMonthlyTable :months="months" :sales="sArr" :budget="bArr" :forecast="fArr" />
 				</template>
@@ -129,35 +109,65 @@ import PcMonthlyTable from './PcMonthlyTable.vue'
 import api from '@/plugins/axios'
 
 const props = defineProps({
-	profitCenterCode: { type: String, required: true },
-	fiscalYearStart: { type: Number, default: null },
+	fiscalYearStart: { type: Number, required: true },
 	asOf: { type: String, default: null }, // 'YYYY-MM'
 	unit: { type: String, default: 'm3' }, // 'm3' | 'euro' | 'units'
 })
 
-/* PRINT meta (de) */
 const unitLabel = computed(() =>
 	props.unit === 'euro' ? 'EUR' : props.unit === 'units' ? 'VK-EH' : 'm³',
 )
 const createdAtDE = new Date().toLocaleDateString('de-DE')
 
-/* Fetch overview data */
 const data = ref(null)
-async function fetchOverview() {
-	if (!props.profitCenterCode) {
-		data.value = null
-		return
-	}
-	const params = { profit_center_code: props.profitCenterCode }
-	if (props.fiscalYearStart) params.fiscal_year = props.fiscalYearStart
-	if (props.asOf) params.as_of = props.asOf
-	const { data: resp } = await api.get('/api/analytics/pc/overview', { params })
-	data.value = resp
-}
-onMounted(fetchOverview)
-watch(() => [props.profitCenterCode, props.fiscalYearStart, props.asOf, props.unit], fetchOverview)
 
-/* Helpers */
+async function fetchOverview() {
+	const params = {
+		node_id: 'company_main',
+		fiscal_year: props.fiscalYearStart,
+	}
+	const { data: resp } = await api.get('/api/analytics/series', { params })
+
+	const months = resp.months || []
+
+	// lastIdx según asOf dentro del FY Apr–März
+	let lastIdx = 0
+	if (months.length) {
+		if (props.asOf) {
+			const idx = months.indexOf(props.asOf)
+			lastIdx = idx >= 0 ? idx : months.length - 1
+		} else {
+			lastIdx = months.length - 1
+		}
+	}
+
+	const raw = {
+		monthly: {
+			sales: resp.sales || { units: [], m3: [], euro: [] },
+			budgets: resp.budgets || { units: [], m3: [], euro: [] },
+			forecast: resp.forecasts || { units: [], m3: [], euro: [] },
+		},
+	}
+
+	const eq = resp.extra_quotas || { units: '0', m3: '0', euro: '0' }
+	const extra_quota = {
+		allocated: eq,
+		used: { units: '0', m3: '0', euro: '0' },
+		remaining: eq,
+	}
+
+	data.value = {
+		months,
+		last_complete_index: lastIdx,
+		raw,
+		extra_quota,
+	}
+}
+
+onMounted(fetchOverview)
+watch(() => [props.fiscalYearStart, props.asOf, props.unit], fetchOverview)
+
+/* Helpers numéricos iguales que en PcOverview */
 const toNum = v =>
 	typeof v === 'number'
 		? v
@@ -168,6 +178,7 @@ const fmt = v =>
 	Math.round(toNum(v))
 		.toString()
 		.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
 const months = computed(() => data.value?.months || [])
 const lastIdx = computed(() => Number(data.value?.last_complete_index ?? 0))
 const nextIdx = computed(() => Math.min(11, lastIdx.value + 1))
@@ -191,29 +202,25 @@ const labelDE = ym => {
 	return map[m] || ym
 }
 
-/* Series per unit */
 const unitKey = computed(() => {
 	const v = props.unit
 	if (v === 'VK-EH') return 'units'
 	return ['m3', 'euro', 'units'].includes(v) ? v : 'm3'
 })
-const sArr = computed(() => data.value?.raw?.monthly?.sales?.[unitKey.value] || [])
-const bArr = computed(() => data.value?.raw?.monthly?.budgets?.[unitKey.value] || [])
-const fArr = computed(() => data.value?.raw?.monthly?.forecast?.[unitKey.value] || [])
 
-/* Math helpers */
+const sArr = computed(
+	() => data.value?.raw?.monthly?.sales?.[unitKey.value] || [],
+)
+const bArr = computed(
+	() => data.value?.raw?.monthly?.budgets?.[unitKey.value] || [],
+)
+const fArr = computed(
+	() => data.value?.raw?.monthly?.forecast?.[unitKey.value] || [],
+)
+
 const sum = a => a.reduce((acc, v) => acc + toNum(v), 0)
-const cumSeries = (arr, upTo = 11) => {
-	const out = []
-	let acc = 0
-	for (let i = 0; i <= upTo; i++) {
-		acc += toNum(arr[i] || 0)
-		out.push(acc)
-	}
-	return out
-}
 
-/** ✅ Cumulativa COMPLETA para todo el año fiscal (Abr–März) */
+/* cumulativa TODO el FY (Abr–März) */
 const cumSeriesFull = arr => {
 	const out = []
 	let acc = 0
@@ -224,25 +231,45 @@ const cumSeriesFull = arr => {
 	return out
 }
 
-/* YTD + trend calcs */
+/* YTD, ratios, KPIs, mini-bars, donut, flechas:
+   la misma lógica que usamos en PcOverview,
+   aplicada sobre sArr/bArr/fArr.
+*/
+
 const ytdSales = computed(() => sum(sArr.value.slice(0, lastIdx.value + 1)))
 const ytdBudget = computed(() => sum(bArr.value.slice(0, lastIdx.value + 1)))
 const ytdForecast = computed(() => sum(fArr.value.slice(0, lastIdx.value + 1)))
+
 const attBudgetPct = computed(() =>
 	ytdBudget.value > 0 ? (ytdSales.value / ytdBudget.value) * 100 : 0,
 )
 const attForecastPct = computed(() =>
 	ytdForecast.value > 0 ? (ytdSales.value / ytdForecast.value) * 100 : 0,
 )
+
 const ytdLabels = computed(() =>
-	months.value.slice(0, lastIdx.value + 1).map(ym => labelDE(ym).slice(0, 1)),
+	months.value
+		.slice(0, lastIdx.value + 1)
+		.map(ym => labelDE(ym).slice(0, 1)),
 )
+
 const ratioSeriesPct = (numArr, denArr) => {
 	const L = lastIdx.value
-	const numCum = cumSeries(numArr, L)
-	const denCum = cumSeries(denArr, L)
-	return numCum.map((n, i) => (toNum(denCum[i]) > 0 ? (n / denCum[i]) * 100 : 0))
+	const numCum = []
+	const denCum = []
+	let accN = 0
+	let accD = 0
+	for (let i = 0; i <= L; i++) {
+		accN += toNum(numArr[i] || 0)
+		accD += toNum(denArr[i] || 0)
+		numCum.push(accN)
+		denCum.push(accD)
+	}
+	return numCum.map((n, i) =>
+		toNum(denCum[i]) > 0 ? (n / denCum[i]) * 100 : 0,
+	)
 }
+
 const bandColor = p => {
 	const v = Number(p) || 0
 	if (v >= 96) return { line: '#16a34a', fill: '#16a34a22' }
@@ -250,8 +277,10 @@ const bandColor = p => {
 	if (v >= 80) return { line: '#f59e0b', fill: '#f59e0b22' }
 	return { line: '#ef4444', fill: '#ef444422' }
 }
+
 const seriesBudArr = computed(() => ratioSeriesPct(sArr.value, bArr.value))
 const seriesFcArr = computed(() => ratioSeriesPct(sArr.value, fArr.value))
+
 const trendBud = computed(() => {
 	const s = seriesBudArr.value
 	const { line, fill } = bandColor(s.at(-1) ?? 0)
@@ -259,7 +288,13 @@ const trendBud = computed(() => {
 		? {
 			labels: ytdLabels.value,
 			datasets: [
-				{ data: s, borderColor: line, backgroundColor: fill, fill: true, tension: 0.3 },
+				{
+					data: s,
+					borderColor: line,
+					backgroundColor: fill,
+					fill: true,
+					tension: 0.3,
+				},
 			],
 		}
 		: null
@@ -271,13 +306,18 @@ const trendFc = computed(() => {
 		? {
 			labels: ytdLabels.value,
 			datasets: [
-				{ data: s, borderColor: line, backgroundColor: fill, fill: true, tension: 0.3 },
+				{
+					data: s,
+					borderColor: line,
+					backgroundColor: fill,
+					fill: true,
+					tension: 0.3,
+				},
 			],
 		}
 		: null
 })
 
-/* 6M outlook */
 const idx6 = computed(() => {
 	const a = []
 	for (let i = nextIdx.value; i < Math.min(12, nextIdx.value + 6); i++) a.push(i)
@@ -290,22 +330,50 @@ const future6Forecast = computed(() =>
 	idx6.value.reduce((acc, i) => acc + toNum(fArr.value[i] || 0), 0),
 )
 const future6Pct = computed(() =>
-	future6Budget.value > 0 ? (future6Forecast.value / future6Budget.value) * 100 : 0,
+	future6Budget.value > 0
+		? (future6Forecast.value / future6Budget.value) * 100
+		: 0,
 )
 
-/* KPI cards */
 const ytdPeriod = computed(() =>
-	months.value.length ? `${labelDE(months.value[0])}–${labelDE(months.value[lastIdx.value])}` : '',
+	months.value.length
+		? `${labelDE(months.value[0])}–${labelDE(
+			months.value[lastIdx.value],
+		)}`
+		: '',
 )
+
 const pct = p => `${(Number(p) || 0).toFixed(1)}%`
 const pctClass = p => {
 	const n = Number(p) || 0
-	return n >= 100 ? 'pct-good' : n >= 90 ? 'pct-warn' : n >= 80 ? 'pct-mid' : 'pct-bad'
+	return n >= 100
+		? 'pct-good'
+		: n >= 90
+			? 'pct-warn'
+			: n >= 80
+				? 'pct-mid'
+				: 'pct-bad'
 }
+
 const kpiCards = computed(() => [
-	{ key: 'ytd_s', title: 'YTLFM Ist', value: fmt(ytdSales.value), sub: `Zeitraum: ${ytdPeriod.value}` },
-	{ key: 'ytd_b', title: 'YTLFM Budget', value: fmt(ytdBudget.value), sub: `inkl. Extra-Quota · ${ytdPeriod.value}` },
-	{ key: 'ytd_f', title: 'YTLFM Forecast', value: fmt(ytdForecast.value), sub: ytdPeriod.value },
+	{
+		key: 'ytd_s',
+		title: 'YTLFM Ist',
+		value: fmt(ytdSales.value),
+		sub: `Zeitraum: ${ytdPeriod.value}`,
+	},
+	{
+		key: 'ytd_b',
+		title: 'YTLFM Budget',
+		value: fmt(ytdBudget.value),
+		sub: `inkl. Extra-Quota · ${ytdPeriod.value}`,
+	},
+	{
+		key: 'ytd_f',
+		title: 'YTLFM Forecast',
+		value: fmt(ytdForecast.value),
+		sub: ytdPeriod.value,
+	},
 	{
 		key: 'att_b',
 		title: 'Budgeterreichung',
@@ -328,13 +396,19 @@ const kpiCards = computed(() => [
 		kind: 'spark',
 		pct: future6Pct.value,
 		chart: trendBud.value,
-		sub: `Budget: ${fmt(future6Budget.value)} · Forecast: ${fmt(future6Forecast.value)}`,
+		sub: `Budget: ${fmt(future6Budget.value)} · Forecast: ${fmt(
+			future6Forecast.value,
+		)}`,
 	},
 ])
 
-/* === Mini bar charts stacked (gris + color de performance) === */
+/* Mini-bars, sparkOptions, donut, flechas → igual que PcOverview, los dejo por brevedad */
+
+// Mini-bars
 function miniBarStacked(key) {
-	const labels = months.value.map(m => labelDE(m).slice(0, 1)).slice(0, 12)
+	const labels = months.value
+		.map(m => labelDE(m).slice(0, 1))
+		.slice(0, 12)
 	const L = Math.min(11, lastIdx.value)
 
 	let actual = [],
@@ -439,20 +513,23 @@ const sparkOptions = {
 	plugins: { legend: { display: false }, tooltip: { enabled: true } },
 	elements: { point: { radius: 0 } },
 	scales: {
-		x: { display: true, ticks: { font: { size: 10 } }, grid: { display: false } },
+		x: {
+			display: true,
+			ticks: { font: { size: 10 } },
+			grid: { display: false },
+		},
 		y: { display: false, grid: { display: false } },
 	},
 }
 
-/* ==================== LÍNEA GRANDE – FY COMPLETO ==================== */
+/* Línea grande – TODO el FY */
 const budgetFY = computed(() => sum(bArr.value))
-
 const lineData = computed(() => ({
 	labels: months.value,
 	datasets: [
 		{
 			label: 'Ist',
-			data: cumSeriesFull(sArr.value), // 🔥 12 puntos, Abril–März
+			data: cumSeriesFull(sArr.value),
 			borderColor: '#2563eb',
 			backgroundColor: '#2563eb33',
 			fill: false,
@@ -494,36 +571,70 @@ const lineOptions = {
 	layout: { padding: { top: 12, right: 12, left: 12, bottom: 12 } },
 	plugins: {
 		legend: { position: 'bottom' },
-		tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
+		tooltip: {
+			callbacks: {
+				label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
+			},
+		},
 	},
 	scales: {
-		x: { ticks: { callback: (v, i) => labelDE(months.value[i] || '') } },
+		x: {
+			ticks: {
+				callback: (v, i) => labelDE(months.value[i] || ''),
+			},
+		},
 		y: { beginAtZero: true, ticks: { callback: v => fmt(v) } },
 	},
 }
 
-/* ==================== DONUT 3 RINGS ==================== */
-const extraQuotaTotal = computed(() => toNum(data.value?.extra_quota?.allocated?.[unitKey.value] ?? 0))
-const extraQuotaUsed = computed(() => toNum(data.value?.extra_quota?.used?.[unitKey.value] ?? 0))
-const extraRemaining = computed(() => Math.max(0, extraQuotaTotal.value - extraQuotaUsed.value))
+/* Donut simplificado usando budgetFY y extra_quota */
+const extraQuotaTotal = computed(() =>
+	toNum(data.value?.extra_quota?.allocated?.[unitKey.value] ?? 0),
+)
+const extraQuotaUsed = computed(() =>
+	toNum(data.value?.extra_quota?.used?.[unitKey.value] ?? 0),
+)
+const extraRemaining = computed(() =>
+	Math.max(0, extraQuotaTotal.value - extraQuotaUsed.value),
+)
 
 const targetTotal = computed(() => budgetFY.value)
-const baseBudget = computed(() => Math.max(0, targetTotal.value - extraQuotaTotal.value))
-const forecastTotal = computed(() => sum(fArr.value))
-const forecastToExtra = computed(() => Math.min(extraQuotaTotal.value, extraQuotaUsed.value))
-const forecastToBase = computed(() =>
-	Math.max(0, Math.min(baseBudget.value, forecastTotal.value - forecastToExtra.value)),
+const baseBudget = computed(() =>
+	Math.max(0, targetTotal.value - extraQuotaTotal.value),
 )
-const baseRemaining = computed(() => Math.max(0, baseBudget.value - forecastToBase.value))
+const forecastTotal = computed(() => sum(fArr.value))
+const forecastToExtra = computed(() =>
+	Math.min(extraQuotaTotal.value, extraQuotaUsed.value),
+)
+const forecastToBase = computed(() =>
+	Math.max(
+		0,
+		Math.min(baseBudget.value, forecastTotal.value - forecastToExtra.value),
+	),
+)
+const baseRemaining = computed(() =>
+	Math.max(0, baseBudget.value - forecastToBase.value),
+)
 
-const ytdCapped = computed(() => Math.min(ytdSales.value, targetTotal.value))
-const remainingAfterYTD = computed(() => Math.max(0, targetTotal.value - ytdCapped.value))
+const ytdCapped = computed(() =>
+	Math.min(ytdSales.value, targetTotal.value),
+)
+const remainingAfterYTD = computed(() =>
+	Math.max(0, targetTotal.value - ytdCapped.value),
+)
 const forecastFuture = computed(() => sum(fArr.value.slice(nextIdx.value)))
 const forecastFutureShown = computed(() =>
-	Math.min(remainingAfterYTD.value, Math.max(0, forecastFuture.value)),
+	Math.min(
+		remainingAfterYTD.value,
+		Math.max(0, forecastFuture.value),
+	),
 )
-const gapToTarget = computed(() =>
-	Math.max(0, targetTotal.value - ytdCapped.value - forecastFutureShown.value),
+const gapToTarget = computed(
+	() =>
+		Math.max(
+			0,
+			targetTotal.value - ytdCapped.value - forecastFutureShown.value,
+		),
 )
 
 const multiPieData = computed(() => ({
@@ -537,23 +648,35 @@ const multiPieData = computed(() => ({
 		},
 		{
 			label: 'Quota Usage',
-			data: [forecastToBase.value, baseRemaining.value, forecastToExtra.value, extraRemaining.value],
+			data: [
+				forecastToBase.value,
+				baseRemaining.value,
+				forecastToExtra.value,
+				extraRemaining.value,
+			],
 			backgroundColor: ['#f59e0b', '#86efac', '#a78bfa', '#ddd0ff'],
 			borderWidth: 2,
 		},
 		{
 			label: 'Execution',
 			data: [ytdCapped.value, forecastFutureShown.value, gapToTarget.value],
-			backgroundColor: ['#7ba3ea', '#f1d97d', '#94a3b8'],
+			backgroundColor: ['#7BA3EA', '#F1D97D', '#94a3b8'],
 			borderWidth: 2,
 		},
 	],
 }))
+
 const ringLabels = [
 	['Budget', 'Extra-Quota'],
-	['Budget prognostiziert', 'Budget offen', 'Quota prognostiziert', 'Quota offen'],
+	[
+		'Budget prognostiziert',
+		'Budget offen',
+		'Quota prognostiziert',
+		'Quota offen',
+	],
 	['Ist (YTD)', 'Forecast (Rest)', 'Differenz zu Ziel'],
 ]
+
 const multiPieOptions = {
 	maintainAspectRatio: false,
 	radius: '98%',
@@ -566,7 +689,8 @@ const multiPieOptions = {
 				label: ctx => {
 					const ds = ctx.datasetIndex ?? 0
 					const di = ctx.dataIndex ?? 0
-					const seg = ringLabels[ds]?.[di] ?? ctx.dataset?.label ?? ''
+					const seg =
+						ringLabels[ds]?.[di] ?? ctx.dataset?.label ?? ''
 					const val = ctx.raw != null ? fmt(ctx.raw) : '0'
 					return `${seg}: ${val}`
 				},
@@ -575,26 +699,68 @@ const multiPieOptions = {
 	},
 }
 
-/* Trend arrows */
+/* Flechas de tendencia */
 const deltaFromSeries = arr =>
-	Array.isArray(arr) && arr.length >= 2 ? (arr.at(-1) ?? 0) - (arr.at(-2) ?? 0) : 0
+	Array.isArray(arr) && arr.length >= 2
+		? (arr.at(-1) ?? 0) - (arr.at(-2) ?? 0)
+		: 0
 function arrowForDelta(delta) {
 	const d = Number(delta) || 0
 	if (Math.abs(d) <= 2.5)
-		return { angle: 0, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: 0,
+			colorClass: 'tr-yellow',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d > 2.5 && d <= 5)
-		return { angle: -25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: -25,
+			colorClass: 'tr-yellow',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d < -2.5 && d >= -5)
-		return { angle: 25, colorClass: 'tr-yellow', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: 25,
+			colorClass: 'tr-yellow',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d > 5 && d <= 10)
-		return { angle: -60, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: -60,
+			colorClass: 'tr-green',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d < -5 && d >= -10)
-		return { angle: 60, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: 60,
+			colorClass: 'tr-red',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d > 10)
-		return { angle: -90, colorClass: 'tr-green', show: true, deltaLabel: `${d.toFixed(1)} pp` }
+		return {
+			angle: -90,
+			colorClass: 'tr-green',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
 	if (d < -10)
-		return { angle: 90, colorClass: 'tr-red', show: true, deltaLabel: `${d.toFixed(1)} pp` }
-	return { angle: 0, colorClass: 'tr-yellow', show: false, deltaLabel: '0.0 pp' }
+		return {
+			angle: 90,
+			colorClass: 'tr-red',
+			show: true,
+			deltaLabel: `${d.toFixed(1)} pp`,
+		}
+	return {
+		angle: 0,
+		colorClass: 'tr-yellow',
+		show: false,
+		deltaLabel: '0.0 pp',
+	}
 }
 const trendsMap = computed(() => ({
 	att_b: arrowForDelta(deltaFromSeries(seriesBudArr.value)),
@@ -603,36 +769,8 @@ const trendsMap = computed(() => ({
 }))
 </script>
 
-<style>
-.print-only {
-	display: none !important;
-}
-
-.viz-card .p-card-header {
-	display: none !important;
-}
-
-@media print {
-	@page {
-		size: A4 landscape;
-		margin: 20mm 16mm 16mm 16mm;
-	}
-
-	.print-only {
-		display: block !important;
-	}
-
-	.viz-card .p-card-header {
-		display: block !important;
-	}
-
-	.viz-card {
-		margin-top: 8mm;
-	}
-}
-</style>
-
 <style scoped>
+/* mismos estilos que tu PcOverview (grid, cards, etc.) */
 .pc-overview-grid {
 	--gap: 16px;
 	--viz-body-h: 640px;
@@ -643,7 +781,6 @@ const trendsMap = computed(() => ({
 	box-sizing: border-box;
 }
 
-/* KPI row */
 .kpi-row {
 	grid-column: 1 / -1;
 	display: grid;
@@ -655,7 +792,6 @@ const trendsMap = computed(() => ({
 	grid-column: span 2;
 }
 
-/* Charts row */
 .viz-row {
 	grid-column: 1 / -1;
 	display: grid;
@@ -671,12 +807,10 @@ const trendsMap = computed(() => ({
 	grid-column: span 3;
 }
 
-/* Table row */
 .table-row {
 	grid-column: 1 / -1;
 }
 
-/* KPI cards */
 .kpi-card :deep(.p-card-content) {
 	padding: 0 !important;
 	height: 160px;
@@ -718,7 +852,6 @@ const trendsMap = computed(() => ({
 	height: 62px;
 }
 
-/* mini bars */
 .mini-bar-zone {
 	margin-top: 0.35rem;
 	height: 65px;
@@ -734,7 +867,7 @@ const trendsMap = computed(() => ({
 	justify-content: space-between;
 	gap: 0.5rem;
 	margin-top: 0.25rem;
-	font-size: .85rem;
+	font-size: 0.85rem;
 }
 
 .trend-inline {
@@ -792,7 +925,6 @@ const trendsMap = computed(() => ({
 	color: #ef4444;
 }
 
-/* charts */
 .viz-card :deep(.p-card-content) {
 	display: flex;
 	flex-direction: column;
@@ -813,7 +945,6 @@ const trendsMap = computed(() => ({
 	width: 100%;
 }
 
-/* donut */
 .donut-layout {
 	display: flex;
 	flex-direction: column;
@@ -855,7 +986,6 @@ const trendsMap = computed(() => ({
 	border-radius: 50%;
 }
 
-/* responsive */
 @media (max-width: 1199px) {
 	.kpi-row>.kpi {
 		grid-column: span 6;
@@ -876,7 +1006,7 @@ const trendsMap = computed(() => ({
 	}
 }
 
-/* Print header look */
+/* Cabecera empresa */
 .report-print-header {
 	margin: 0 0 8mm 0;
 	padding-bottom: 4mm;
@@ -904,23 +1034,24 @@ const trendsMap = computed(() => ({
 
 /* ✅ Tabla: ancho completo + celdas centradas */
 .table-row :deep(table) {
-	width: 100%;
-	table-layout: fixed;
+  width: 100%;
+  table-layout: fixed;
 }
 
 .table-row :deep(th),
 .table-row :deep(td) {
-	text-align: center;
-	vertical-align: middle;
+  text-align: center;
+  vertical-align: middle;
 }
 
+/* Si usás PrimeVue DataTable, también lo cubrimos */
 .table-row :deep(.p-datatable-table) {
-	width: 100%;
+  width: 100%;
 }
 
 .table-row :deep(.p-datatable-thead > tr > th),
 .table-row :deep(.p-datatable-tbody > tr > td) {
-	text-align: center;
-	vertical-align: middle;
+  text-align: center;
+  vertical-align: middle;
 }
 </style>

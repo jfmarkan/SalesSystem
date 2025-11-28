@@ -37,24 +37,46 @@ class ClientsController extends Controller {
             'recent' => $recent,
         ]);
     }
+
     public function index() {
         $clients = DB::table('clients as c')
             ->leftJoin('classifications as cl','cl.id','=','c.classification_id')
-            ->select('c.client_group_number','c.client_name','c.classification_id','cl.classification')
-            ->orderBy('c.client_name')->get();
+            ->leftJoin('users as u', 'u.username', '=', 'c.group_responsible')
+            ->leftJoin('user_details as ud', 'ud.user_id', '=', 'u.id')
+            ->select(
+                'c.client_group_number',
+                'c.client_name',
+                'c.classification_id',
+                'cl.classification',
+                'c.group_responsible',
+                'u.first_name as responsible_name',
+                'u.last_name as responsible_surname',)
+            ->selectRaw("
+                CASE
+                    WHEN ud.profile_picture IS NOT NULL AND ud.profile_picture != ''
+                    THEN CONCAT('" . config('app.url') . "/storage/', ud.profile_picture)
+                    ELSE NULL
+                END as responsible_avatar
+            ")
+            ->orderBy('c.client_name')
+            ->get();
 
-        $cpc = DB::table('client_profit_centers')->select('client_group_number', DB::raw('COUNT(*) cnt'))->groupBy('client_group_number')->pluck('cnt','client_group_number');
-        $users = DB::table('assignments')
-            ->join('client_profit_centers as cpc','cpc.id','=','assignments.client_profit_center_id')
-            ->select('cpc.client_group_number as cgn', DB::raw('COUNT(DISTINCT assignments.user_id) as ucnt'))
-            ->groupBy('cpc.client_group_number')->pluck('ucnt','cgn');
+        $profitCenters = DB::table('client_profit_centers as cpc')
+            ->join('profit_centers as p', 'p.profit_center_code', '=', 'cpc.profit_center_code')
+            ->select(
+                'cpc.client_group_number',
+                'p.profit_center_code as code',
+                'cpc.id'
+            )
+            ->get()
+            ->groupBy('client_group_number');
 
-        return response()->json($clients->map(function($c) use($cpc,$users){
-            $c->cpc_count = (int)($cpc[$c->client_group_number] ?? 0);
-            $c->user_count = (int)($users[$c->client_group_number] ?? 0);
+        return response()->json($clients->map(function ($c) use ($profitCenters) {
+            $c->profit_centers = $profitCenters[$c->client_group_number] ?? [];
             return $c;
         }));
     }
+
 
     public function show(int $client_group_number) {
         $client = DB::table('clients')->where('client_group_number',$client_group_number)->first();

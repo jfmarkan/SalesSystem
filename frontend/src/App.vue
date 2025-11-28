@@ -5,6 +5,5 @@ import AppDialog from '@/components/ui/AppDialog.vue'
 
 <template>
   <RouterView />
-  <Toast />
   <AppDialog />
 </template>

@@ -1,60 +1,47 @@
 <template>
 	<div class="analytics-grid">
 		<!-- === COLUMNA IZQUIERDA === -->
-		<aside class="aside-col">
-			<Card class="flat-card tree-card">
-				<template #content>
-					<Tree
-						:value="nodes"
-						:expandedKeys="expandedKeys"
-						v-model:selectionKeys="selectionKeys"
-						selectionMode="single"
-						filter
-						filterMode="lenient"
-						:filterBy="'label'"
-						v-model:filterValue="treeFilter"
-						class="w-full p-0"
-						@node-expand="onNodeExpand"
-						@node-select="onNodeSelect"
-						@node-unselect="onNodeUnselect"
-						@update:selectionKeys="onSelectionUpdate"
-					>
-						<template #default="{ node }">
-							<div class="tree-node-content">
-								<i
-									v-if="node.data?.type === 'company'"
-									class="pi pi-home text-primary"
-								></i>
-								<i
-									v-else-if="node.data?.type === 'team'"
-									class="pi pi-sitemap text-500"
-								></i>
-								<i v-else-if="node.data?.type === 'user'" class="pi pi-user"></i>
-								<i
-									v-else-if="node.data?.type === 'pc'"
-									class="pi pi-database text-500"
-								></i>
+		<aside class="pane left">
+	<!-- Opcional: barra superior con input o botón -->
 
-								<!-- Cliente: sin icono, letra con color + 'LETRA - Nombre' -->
-								<template v-else-if="node.data?.type === 'client'">
-									<span
-										class="classification-badge"
-										:class="
-											'class-' +
-											(node.data.classification || 'x').toLowerCase()
-										"
-									>
-										{{ node.data.classification }}
-									</span>
-								</template>
+	<!-- Lista ocupa todo el alto -->
+	<div class="list-wrap">
+		<Tree
+			:value="nodes"
+			:expandedKeys="expandedKeys"
+			v-model:selectionKeys="selectionKeys"
+			selectionMode="single"
+			:filter="true"
+			:filterValue="treeFilter"
+			filterMode="lenient"
+			:filterBy="'label'"
+			class="w-full"
+			@node-expand="onNodeExpand"
+			@node-select="onNodeSelect"
+			@node-unselect="onNodeUnselect"
+			@update:selectionKeys="onSelectionUpdate"
+		>
+			<template #default="{ node }">
+				<div class="tree-node-content">
+					<i v-if="node.data?.type === 'company'" class="pi pi-home text-primary" />
+					<i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500" />
+					<i v-else-if="node.data?.type === 'user'" class="pi pi-user" />
+					<i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500" />
+					<template v-else-if="node.data?.type === 'client'">
+						<span
+							class="classification-badge"
+							:class="'class-' + (node.data.classification || 'x').toLowerCase()"
+						>
+							{{ node.data.classification }}
+						</span>
+					</template>
+					<span>{{ node.label }}</span>
+				</div>
+			</template>
+		</Tree>
+	</div>
+</aside>
 
-								<span>{{ node.label }}</span>
-							</div>
-						</template>
-					</Tree>
-				</template>
-			</Card>
-		</aside>
 
 		<!-- === COLUMNA DERECHA === -->
 		<main class="main-col">
@@ -99,6 +86,7 @@
 			</div>
 
 			<div class="charts-grid">
+				<!-- Gráfico de líneas -->
 				<Card class="flat-card line-card" :class="{ wide: !showStacked }">
 					<template #content>
 						<Chart
@@ -111,9 +99,11 @@
 					</template>
 				</Card>
 
-				<Card v-if="series && showStacked" class="flat-card stack-card">
+				<!-- Gráfico stacked (extra cuota) -->
+				<Card class="flat-card stack-card" v-show="showStacked">
 					<template #content>
 						<Chart
+							v-if="series"
 							type="bar"
 							:data="stackedData"
 							:options="stackedOptions"
@@ -298,13 +288,30 @@ function nextFY() {
 
 async function fetchSeries() {
 	if (!selectedKey.value) return
+
 	const { data } = await api.get('/api/analytics/series', {
 		params: { node_id: selectedKey.value, fiscal_year: fyStart.value },
 	})
+
+	// fallback por si algún backend viejo no trae forecasts
 	if (!data.forecasts) data.forecasts = { units: [], m3: [], euro: [] }
+
 	series.value = data
-	if (!data?.unit_mode_allowed && unitMode.value === 'units') unitMode.value = 'm3'
+
+	// --- gestionar unidad por defecto / unidades permitidas ---
+	const allowedModes = data.unit_mode_allowed
+		? ['m3', 'euro', 'units']
+		: ['m3', 'euro']
+
+	const apiDefault = data.meta?.unit_mode_default || 'm3'
+
+	// Si el modo actual no es válido en este contexto, forzamos uno válido
+	if (!allowedModes.includes(unitMode.value)) {
+		// intentamos usar el default que viene del backend, si es válido
+		unitMode.value = allowedModes.includes(apiDefault) ? apiDefault : allowedModes[0]
+	}
 }
+
 
 // Mapeo de items a TreeNode (agregamos clasificación + volume)
 function toNode(item) {
@@ -418,6 +425,7 @@ const stackedOptions = computed(() => ({
 	},
 }))
 
+
 onMounted(() => {
 	loadRoot()
 })
@@ -428,6 +436,7 @@ onMounted(() => {
 	display: grid;
 	grid-template-columns: 3fr 9fr;
 	gap: 16px;
+	min-height:0;
 	height: 100%;
 	box-sizing: border-box;
 }
@@ -455,9 +464,29 @@ onMounted(() => {
 
 .tree-node-content {
 	display: flex;
-	align-items: center;
+	align-items: start;
 	gap: 0.25rem;
+	min-width: 0;
 }
+
+.tree-node-content i,
+.tree-node-content .classification-badge {
+  flex: 0 0 auto;
+}
+
+.tree-node-content .node-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.p-tree .p-treenode-content) { min-width: 0; }
+:deep(.p-tree .p-treenode-label)   { min-width: 0; }
+
+/* Evita cortes raros en palabras largas */
+.tree-node-content .node-label { word-break: normal; }
 
 /* === MAIN === */
 .main-col {
@@ -503,7 +532,10 @@ onMounted(() => {
 	grid-template-columns: 9fr 3fr;
 	gap: 16px;
 	min-height: 0;
+	max-width: 100%;
+	overflow: hidden;
 }
+
 
 .line-card.wide {
 	grid-column: span 2;
@@ -512,6 +544,7 @@ onMounted(() => {
 .chart {
 	height: 480px;
 	width: 100%;
+	max-width: 100%;
     padding: 1rem;
 }
 
@@ -585,4 +618,39 @@ onMounted(() => {
 .class-pb {
 	background-color: #86a2bd;
 }
+
+.pane.left {
+	display: flex;
+	flex-direction: column;
+	padding: 10px;
+	background: var(--surface-card, #fff);
+	border-radius: 10px;
+	box-shadow: 0 1px 8px rgba(0, 0, 0, .06);
+	min-height: 0;
+}
+
+.pane-head {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.list-wrap {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	height: 100%;
+	overflow-y: auto;
+	overflow-x:hidden
+}
+
+.p-tree {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
 </style>

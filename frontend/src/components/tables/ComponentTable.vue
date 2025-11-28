@@ -28,6 +28,24 @@ function yyyymm(d) {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/**
+ * Normaliza números que pueden venir:
+ *  - como número
+ *  - como string con puntos de miles "5.819"
+ *  - opcionalmente con coma decimal "5.819,25" (por las dudas)
+ */
+function normalizeNumber(v) {
+	if (v == null) return 0
+	if (typeof v === 'number') return v
+
+	const s = String(v)
+		.replace(/\./g, '')   // sacamos puntos de miles
+		.replace(',', '.')    // coma → punto para decimales, por si aparece
+
+	const n = Number(s)
+	return Number.isFinite(n) ? n : 0
+}
+
 function defaultIsEditable(ym) {
 	if (!ym) return false
 	const now = new Date()
@@ -53,8 +71,10 @@ const curIdx = computed(() => {
 })
 
 function devPct(num, den) {
-	if (!den) return 0
-	return (num / den - 1) * 100
+	const n = normalizeNumber(num)
+	const d = normalizeNumber(den)
+	if (!d) return 0
+	return (n / d - 1) * 100
 }
 function clsSalesDev(v, b) {
 	const d = Math.abs(devPct(v, b))
@@ -70,26 +90,44 @@ function clsFcstDev(v, b) {
 	return 'dev-green'
 }
 
+/**
+ * 👉 Formato sin decimales, solo separador de miles con punto (ej: 5.819)
+ */
 function formatNumber(v) {
-	const n = parseFloat(v)
-	if (isNaN(n)) return '—'
+	const n = normalizeNumber(v)
+	if (!Number.isFinite(n)) return '—'
 	return new Intl.NumberFormat('de-DE', {
 		minimumFractionDigits: 0,
-		maximumFractionDigits: 2,
-	}).format(n)
+		maximumFractionDigits: 0,
+	}).format(Math.round(n))
 }
+
+/**
+ * 👉 % sin decimales, sin comas (ej: 120 %)
+ */
 function pctLabel(num, den) {
-	if (!den) return '0%'
+	const n = normalizeNumber(num)
+	const d = normalizeNumber(den)
+	if (!d) return '0%'
+
 	return new Intl.NumberFormat('de-DE', {
 		style: 'percent',
 		minimumFractionDigits: 0,
 		maximumFractionDigits: 0,
-	}).format(num / den)
+	}).format(n / d)
 }
 
+/**
+ * Sales: preferimos props.sales, si no props.ventas.
+ * Normalizamos TODO a número real internamente.
+ */
 const salesData = computed(() => {
-	if (Array.isArray(props.sales) && props.sales.length) return props.sales
-	if (Array.isArray(props.ventas)) return props.ventas
+	if (Array.isArray(props.sales) && props.sales.length) {
+		return props.sales.map(normalizeNumber)
+	}
+	if (Array.isArray(props.ventas)) {
+		return props.ventas.map(normalizeNumber)
+	}
 	return Array(props.months?.length || 12).fill(0)
 })
 
@@ -123,7 +161,7 @@ onBeforeUnmount(() => {
 	try {
 		ro?.disconnect()
 	} catch {
-		//else
+		// ignore
 	}
 })
 
@@ -141,7 +179,7 @@ watch(
 function onForecastInput(i, e, ym) {
 	if (!canEdit(ym)) return
 	const raw = String(e?.target?.value ?? '')
-	const n = Number(raw.replace(',', '.'))
+	const n = Number(raw.replace('.', '').replace(',', '.')) // aceptamos "1.234" o "1234" o "1234,5"
 	emit('edit-forecast', { index: i, value: isNaN(n) ? 0 : n })
 }
 </script>

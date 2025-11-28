@@ -15,6 +15,7 @@ class BudgetCase extends Model
         'fiscal_year',
         'best_case',
         'worst_case',
+        'skip_budget',
     ];
 
     protected $casts = [
@@ -22,6 +23,7 @@ class BudgetCase extends Model
         'fiscal_year' => 'int',
         'best_case' => 'float',
         'worst_case' => 'float',
+        'skip_budget' => 'bool',
     ];
 
     public function cpc(): BelongsTo

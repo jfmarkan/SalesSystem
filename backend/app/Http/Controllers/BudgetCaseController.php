@@ -73,7 +73,7 @@ class BudgetCaseController extends Controller
 
         return response()->json(['exists' => $found]);
     }
-    
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -87,6 +87,7 @@ class BudgetCaseController extends Controller
             // values to save
             'best_case'               => ['required','numeric','between:-100,100'],
             'worst_case'              => ['required','numeric','between:-100,100'],
+            'skip_budget'             => ['nullable','boolean'],
 
             // optional override for FY
             'fiscal_year'             => ['nullable','integer','min:1900'],
@@ -127,6 +128,7 @@ class BudgetCaseController extends Controller
             [
                 'best_case'  => (float)$data['best_case'],
                 'worst_case' => (float)$data['worst_case'],
+                'skip_budget' => (bool) ($data['skip_budget'] ?? false),
             ]
         );
 

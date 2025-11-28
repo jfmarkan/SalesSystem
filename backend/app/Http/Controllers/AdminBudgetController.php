@@ -93,6 +93,14 @@ class AdminBudgetController extends Controller
 
     private function generateForClient(int $clientPCId, int $targetFY, string $caseType, ?float $defaultPct): int
     {
+
+        $skip = DB::table('budget_cases')
+            ->where('client_profit_center_id', $clientPCId)
+            ->where('fiscal_year', $targetFY)
+            ->value('skip_budget');
+
+        if ($skip) return 0;
+
         $now      = Carbon::now();
         $capMonth = $now->month < 10 ? 9 : $now->month;
         $salesYear= $targetFY - 1; // Jan..cap from prev calendar year

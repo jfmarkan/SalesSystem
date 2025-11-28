@@ -1,5 +1,4 @@
 <?php
-// app/Models/TeamMember.php
 
 namespace App\Models;
 
@@ -12,23 +11,21 @@ class TeamMember extends Model
 
     protected $table = 'team_members';
 
-    public $incrementing = false;
-    protected $primaryKey = null; // PK compuesta
-    protected $keyType = 'int';
-
     protected $fillable = [
         'team_id',
         'user_id',
         'role',
     ];
 
+    // Team of the member
     public function team()
     {
-        return $this->belongsTo(Team::class, 'team_id', 'id');
+        return $this->belongsTo(Team::class);
     }
 
+    // User that belongs to the team
     public function user()
     {
-        return $this->belongsTo(User::class, 'user_id', 'id');
+        return $this->belongsTo(User::class);
     }
 }

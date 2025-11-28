@@ -34,12 +34,12 @@ const palette = [
 
 // ✅ Formateo EU: miles con punto, decimales con coma
 function formatNumberEU(value) {
-	const num = Number(value)
-	if (isNaN(num)) return '—'
-	return new Intl.NumberFormat('de-DE', {
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 2
-	}).format(num)
+  const num = Number(value)
+  if (isNaN(num)) return '—'
+  return new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(Math.round(num))
 }
 
 function typeNorm() {

@@ -11,6 +11,9 @@ class BudgetCaseSimulatorController extends Controller
 {
     private const FISCAL_START_MONTH = 4; // Apr
 
+    // PCs que se tratan como m³ (no VK-EH)
+    private const SPECIAL_M3_PC_CODES = [110, 170, 171, 175];
+
     public function simulate(Request $request)
     {
         // Expect exactly client_group_number + profit_center_code + percentages
@@ -22,17 +25,20 @@ class BudgetCaseSimulatorController extends Controller
             'compare_current'     => ['nullable','boolean'],
         ]);
 
-        $trace_id           = (string) Str::uuid();
+        $trace_id            = (string) Str::uuid();
         $client_group_number = (string) $validated['client_group_number'];
         $profit_center_code  = (string) $validated['profit_center_code'];
         $best_pct            = (float) ($validated['best_case']  ?? 0.0);
         $worst_pct           = (float) ($validated['worst_case'] ?? 0.0);
         $compare_current     = (bool)  ($validated['compare_current'] ?? true);
 
-        $now          = Carbon::now();
-        $cap_month    = max(1, min(12, $now->month - 1)); // last complete month
-        $calendar_year= (int) $now->year;
-        $current_fy   = $this->fiscalYearFromDate($now);
+        $now           = Carbon::now();
+        $cap_month     = max(1, min(12, $now->month - 1)); // último mes completo
+        $calendar_year = (int) $now->year;
+        $current_fy    = $this->fiscalYearFromDate($now);
+
+        // ¿Este PC es de los "raros" que van en m³?
+        $isSpecialM3Pc = in_array((int)$profit_center_code, self::SPECIAL_M3_PC_CODES, true);
 
         // Resolve CPC by (client_group_number, profit_center_code)
         $cpc = DB::table('client_profit_centers')
@@ -49,19 +55,20 @@ class BudgetCaseSimulatorController extends Controller
 
         $client_profit_center_id = (int) $cpc->id;
 
-        // SALES YTD: JAN..cap of CURRENT calendar year
-        $sales_rows = DB::table('sales')
-            ->select('month', DB::raw('SUM(volume) AS v'))
-            ->where('client_profit_center_id', $client_profit_center_id)
-            ->where('fiscal_year', $calendar_year)
-            ->whereBetween('month', [1, $cap_month])
-            ->groupBy('month')
-            ->pluck('v','month'); // keys = 1..12
+        // ==== BASE DE VENTAS YTD (JAN..cap del año calendario actual) ====
+        // Para la mayoría: SUM(sales.sales_units)  → VK-EH
+        // Para PCs especiales (110/170/171/175): SUM(sales.sales_units * factor_to_m3) → m³
+        $sales_rows = $this->loadSalesYtdByMonth(
+            $client_profit_center_id,
+            $profit_center_code,
+            $calendar_year,
+            $cap_month,
+            $isSpecialM3Pc
+        ); // array month => valor (int/float, ya en unidades correctas)
 
-        $total_sales_ytd = 0;
+        $total_sales_ytd = 0.0;
         for ($m = 1; $m <= $cap_month; $m++) {
-            // keep raw integer values as stored
-            $total_sales_ytd += (int) ($sales_rows[$m] ?? 0);
+            $total_sales_ytd += (float) ($sales_rows[$m] ?? 0.0);
         }
 
         // Seasonality rows for this PC code:
@@ -87,7 +94,10 @@ class BudgetCaseSimulatorController extends Controller
         $season_prev = $this->mapSeasonRow($season_prev_row ?? $season_max_row);
 
         // Seasonality YTD sum: Jan..Mar from prev FY, Apr..cap from latest FY
-        $names  = [1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec'];
+        $names   = [
+            1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',
+            7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec'
+        ];
         $ytd_pct = 0.0;
         for ($m = 1; $m <= $cap_month; $m++) {
             $nm  = $names[$m];
@@ -95,15 +105,16 @@ class BudgetCaseSimulatorController extends Controller
             $ytd_pct += (float) $pct;
         }
 
-        if ($ytd_pct <= 0.0 || $total_sales_ytd <= 0) {
+        if ($ytd_pct <= 0.0 || $total_sales_ytd <= 0.0) {
             return response()->json([
                 'message' => 'Keine ausreichende Basis für die Simulation.',
                 'basis'   => [
                     'calendarYear'  => $calendar_year,
                     'capMonth'      => $cap_month,
-                    'totalSalesYTD' => (int) $total_sales_ytd,
+                    'totalSalesYTD' => (float) $total_sales_ytd,
                     'ytdPct'        => (float) number_format($ytd_pct, 2, '.', ''),
                     'baseForecast'  => 0.0,
+                    'baseUnit'      => $isSpecialM3Pc ? 'm3' : 'units',
                 ],
                 'seriesTarget'  => [],
                 'seriesCurrent' => [],
@@ -130,39 +141,43 @@ class BudgetCaseSimulatorController extends Controller
         ];
         $series_target = [];
         foreach ($fiscal_order as $slot) {
-            $pct = (float) ($season_max[$slot['name']] ?? 0.0);
-            $base  = (int) round(($pct / 100.0) * $base_forecast, 0);
-            $best  = (int) round(($pct / 100.0) * $total_best, 0);
-            $worst = (int) round(($pct / 100.0) * $total_worst, 0);
+            $pct  = (float) ($season_max[$slot['name']] ?? 0.0);
+            $base = (float) (($pct / 100.0) * $base_forecast);
+            $best = (float) (($pct / 100.0) * $total_best);
+            $worst= (float) (($pct / 100.0) * $total_worst);
             $series_target[] = [
                 'month'  => $slot['m'],
                 'label'  => $slot['name'],
                 'pct'    => (float) number_format($pct, 2, '.', ''),
-                'base'   => $base,
-                'best'   => $best,
-                'worst'  => $worst,
+                'base'   => (int) round($base, 0),
+                'best'   => (int) round($best, 0),
+                'worst'  => (int) round($worst, 0),
             ];
         }
 
         // Optional: current FY actuals by FY (Apr..Mar)
-        $series_current = $compare_current ? $this->currentFYActualsSeries($client_profit_center_id, $current_fy) : [];
+        $series_current = $compare_current
+            ? $this->currentFYActualsSeries($client_profit_center_id, $current_fy, $isSpecialM3Pc)
+            : [];
 
         return response()->json([
             'message' => 'Simulation berechnet.',
             'basis'   => [
                 'calendarYear'  => $calendar_year,
                 'capMonth'      => $cap_month,
-                'totalSalesYTD' => (int) $total_sales_ytd,
+                'totalSalesYTD' => (float) number_format($total_sales_ytd, 2, '.', ''),
                 'ytdPct'        => (float) number_format($ytd_pct, 2, '.', ''),
                 'baseForecast'  => (float) number_format($base_forecast, 2, '.', ''),
                 'totalBest'     => (float) number_format($total_best, 2, '.', ''),
                 'totalWorst'    => (float) number_format($total_worst, 2, '.', ''),
+                'baseUnit'      => $isSpecialM3Pc ? 'm3' : 'units', // <- clave para el front
             ],
             'seriesTarget'  => $series_target,
             'seriesCurrent' => $series_current,
             'debug'         => [
                 'client_profit_center_id' => $client_profit_center_id,
                 'profit_center_code'      => $profit_center_code,
+                'special_m3_pc'           => $isSpecialM3Pc,
             ]
         ])->header('X-BCS-Trace-Id', $trace_id);
     }
@@ -174,7 +189,7 @@ class BudgetCaseSimulatorController extends Controller
         return $fy;
     }
 
-    // Normalize seasonality row to ['Jan'=>float,...,'Dec'=>float] (accept commas)
+    // Normaliza seasonality row a ['Jan'=>float,...,'Dec'=>float] (acepta coma)
     private function mapSeasonRow(object $row): array
     {
         $out = [];
@@ -190,7 +205,69 @@ class BudgetCaseSimulatorController extends Controller
         return $out;
     }
 
-    private function currentFYActualsSeries(int $cpc_id, int $current_fy): array
+    /**
+     * Carga ventas YTD JAN..$capMonth por mes:
+     * - PCs normales → SUM(sales_units)
+     * - PCs especiales → SUM(sales_units * factor_to_m3)  (m³)
+     *
+     * Devuelve array [ month(int) => float ]
+     */
+    private function loadSalesYtdByMonth(
+        int $cpcId,
+        string $profit_center_code,
+        int $calendarYear,
+        int $capMonth,
+        bool $asM3
+    ): array {
+        if ($capMonth < 1) return [];
+
+        if ($asM3) {
+            // m³: sales_units * factor_to_m3
+            $ucAgg = DB::table('unit_conversions')
+                ->select(
+                    'profit_center_code',
+                    DB::raw('MAX(factor_to_m3) as factor_to_m3')
+                )
+                ->groupBy('profit_center_code');
+
+            $rows = DB::table('sales')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', function($j) {
+                    $j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code');
+                })
+                ->where('sales.client_profit_center_id', $cpcId)
+                ->where('sales.fiscal_year', $calendarYear)
+                ->whereBetween('sales.month', [1, $capMonth])
+                ->groupBy('sales.month')
+                ->select(
+                    'sales.month',
+                    DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3,1)) AS v')
+                )
+                ->pluck('v','sales.month');
+        } else {
+            // VK-EH: sales_units “crudas”
+            $rows = DB::table('sales')
+                ->where('client_profit_center_id', $cpcId)
+                ->where('fiscal_year', $calendarYear)
+                ->whereBetween('month', [1, $capMonth])
+                ->groupBy('month')
+                ->select('month', DB::raw('SUM(sales_units) AS v'))
+                ->pluck('v','month');
+        }
+
+        $out = [];
+        foreach ($rows as $m => $v) {
+            $out[(int)$m] = (float)$v;
+        }
+        return $out;
+    }
+
+    /**
+     * Actuals del FY actual, por mes fiscal (Apr..Mar).
+     * - Si $asM3 = true → valores en m³.
+     * - Si $asM3 = false → valores en sales_units.
+     */
+    private function currentFYActualsSeries(int $cpc_id, int $current_fy, bool $asM3): array
     {
         $fiscal = [
             ['name'=>'Apr','m'=>4],['name'=>'May','m'=>5],['name'=>'Jun','m'=>6],
@@ -198,18 +275,51 @@ class BudgetCaseSimulatorController extends Controller
             ['name'=>'Oct','m'=>10],['name'=>'Nov','m'=>11],['name'=>'Dec','m'=>12],
             ['name'=>'Jan','m'=>1], ['name'=>'Feb','m'=>2], ['name'=>'Mar','m'=>3],
         ];
-        $series = [];
-        foreach ($fiscal as $slot) {
-            $val = (int) DB::table('sales')
+
+        if ($asM3) {
+            $ucAgg = DB::table('unit_conversions')
+                ->select(
+                    'profit_center_code',
+                    DB::raw('MAX(factor_to_m3) as factor_to_m3')
+                )
+                ->groupBy('profit_center_code');
+
+            $rows = DB::table('sales')
+                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+                ->leftJoinSub($ucAgg, 'uc', function($j) {
+                    $j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code');
+                })
+                ->where('sales.client_profit_center_id', $cpc_id)
+                ->where('sales.fiscal_year', $current_fy)
+                ->groupBy('sales.month')
+                ->select(
+                    'sales.month',
+                    DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3,1)) AS v')
+                )
+                ->pluck('v','sales.month');
+        } else {
+            $rows = DB::table('sales')
                 ->where('client_profit_center_id', $cpc_id)
                 ->where('fiscal_year', $current_fy)
-                ->where('month', $slot['m'])
-                ->sum('volume');
+                ->groupBy('month')
+                ->select('month', DB::raw('SUM(sales_units) AS v'))
+                ->pluck('v','month');
+        }
+
+        $map = [];
+        foreach ($rows as $m => $v) {
+            $map[(int)$m] = (float)$v;
+        }
+
+        $series = [];
+        foreach ($fiscal as $slot) {
+            $m   = (int)$slot['m'];
+            $val = $map[$m] ?? 0.0;
             $series[] = [
                 'fiscal_year' => $current_fy,
-                'month'       => $slot['m'],
+                'month'       => $m,
                 'label'       => $slot['name'],
-                'actual'      => $val,
+                'actual'      => (int) round($val, 0),
             ];
         }
         return $series;

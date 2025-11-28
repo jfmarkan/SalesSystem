@@ -27,9 +27,15 @@ class ForecastingService
             ->orderBy('month')
             ->get();
 
+        // 🚫 mapa de CPCs con skip_budget=1
+        $skipMap = DB::table('budget_cases')
+            ->where('fiscal_year', $fiscalYear)
+            ->pluck('skip_budget', 'client_profit_center_id');
+
         $payload = [];
         $now = now();
         foreach ($rows as $r) {
+            if (!empty($skipMap[$r->client_profit_center_id])) continue; // ignorar
             $payload[] = [
                 'client_profit_center_id' => $r->client_profit_center_id,
                 'fiscal_year'             => $r->fiscal_year,
@@ -42,7 +48,6 @@ class ForecastingService
             ];
         }
 
-        // upsert según unique (client_profit_center_id,fiscal_year,month,version)
         $chunks = array_chunk($payload, 1000);
         $inserted = 0;
         foreach ($chunks as $chunk) {

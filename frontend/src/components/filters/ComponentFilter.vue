@@ -2,181 +2,184 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  mode: { type: String, required: true },
-  primaryOptions: { type: Array, required: true },
-  primaryId: { type: [Number, String, null], required: true },
-  secondaryOptions: { type: Array, required: true },
-  secondaryId: { type: [Number, String, null], required: true },
+	mode: { type: String, required: true },
+	primaryOptions: { type: Array, required: true },
+	primaryId: { type: [Number, String, null], required: true },
+	secondaryOptions: { type: Array, required: true },
+	secondaryId: { type: [Number, String, null], required: true },
 })
+
 const emit = defineEmits(['update:mode', 'update:primary-id', 'update:secondary-id'])
 
-const m = computed({ get: () => props.mode, set: (v) => emit('update:mode', v) })
-const pid = computed({ get: () => props.primaryId, set: (v) => emit('update:primary-id', v) })
-const sid = computed({ get: () => props.secondaryId, set: (v) => emit('update:secondary-id', v) })
+/**
+ * Local computed bindings to support v-model style for props
+ */
+const m = computed({
+	get: () => props.mode,
+	set: (v) => emit('update:mode', v),
+})
 
+const pid = computed({
+	get: () => props.primaryId,
+	set: (v) => emit('update:primary-id', v),
+})
+
+const sid = computed({
+	get: () => props.secondaryId,
+	set: (v) => emit('update:secondary-id', v),
+})
+
+/**
+ * When changing mode, reset primary/secondary selections
+ */
 function setMode(v) {
-  if (v !== m.value) {
-    m.value = v
-    pid.value = null
-    sid.value = null
-  }
+	if (v !== m.value) {
+		m.value = v
+		pid.value = null
+		sid.value = null
+	}
 }
 </script>
 
 <template>
-  <div class="filter-wrap">
-    <!-- Botones de modo -->
-    <div class="mode-toggle">
-      <Button
-        type="button"
-        :class="['m-btn', m === 'client' && 'active']"
-        :aria-pressed="m === 'client'"
-        @click="setMode('client')"
-      >Kunde</Button>
-      <Button
-        type="button"
-        :class="['m-btn', m === 'pc' && 'active']"
-        :aria-pressed="m === 'pc'"
-        @click="setMode('pc')"
-      >Profit Center</Button>
-    </div>
+	<div class="filter-wrap">
+		<!-- Modus-Schalter -->
+		<div class="mode-toggle">
+			<Button type="button" :class="['m-btn', m === 'client' && 'active']" :aria-pressed="m === 'client'"
+				@click="setMode('client')">
+				Kunde
+			</Button>
 
-    <!-- Select primario -->
-    <div class="select-row">
-      <Select
-        v-model="pid"
-        :options="primaryOptions"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="Wählen"
-        :disabled="!m"
-        class="select-full"
-      />
-    </div>
+			<Button type="button" :class="['m-btn', m === 'pc' && 'active']" :aria-pressed="m === 'pc'"
+				@click="setMode('pc')">
+				Profit Center
+			</Button>
+		</div>
 
-    <!-- Lista secundaria con scroll -->
-    <div class="list-wrap">
-      <label class="list-caption">
-        {{ m === 'client' ? 'Profit Center pro Kunde' : 'Kunden im Profit Center' }}
-      </label>
+		<!-- Primäre Auswahl -->
+		<div class="select-row">
+			<Select v-model="pid" :options="primaryOptions" optionLabel="label" optionValue="value" placeholder="Wählen"
+				:disabled="!m" class="select-full" />
+		</div>
 
-      <Listbox
-        v-model="sid"
-        :options="secondaryOptions"
-        optionLabel="label"
-        optionValue="value"
-		class="w-full h-full"
-        :disabled="!m || pid == null"
-		:listStyle="{ height: '100%' }"
-      >
-        <template #option="{ option }">
-          <span v-html="option.label"></span>
-        </template>
-      </Listbox>
-    </div>
-  </div>
+		<!-- Sekundäre Liste mit internem Scroll -->
+		<div class="list-wrap">
+			<label class="list-caption">
+				{{ m === 'client' ? 'Profit Center pro Kunde' : 'Kunden im Profit Center' }}
+			</label>
+
+			<!-- This wrapper takes all remaining height and keeps the scroll only inside the list -->
+			<div class="listbox-shell">
+				<Listbox v-model="sid" :options="secondaryOptions" optionLabel="label" optionValue="value"
+					class="listbox" :disabled="!m || pid == null">
+					<template #option="{ option }">
+						<span v-html="option.label"></span>
+					</template>
+				</Listbox>
+			</div>
+		</div>
+	</div>
 </template>
 
 <style scoped>
+/* Root container: must be allowed to stretch by its parent (parent needs a fixed height or flex:1) */
 .filter-wrap {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  gap: 10px;
-  min-height:0;
-  height: 100%;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	/* allow children to control internal scroll */
+	height: 100%;
+	/* take full height of parent */
+	gap: 10px;
 }
 
-/* Botones modo */
+/* Mode buttons row */
 .mode-toggle {
-  display: flex;
-  gap: 8px;
+	display: flex;
+	gap: 8px;
+	flex: 0 0 auto;
 }
 
 .m-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--input-border);
-  font-weight: 500;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	flex: 1;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--input-border);
+	font-weight: 500;
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .m-btn.active {
-  background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
-  color: white;
-  border: none;
+	background: linear-gradient(60deg, #5073b8, #1098ad, #07b39b, #6fba82);
+	color: white;
+	border: none;
 }
 
-/* Select primario */
+/* Primary select (fixed height area) */
 .select-row {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
 
 .select-full {
-  width: 100% !important;
+	width: 100% !important;
 }
 
 .select-full :deep(.p-select-label) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-/* Scroll interno del listbox SOLAMENTE */
+/* List area: takes all remaining height */
 .list-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden; /* 💡 clave para el scroll interno */
+	flex: 1 1 auto;
+	/* consume remaining vertical space */
+	min-height: 0;
+	/* important for flex scroll */
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	/* only inner shell scrolls */
 }
 
 .list-caption {
-  font-size: 0.85rem;
-  opacity: 0.9;
-  flex: 0 0 auto;
+	font-size: 0.85rem;
+	opacity: 0.9;
+	flex: 0 0 auto;
 }
 
-/* Listbox con scroll interno */
-.listbox {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  height: 100%;
+/* Shell that hosts the Listbox and controls scroll region */
+.listbox-shell {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
-.listbox :deep(.p-listbox) {
-  height: 100%;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height:0;
-}
-.listbox :deep(.p-listbox-list-container) {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  height: 100%;
-  min-height: 0;
+/* PrimeVue Listbox root element */
+.listbox-shell :deep(.p-listbox) {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
-.listbox :deep(.p-listbox-list) {
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
+/* Wrapper around the <ul> list: this gets the scroll */
+.listbox-shell :deep(.p-listbox-list-wrapper),
+.listbox-shell :deep(.p-listbox-list-container) {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	/* internal scroll here */
 }
 
-/* Botón footer siempre visible */
-.btn-footer {
-  flex: 0 0 auto;
-}
-
-.btn-next {
-  width: 100%;
+/* The <ul> itself should not have its own fixed height */
+.listbox-shell :deep(.p-listbox-list) {
+	flex: 1 1 auto;
+	min-height: 0;
 }
 </style>

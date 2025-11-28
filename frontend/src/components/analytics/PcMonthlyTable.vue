@@ -271,30 +271,4 @@ const forecastData = computed(() => {
     background: rgba(5, 164, 111, 0.18);
     color: #093a2c;
 }
-
-@media (prefers-color-scheme: dark) {
-    .stick-head,
-    .stick-left {
-        background: var(--surface-card);
-    }
-    .cell-sales {
-        background: rgba(31, 86, 115, 0.28);
-    }
-    .cell-budget {
-        background: rgba(84, 132, 154, 0.28);
-    }
-    .ro-forecast {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 255, 255, 0.12);
-    }
-
-    /* Números en blanco en la fila de % */
-    .dev-cell,
-    .dev-cell.dev-red,
-    .dev-cell.dev-orange,
-    .dev-cell.dev-yellow,
-    .dev-cell.dev-green {
-        color: #fff !important;
-    }
-}
 </style>

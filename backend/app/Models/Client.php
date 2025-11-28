@@ -19,6 +19,7 @@ class Client extends Model
         'client_group_number',
         'client_name',
         'classification_id',
+        'group_responsible',
     ];
 
     /**

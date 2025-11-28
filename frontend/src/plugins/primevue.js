@@ -49,6 +49,7 @@ import Menu from 'primevue/menu'
 import Menubar from 'primevue/menubar'
 import Message from 'primevue/message'
 import MultiSelect from 'primevue/multiselect'
+import OrganizationChart from 'primevue/organizationchart'
 import Popover from 'primevue/popover' // reemplaza OverlayPanel
 import Panel from 'primevue/panel'
 import Password from 'primevue/password'
@@ -81,109 +82,110 @@ import Divider from 'primevue/divider'
 
 // Preset Aura con primario negro
 const BlackPrimaryAura = definePreset(Aura, {
-  semantic: {
-    primary: {
-      50:  '{neutral.50}',
-      100: '{neutral.100}',
-      200: '{neutral.200}',
-      300: '{neutral.300}',
-      400: '{neutral.400}',
-      500: '{neutral.900}', // usa '{neutral.950}' para negro absoluto
-      600: '{neutral.900}',
-      700: '{neutral.900}',
-      800: '{neutral.950}',
-      900: '{neutral.950}',
-      950: '{neutral.950}'
-    }
-  }
+	semantic: {
+		primary: {
+			50: '{neutral.50}',
+			100: '{neutral.100}',
+			200: '{neutral.200}',
+			300: '{neutral.300}',
+			400: '{neutral.400}',
+			500: '{neutral.900}', // usa '{neutral.950}' para negro absoluto
+			600: '{neutral.900}',
+			700: '{neutral.900}',
+			800: '{neutral.950}',
+			900: '{neutral.950}',
+			950: '{neutral.950}'
+		}
+	}
 })
 
 export default function setupPrimeVue(app) {
-  app.use(PrimeVue, {
-    ripple: true,
-    theme: {
-      preset: BlackPrimaryAura,
-      options: {
-        prefix: 'p',
-        cssLayer: false,          // déjalo en false si ya manejas orden de CSS
-        darkModeSelector: '.app-dark'
-      }
-    }
-  })
+	app.use(PrimeVue, {
+		ripple: true,
+		theme: {
+			preset: BlackPrimaryAura,
+			options: {
+				prefix: 'p',
+				cssLayer: false,          // déjalo en false si ya manejas orden de CSS
+				darkModeSelector: '.app-dark'
+			}
+		}
+	})
 
-  app.use(ToastService)
-  app.use(ConfirmationService)
+	app.use(ToastService)
+	app.use(ConfirmationService)
 
-  // Registro global sólo de lo que uses realmente
-  app.component('Accordion', Accordion)
-  app.component('AccordionTab', AccordionTab)
-  app.component('AutoComplete', AutoComplete)
-  app.component('Avatar', Avatar)
-  app.component('AvatarGroup', AvatarGroup)
-  app.component('Badge', Badge)
-  app.component('Button', Button)
-  app.component('Card', Card)
-  app.component('Carousel', Carousel)
-  app.component('Chart', Chart)
-  app.component('Checkbox', Checkbox)
-  app.component('Chip', Chip)
-  app.component('Chips', Chips)
-  app.component('ColorPicker', ColorPicker)
-  app.component('ConfirmDialog', ConfirmDialog)
-  app.component('ConfirmPopup', ConfirmPopup)
-  app.component('ContextMenu', ContextMenu)
-  app.component('DataTable', DataTable)
-  app.component('DatePicker', DatePicker)
-  app.component('Column', Column)
-  app.component('Dialog', Dialog)
-  app.component('Editor', Editor)
-  app.component('Fieldset', Fieldset)
-  app.component('FileUpload', FileUpload)
-  app.component('FloatLabel', FloatLabel)
-  app.component('IconField', IconField)
-  app.component('Image', Image)
-  app.component('InlineMessage', InlineMessage)
-  app.component('InputIcon', InputIcon)
-  app.component('InputMask', InputMask)
-  app.component('InputNumber', InputNumber)
-  app.component('InputOtp', InputOtp)
-  app.component('InputSwitch', InputSwitch)
-  app.component('InputText', InputText)
-  app.component('Knob', Knob)
-  app.component('Listbox', Listbox)
-  app.component('Menu', Menu)
-  app.component('Menubar', Menubar)
-  app.component('Message', Message)
-  app.component('MultiSelect', MultiSelect)
-  app.component('Popover', Popover)
-  app.component('Panel', Panel)
-  app.component('Password', Password)
-  app.component('ProgressBar', ProgressBar)
-  app.component('ProgressSpinner', ProgressSpinner)
-  app.component('RadioButton', RadioButton)
-  app.component('Rating', Rating)
-  app.component('ScrollPanel', ScrollPanel)
-  app.component('ScrollTop', ScrollTop)
-  app.component('Select', Select)
-  app.component('SelectButton', SelectButton)
-  app.component('Sidebar', Sidebar)
-  app.component('Skeleton', Skeleton)
-  app.component('Slider', Slider)
-  app.component('SpeedDial', SpeedDial)
-  app.component('SplitButton', SplitButton)
-  app.component('Steps', Steps)
-  app.component('TabMenu', TabMenu)
-  app.component('TabView', TabView)
-  app.component('TabPanel', TabPanel)
-  app.component('Tag', Tag)
-  app.component('Textarea', Textarea)
-  app.component('Timeline', Timeline)
-  app.component('Toast', Toast)
-  app.component('ToggleButton', ToggleButton)
-  app.component('Toolbar', Toolbar)
-  app.component('Tree', Tree)
-  app.component('TreeTable', TreeTable)
-  app.component('Divider', Divider)
+	// Registro global sólo de lo que uses realmente
+	app.component('Accordion', Accordion)
+	app.component('AccordionTab', AccordionTab)
+	app.component('AutoComplete', AutoComplete)
+	app.component('Avatar', Avatar)
+	app.component('AvatarGroup', AvatarGroup)
+	app.component('Badge', Badge)
+	app.component('Button', Button)
+	app.component('Card', Card)
+	app.component('Carousel', Carousel)
+	app.component('Chart', Chart)
+	app.component('Checkbox', Checkbox)
+	app.component('Chip', Chip)
+	app.component('Chips', Chips)
+	app.component('ColorPicker', ColorPicker)
+	app.component('ConfirmDialog', ConfirmDialog)
+	app.component('ConfirmPopup', ConfirmPopup)
+	app.component('ContextMenu', ContextMenu)
+	app.component('DataTable', DataTable)
+	app.component('DatePicker', DatePicker)
+	app.component('Column', Column)
+	app.component('Dialog', Dialog)
+	app.component('Editor', Editor)
+	app.component('Fieldset', Fieldset)
+	app.component('FileUpload', FileUpload)
+	app.component('FloatLabel', FloatLabel)
+	app.component('IconField', IconField)
+	app.component('Image', Image)
+	app.component('InlineMessage', InlineMessage)
+	app.component('InputIcon', InputIcon)
+	app.component('InputMask', InputMask)
+	app.component('InputNumber', InputNumber)
+	app.component('InputOtp', InputOtp)
+	app.component('InputSwitch', InputSwitch)
+	app.component('InputText', InputText)
+	app.component('Knob', Knob)
+	app.component('Listbox', Listbox)
+	app.component('Menu', Menu)
+	app.component('Menubar', Menubar)
+	app.component('Message', Message)
+	app.component('MultiSelect', MultiSelect)
+	app.component('OrganizationChart', OrganizationChart)
+	app.component('Popover', Popover)
+	app.component('Panel', Panel)
+	app.component('Password', Password)
+	app.component('ProgressBar', ProgressBar)
+	app.component('ProgressSpinner', ProgressSpinner)
+	app.component('RadioButton', RadioButton)
+	app.component('Rating', Rating)
+	app.component('ScrollPanel', ScrollPanel)
+	app.component('ScrollTop', ScrollTop)
+	app.component('Select', Select)
+	app.component('SelectButton', SelectButton)
+	app.component('Sidebar', Sidebar)
+	app.component('Skeleton', Skeleton)
+	app.component('Slider', Slider)
+	app.component('SpeedDial', SpeedDial)
+	app.component('SplitButton', SplitButton)
+	app.component('Steps', Steps)
+	app.component('TabMenu', TabMenu)
+	app.component('TabView', TabView)
+	app.component('TabPanel', TabPanel)
+	app.component('Tag', Tag)
+	app.component('Textarea', Textarea)
+	app.component('Timeline', Timeline)
+	app.component('Toast', Toast)
+	app.component('ToggleButton', ToggleButton)
+	app.component('Toolbar', Toolbar)
+	app.component('Tree', Tree)
+	app.component('TreeTable', TreeTable)
+	app.component('Divider', Divider)
 
-  app.directive('tooltip', Tooltip)
+	app.directive('tooltip', Tooltip)
 }

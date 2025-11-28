@@ -39,7 +39,7 @@ api.interceptors.response.use(
   error => {
     if (error.response && error.response.status === 401) {
       // Limpia cookies si hace falta (opcional, dependiendo del logout en el backend)
-      
+
       // Redirige al login con un mensaje opcional
       router.push({ name: 'login', query: { expired: '1' } })
     }

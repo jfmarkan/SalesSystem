@@ -9,25 +9,35 @@ class Team extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'teams';
-
     protected $fillable = [
         'name',
         'manager_user_id',
+        'company_id',
     ];
 
-    public function manager()
+    // Owning company for this team
+    public function company()
     {
-        return $this->belongsTo(User::class, 'manager_user_id', 'id');
+        return $this->belongsTo(Company::class, 'company_id');
     }
 
+    // Manager user (nullable)
+    public function managerUser()
+    {
+        return $this->belongsTo(User::class, 'manager_user_id');
+    }
+
+    // Members through team_members pivot (EXCLUDING manager rows)
     public function members()
     {
-        return $this->hasMany(TeamMember::class, 'team_id', 'id');
-    }
-
-    public function assignments()
-    {
-        return $this->hasMany(Assignment::class, 'team_id', 'id');
+        return $this->belongsToMany(User::class, 'team_members')
+            ->withPivot('role')
+            ->withTimestamps()
+            ->whereNull('team_members.deleted_at')
+            ->where(function ($q) {
+                // manager should NOT count as "Mitglied" for delete logic
+                $q->whereNull('team_members.role')
+                  ->orWhere('team_members.role', '!=', 'MANAGER');
+            });
     }
 }

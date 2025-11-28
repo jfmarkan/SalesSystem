@@ -1,37 +1,18 @@
 <template>
 	<Toast />
 	<div class="budget-case-grid">
-		<Dialog
-			v-model:visible="confirmVisible"
-			modal
-			dismissable-mask
-			header="Ungespeicherte Änderungen"
-			:style="{ width: '520px' }"
-		>
+		<Dialog v-model:visible="confirmVisible" modal dismissable-mask header="Ungespeicherte Änderungen"
+			:style="{ width: '520px' }">
 			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
 			<div class="flex justify-content-end gap-2">
-				<Button
-					label="Abbrechen"
-					severity="secondary"
-					@click="
-						() => {
-							confirmVisible = false
-							pendingChange.value = null
-						}
-					"
-				/>
-				<Button
-					label="Verwerfen"
-					severity="danger"
-					icon="pi pi-trash"
-					@click="discardAndApply"
-				/>
-				<Button
-					label="Speichern"
-					severity="success"
-					icon="pi pi-save"
-					@click="saveAndApply"
-				/>
+				<Button label="Abbrechen" severity="secondary" @click="
+					() => {
+						confirmVisible = false
+						pendingChange.value = null
+					}
+				" />
+				<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
+				<Button label="Speichern" severity="success" icon="pi pi-save" @click="saveAndApply" />
 			</div>
 		</Dialog>
 
@@ -42,18 +23,12 @@
 					<div class="filters-inner">
 						<div class="field-block flex-1 min-h-0">
 							<div class="selector-host">
-								<ForecastFilters
-									class="ff-host"
-									:mode="mode"
-									:primary-options="primaryOptions"
-									:primary-id="primaryId"
-									:secondary-options="secondaryOptionsWithDots"
+								<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
+									:primary-id="primaryId" :secondary-options="secondaryOptionsWithDots"
 									:secondary-id="secondaryId"
 									@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
 									@update:primary-id="(v) => guardedChange('primary', v)"
-									@update:secondary-id="(v) => guardedChange('secondary', v)"
-									@next="handleNext"
-								/>
+									@update:secondary-id="(v) => guardedChange('secondary', v)" @next="handleNext" />
 								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
 							</div>
 						</div>
@@ -89,13 +64,8 @@
 							</div>
 						</div>
 						<div class="actions">
-							<Button
-								label="Speichern"
-								icon="pi pi-save"
-								:disabled="!budgetDirty"
-								:outlined="!budgetDirty"
-								@click="saveBudgetCase"
-							/>
+							<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty"
+								:outlined="!budgetDirty" @click="saveBudgetCase" />
 						</div>
 					</div>
 				</template>
@@ -107,16 +77,9 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<LineChartSmart
-									v-if="hasSelection"
-									type="cumulative"
-									:client-id="currentClientId"
-									:profit-center-id="currentPcId"
-									api-prefix="/api"
-									:auto-fetch="false"
-									:cum-data="cumDataForChart"
-									:busy="loading"
-								/>
+								<LineChartSmart v-if="hasSelection" type="cumulative" :client-id="currentClientId"
+									:profit-center-id="currentPcId" api-prefix="/api" :auto-fetch="false"
+									:cum-data="cumDataForChart" :busy="loading" />
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -127,18 +90,11 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<BudgetCasePanel
-									v-if="hasSelection"
-									:key="`${currentClientId}-${currentPcId}`"
-									ref="bcRef"
-									:client-group-number="cgnForChild"
-									:profit-center-code="pccForChild"
-									:disabled="false"
-									:prefill="prefillFromDb"
-									@dirty-change="(v) => (budgetDirty = !!v)"
-									@values-change="onChildValues"
-									@simulated="onSimulated"
-								/>
+								<BudgetCasePanel v-if="hasSelection" :key="`${currentClientId}-${currentPcId}`"
+									ref="bcRef" :client-group-number="cgnForChild" :profit-center-code="pccForChild"
+									:disabled="false" :prefill="prefillFromDb"
+									@dirty-change="(v) => (budgetDirty = !!v)" @values-change="onChildValues"
+									@simulated="onSimulated" />
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -151,17 +107,9 @@
 				<template #content>
 					<div class="table-pad">
 						<template v-if="hasSelection">
-							<ForecastTable
-								ref="tableRef"
-								:months="months"
-								:ventas="sales"
-								:budget="budget"
-								:forecast="forecast"
-								:viewport-start="0"
-								:viewport-size="12"
-								:is-editable-ym="() => false"
-								@edit-forecast="() => {}"
-							/>
+							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
+								:forecast="forecast" :viewport-start="0" :viewport-size="12"
+								:is-editable-ym="() => false" @edit-forecast="() => { }" />
 						</template>
 						<div v-else class="card-placeholder">Keine Auswahl</div>
 					</div>
@@ -414,6 +362,8 @@ async function refreshCaseFlagsForSecondary() {
 const prefillFromDb = ref({ best_case: null, worst_case: null })
 const savedBest = ref(0)
 const savedWorst = ref(0)
+const skipBudget = ref(false)
+const savedSkip = ref(false)
 async function loadBudgetCasePrefill() {
 	prefillFromDb.value = { best_case: null, worst_case: null }
 	savedBest.value = 0
@@ -643,14 +593,17 @@ const bestLatest = ref(0)
 const worstLatest = ref(0)
 const round4 = (n) => Math.round((Number(n) || 0) * 10000) / 10000
 
-function onChildValues({ best_case, worst_case }) {
+function onChildValues({ best_case, worst_case, skip_budget }) {
 	const b = Number(best_case) || 0
 	const w = Number(worst_case) || 0
+	const s = !!skip_budget
 	bestLatest.value = b
 	worstLatest.value = w
+	skipBudget.value = s
 	budgetDirty.value =
-		round4(b) !== round4(savedBest.value) || round4(w) !== round4(savedWorst.value)
+		round4(b) !== round4(savedBest.value) || round4(w) !== round4(savedWorst.value) || s !== savedSkip.value
 }
+
 function sanitize(v, fb = 0) {
 	const n = Number(v)
 	return Number.isFinite(n) ? n : Number(fb) || 0
@@ -668,10 +621,10 @@ async function saveBudgetCase() {
 	const fromChild = bcRef.value.getValues?.()
 	const best = sanitize(fromChild?.best_case, bestLatest.value)
 	const worst = sanitize(fromChild?.worst_case, worstLatest.value)
-
+	const skip = !!fromChild?.skip_budget
 	try {
 		await ensureCsrf()
-		const payload = { fiscal_year: budgetFiscalYear.value, best_case: best, worst_case: worst }
+		const payload = { fiscal_year: budgetFiscalYear.value, best_case: best, worst_case: worst, skip_budget: skip }
 
 		if (Number.isFinite(cpcId) && cpcId > 0) {
 			payload.client_profit_center_id = cpcId
@@ -699,6 +652,7 @@ async function saveBudgetCase() {
 
 		savedBest.value = best
 		savedWorst.value = worst
+		savedSkip.value = skip
 		budgetDirty.value = false
 		bcRef.value?.markSaved?.()
 		toast.add({
@@ -732,6 +686,8 @@ function clearAll() {
 	worstLatest.value = 0
 	savedBest.value = 0
 	savedWorst.value = 0
+	skipBudget.value = false
+	savedSkip.value = false
 	prefillFromDb.value = { best_case: null, worst_case: null }
 	budgetDirty.value = false
 	bcRef.value?.hardReset?.()
@@ -941,88 +897,92 @@ const selectedPCName = computed(() => {
 
 /* Charts */
 .charts-row {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--gap);
-  align-items: stretch;
-  min-height: 0;
-  height: 100%;
+	grid-column: 1 / -1;
+	grid-row: 2;
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: var(--gap);
+	align-items: stretch;
+	min-height: 0;
+	height: 100%;
 }
 
 .chart-lg {
-  grid-column: span 9;
+	grid-column: span 9;
 }
 
 .chart-sm {
-  grid-column: span 3;
+	grid-column: span 3;
 }
 
 /* El contenedor del Card ocupa todo y permite que el body crezca */
 .chart-card {
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
+	min-height: 0;
+	height: 100%;
+	overflow: hidden;
 }
 
 /* PrimeVue Card: header fijo, body estirable */
 .chart-card :deep(.p-card) {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
 }
+
 .chart-card :deep(.p-card-header) {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
+
 .chart-card :deep(.p-card-body) {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  /* si querés margen interno, ajustá aquí: */
-  padding: 8px 10px;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	/* si querés margen interno, ajustá aquí: */
+	padding: 8px 10px;
 }
+
 .chart-card :deep(.p-card-content) {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
 }
 
 /* Tus wrappers internos también llenan el alto */
 .chart-pad,
 .chart-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
 }
 
 /* El lienzo del chart ocupa 100% del espacio disponible */
 .chart-card :deep(canvas),
 .chart-card :deep(svg) {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none;
-  max-height: none;
+	width: 100% !important;
+	height: 100% !important;
+	max-width: none;
+	max-height: none;
 }
 
 .chart-card :deep(.p-card-header) {
-  padding: .25rem .5rem !important;   /* lo que pediste */
-  display: flex;
-  align-items: center;
-  gap: .5rem;
+	padding: .25rem .5rem !important;
+	/* lo que pediste */
+	display: flex;
+	align-items: center;
+	gap: .5rem;
 
-  /* toques suaves opcionales (no rompen nada) */
-  font-weight: 600;
-  font-size: .95rem;
-  color: var(--text, #334155);
-  background: color-mix(in oklab, var(--surface) 94%, transparent);
-  border-bottom: 1px solid color-mix(in oklab, var(--border, #e5e7eb) 70%, transparent);
+	/* toques suaves opcionales (no rompen nada) */
+	font-weight: 600;
+	font-size: .95rem;
+	color: var(--text, #334155);
+	background: color-mix(in oklab, var(--surface) 94%, transparent);
+	border-bottom: 1px solid color-mix(in oklab, var(--border, #e5e7eb) 70%, transparent);
 }
 
 /* Si incluís iconos en el header en algún momento */
 .chart-card :deep(.p-card-header .pi) {
-  margin-right: .25rem;
+	margin-right: .25rem;
 }
 
 /* Table */
