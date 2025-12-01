@@ -11,6 +11,7 @@ use App\Models\ClientProfitCenter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role as SpatieRole;
+use Illuminate\Validation\Rule;
 use Spatie\Activitylog\Models\Activity;
 
 class UserAdministrationController extends Controller
@@ -75,7 +76,7 @@ class UserAdministrationController extends Controller
     return response()->json($out);
     }
 
-    public function transfer($id, Request $request){
+    public function transferClients($id, Request $request){
         $data = $request->validate([
             'toUserId'            => ['required','integer','exists:users,id'],
             'clientGroupNumbers'  => ['array'],   // preferido: mueve el cliente entero

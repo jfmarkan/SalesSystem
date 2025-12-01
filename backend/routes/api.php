@@ -31,6 +31,8 @@ use App\Http\Controllers\Admin\KpiController;
 use App\Http\Controllers\Admin\ProgressController;
 use App\Http\Controllers\Admin\ClientStatsController;
 use App\Http\Controllers\BudgetGenerationController;
+use App\Http\Controllers\Admin\OrganizationController;
+use App\Http\Controllers\Admin\BudgetOverviewController;
 
 
 Route::post('/verify-otp', [VerifyOtpController::class, 'verify']);
@@ -82,6 +84,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/exists', [BudgetCaseController::class, 'exists']);
         Route::post('/simulate', [BudgetCaseSimulatorController::class, 'simulate']);
         Route::post('/sales-ytd',[BudgetCaseSimulatorController::class, 'salesYtd']);
+        Route::get('/overview', [BudgetOverviewController::class, 'index']);
+
     });
 
     Route::prefix('deviations')->group(function () {
@@ -131,51 +135,85 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('settings')->group(function () {
-
         // Users
-        Route::get('/users', [UserAdminController::class, 'index']);
-        Route::post('/users', [UserAdminController::class, 'store']);
-        // Route::post('/users/{id}/block', [UserAdminController::class, 'block']);
-        // Route::post('/users/{id}/unblock', [UserAdminController::class, 'unblock']);
-        Route::patch('/users/{id}/block',  [UserAdministrationController::class, 'block']);
-        Route::post('/users/{id}/kick', [UserAdminController::class, 'kick']);
-        Route::get('/roles',        [UserAdministrationController::class, 'roles']);
-        Route::get('/teams',        [UserAdministrationController::class, 'teams']);
-        Route::get('/clients',      [UserAdministrationController::class, 'clients']); // ?userId=
-//      Route::patch('/users/{id}/roles',  [UserAdministrationController::class, 'updateRole']);
-        Route::patch('/users/{id}/teams',  [UserAdministrationController::class, 'updateTeams']);
-
-//      Route::post('/users/{id}/transfer', [UserAdministrationController::class, 'transfer']);
-//      Route::get('/users/{id}/logs',       [UserAdministrationController::class, 'logs']); // opcional
-
-        // Sessions / online
-        Route::get('/sessions/online', [SessionAdminController::class, 'online']);
-        Route::delete('/sessions/by-user/{id}', [SessionAdminController::class, 'destroyByUser']);
-
-        // Clients
-        Route::get('/clients/summary', [ClientAdminController::class, 'summary']);
-        Route::get('/clients/{clientGroup}/pcs', [ClientAdminController::class, 'pcs']);
-        Route::put('/clients/{clientGroup}', [ClientAdminController::class, 'update']);
-        Route::post('/clients/{clientGroup}/pcs', [ClientAdminController::class, 'setPcs']);
-        Route::post('/clients/{clientGroup}/assign-user', [ClientAdminController::class, 'assignUser']);
-        Route::post('/clients/{clientGroup}/block', [ClientAdminController::class, 'block']);
-        Route::delete('/clients/{clientGroup}', [ClientAdminController::class, 'destroy']);
-
-        // Profit centers
-        Route::get('/profit-centers/summary', [ProfitCenterAdminController::class, 'summary']);
-        Route::put('/profit-centers/{code}', [ProfitCenterAdminController::class, 'update']);
-        Route::put('/profit-centers/{code}/conversion', [ProfitCenterAdminController::class, 'updateConversion']);
-        Route::put('/profit-centers/{code}/seasonality', [ProfitCenterAdminController::class, 'updateSeasonality']);
-
-        // Tools / flags
-        Route::post('/tools/rebuild-sales', [ToolsAdminController::class, 'rebuildSales']);
-        Route::post('/tools/generate-budget', [ToolsAdminController::class, 'generateBudget']);
-        Route::post('/tools/clients-update', [ToolsAdminController::class, 'clientsUpdate']);
-        Route::post('/flags/budget-season', [ToolsAdminController::class, 'setBudgetSeason']);
-
-        // KPIs and Progress
-        Route::get('/kpis/summary', [KpiController::class, 'index']);
-        Route::get('/progress/summary', [ProgressController::class, 'index']);
-        Route::get('/clients/{clientGroup}/stats', [ClientStatsController::class, 'show']);
+    Route::get('/roles',        [UserAdministrationController::class, 'roles']);
+    Route::get('/teams',        [UserAdministrationController::class, 'teams']);
+    Route::get('/user-clients',      [UserAdministrationController::class, 'clients']);
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserAdminController::class, 'index']);
+        Route::post('', [UserAdminController::class, 'store']);
+        Route::patch('/{id}/block',  [UserAdministrationController::class, 'block']);
+        Route::post('/{id}/kick', [UserAdminController::class, 'kick']);
+        Route::patch('/{id}/teams',  [UserAdministrationController::class, 'updateTeams']);
+        Route::patch('/{id}/roles',  [UserAdministrationController::class, 'updateRole']);
+        Route::post('/{id}/transfer', [UserAdministrationController::class, 'transferClients']);
     });
+    // Sessions / online
+    Route::get('/sessions/online', [SessionAdminController::class, 'online']);
+    Route::delete('/sessions/by-user/{id}', [SessionAdminController::class, 'destroyByUser']);
+
+    Route::prefix('org-chart')->group(function () {
+        // Company Structure
+        Route::get    ('/tree', [OrganizationController::class, 'orgChart']);
+        // Companies
+        Route::post   ('/companies',          [OrganizationController::class, 'storeCompany']);
+        Route::put    ('/companies/{company}',[OrganizationController::class, 'updateCompany']);
+        Route::delete ('/companies/{company}',[OrganizationController::class, 'deleteCompany']);
+        // Teams
+        Route::post   ('/teams',        [OrganizationController::class, 'storeTeam']);
+        Route::put    ('/teams/{team}', [OrganizationController::class, 'updateTeam']);
+        Route::delete ('/teams/{team}',[OrganizationController::class, 'deleteTeam']);
+        // Team Members
+        Route::post   ('/team-members',  [OrganizationController::class, 'addTeamMember']);
+        Route::delete ('/team-members',  [OrganizationController::class, 'removeTeamMember']);
+        Route::post   ('/team-members/sync', [OrganizationController::class, 'syncTeamMembers']);
+        // Auxiliary lists
+        Route::get    ('/admin-users', [OrganizationController::class, 'adminUsers']);
+        Route::get    ('/users',       [OrganizationController::class, 'users']);
+    });
+
+    // 🔸 Si querés mantener esta ruta vieja por compatibilidad, la dejamos.
+    //     (Internamente puede usar la misma lógica que storeCompany)
+    //Route::post('/company', [OrganizationController::class, 'storeCompany']);
+
+    // Clients
+    Route::prefix('clients')->group(function () {
+        Route::get('/', [ClientAdminController::class, 'index']);
+        Route::get('/summary', [ClientAdminController::class, 'summary']);
+        Route::get('/{clientGroup}/pcs', [ClientAdminController::class, 'pcs']);
+        Route::put('/{clientGroup}', [ClientAdminController::class, 'update']);
+        Route::post('/{clientGroup}/pcs', [ClientAdminController::class, 'setPcs']);
+        Route::post('/{clientGroup}/assign-user', [ClientAdminController::class, 'assignUser']);
+        Route::post('/{clientGroup}/block', [ClientAdminController::class, 'block']);
+        Route::delete('/{clientGroup}', [ClientAdminController::class, 'destroy']);
+    });
+
+    // Profit centers
+    Route::prefix('profit-centers')->group(function () {
+        Route::get('/', [ProfitCenterAdminController::class, 'index']);
+        Route::post('/', [ProfitCenterAdminController::class, 'store']);
+        Route::delete('/{code}', [ProfitCenterAdminController::class, 'destroy']);
+        Route::get('/{code}/seasonality', [ProfitCenterAdminController::class, 'getSeasonality']);
+        Route::put('/{code}/seasonality', [ProfitCenterAdminController::class, 'updateSeasonality']);
+        Route::get('/{code}/conversion', [ProfitCenterAdminController::class, 'getConversion']);
+        Route::put('/{code}/conversion', [ProfitCenterAdminController::class, 'updateConversion']);
+    });
+
+    // Tools / flags
+    Route::post('/tools/rebuild-sales', [ToolsAdminController::class, 'rebuildSales']);
+    Route::post('/tools/generate-budget', [ToolsAdminController::class, 'generateBudget']);
+    Route::post('/tools/clients-update', [ToolsAdminController::class, 'clientsUpdate']);
+    Route::post('/flags/budget-season', [ToolsAdminController::class, 'setBudgetSeason']);
+
+    // KPIs and Progress
+    Route::get('/kpis/summary', [KpiController::class, 'index']);
+    Route::get('/progress/summary', [ProgressController::class, 'index']);
+    Route::get('/clients/{clientGroup}/stats', [ClientStatsController::class, 'show']);
+
+    // Tools
+    Route::post('/tools/clients-update', [ToolsAdminController::class, 'clientsUpdate']);
+    Route::get ('/tools/runs',          [ToolsAdminController::class, 'toolRunsIndex']);
+    Route::get ('/tools/runs/{id}',     [ToolsAdminController::class, 'toolRunsShow'])->whereNumber('id');
+});
+
 });
