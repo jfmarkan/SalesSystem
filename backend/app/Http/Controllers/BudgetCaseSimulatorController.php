@@ -16,12 +16,12 @@ class BudgetCaseSimulatorController extends Controller
 
     public function simulate(Request $request)
     {
-        // Expect exactly client_group_number + profit_center_code + percentages
         $validated = $request->validate([
             'client_group_number' => ['required'], // string|int accepted
             'profit_center_code'  => ['required'],
-            'best_case'           => ['nullable','numeric','between:-100,100'],
-            'worst_case'          => ['nullable','numeric','between:-100,100'],
+            // 👉 porcentaje libre, sin between
+            'best_case'           => ['nullable','numeric'],
+            'worst_case'          => ['nullable','numeric'],
             'compare_current'     => ['nullable','boolean'],
         ]);
 
@@ -37,10 +37,8 @@ class BudgetCaseSimulatorController extends Controller
         $calendar_year = (int) $now->year;
         $current_fy    = $this->fiscalYearFromDate($now);
 
-        // ¿Este PC es de los "raros" que van en m³?
         $isSpecialM3Pc = in_array((int)$profit_center_code, self::SPECIAL_M3_PC_CODES, true);
 
-        // Resolve CPC by (client_group_number, profit_center_code)
         $cpc = DB::table('client_profit_centers')
             ->where('client_group_number', $client_group_number)
             ->where('profit_center_code', $profit_center_code)
@@ -55,23 +53,21 @@ class BudgetCaseSimulatorController extends Controller
 
         $client_profit_center_id = (int) $cpc->id;
 
-        // ==== BASE DE VENTAS YTD (JAN..cap del año calendario actual) ====
-        // Para la mayoría: SUM(sales.sales_units)  → VK-EH
-        // Para PCs especiales (110/170/171/175): SUM(sales.sales_units * factor_to_m3) → m³
+        // === BASE YTD ===
+        // PCs normales → SUM(sales_units)
+        // PCs especiales → SUM(cubic_meters)
         $sales_rows = $this->loadSalesYtdByMonth(
             $client_profit_center_id,
-            $profit_center_code,
             $calendar_year,
             $cap_month,
             $isSpecialM3Pc
-        ); // array month => valor (int/float, ya en unidades correctas)
+        );
 
         $total_sales_ytd = 0.0;
         for ($m = 1; $m <= $cap_month; $m++) {
             $total_sales_ytd += (float) ($sales_rows[$m] ?? 0.0);
         }
 
-        // Seasonality rows for this PC code:
         $season_max_row = DB::table('seasonalities')
             ->where('profit_center_code', $profit_center_code)
             ->orderBy('fiscal_year','desc')
@@ -93,7 +89,6 @@ class BudgetCaseSimulatorController extends Controller
         $season_max  = $this->mapSeasonRow($season_max_row);
         $season_prev = $this->mapSeasonRow($season_prev_row ?? $season_max_row);
 
-        // Seasonality YTD sum: Jan..Mar from prev FY, Apr..cap from latest FY
         $names   = [
             1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',
             7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec'
@@ -125,14 +120,11 @@ class BudgetCaseSimulatorController extends Controller
             ])->header('X-BCS-Trace-Id', $trace_id);
         }
 
-        // Base forecast = convert YTD to 100%
         $base_forecast = $total_sales_ytd / ($ytd_pct / 100.0);
 
-        // Apply best/worst percentages to annual base
         $total_best  = $base_forecast * (1 + $best_pct  / 100.0);
         $total_worst = $base_forecast * (1 + $worst_pct / 100.0);
 
-        // Distribute Apr..Mar using latest seasonality
         $fiscal_order = [
             ['name'=>'Apr','m'=>4],['name'=>'May','m'=>5],['name'=>'Jun','m'=>6],
             ['name'=>'Jul','m'=>7],['name'=>'Aug','m'=>8],['name'=>'Sep','m'=>9],
@@ -155,7 +147,6 @@ class BudgetCaseSimulatorController extends Controller
             ];
         }
 
-        // Optional: current FY actuals by FY (Apr..Mar)
         $series_current = $compare_current
             ? $this->currentFYActualsSeries($client_profit_center_id, $current_fy, $isSpecialM3Pc)
             : [];
@@ -170,7 +161,7 @@ class BudgetCaseSimulatorController extends Controller
                 'baseForecast'  => (float) number_format($base_forecast, 2, '.', ''),
                 'totalBest'     => (float) number_format($total_best, 2, '.', ''),
                 'totalWorst'    => (float) number_format($total_worst, 2, '.', ''),
-                'baseUnit'      => $isSpecialM3Pc ? 'm3' : 'units', // <- clave para el front
+                'baseUnit'      => $isSpecialM3Pc ? 'm3' : 'units',
             ],
             'seriesTarget'  => $series_target,
             'seriesCurrent' => $series_current,
@@ -189,7 +180,6 @@ class BudgetCaseSimulatorController extends Controller
         return $fy;
     }
 
-    // Normaliza seasonality row a ['Jan'=>float,...,'Dec'=>float] (acepta coma)
     private function mapSeasonRow(object $row): array
     {
         $out = [];
@@ -205,16 +195,8 @@ class BudgetCaseSimulatorController extends Controller
         return $out;
     }
 
-    /**
-     * Carga ventas YTD JAN..$capMonth por mes:
-     * - PCs normales → SUM(sales_units)
-     * - PCs especiales → SUM(sales_units * factor_to_m3)  (m³)
-     *
-     * Devuelve array [ month(int) => float ]
-     */
     private function loadSalesYtdByMonth(
         int $cpcId,
-        string $profit_center_code,
         int $calendarYear,
         int $capMonth,
         bool $asM3
@@ -222,30 +204,14 @@ class BudgetCaseSimulatorController extends Controller
         if ($capMonth < 1) return [];
 
         if ($asM3) {
-            // m³: sales_units * factor_to_m3
-            $ucAgg = DB::table('unit_conversions')
-                ->select(
-                    'profit_center_code',
-                    DB::raw('MAX(factor_to_m3) as factor_to_m3')
-                )
-                ->groupBy('profit_center_code');
-
             $rows = DB::table('sales')
-                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
-                ->leftJoinSub($ucAgg, 'uc', function($j) {
-                    $j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code');
-                })
-                ->where('sales.client_profit_center_id', $cpcId)
-                ->where('sales.fiscal_year', $calendarYear)
-                ->whereBetween('sales.month', [1, $capMonth])
-                ->groupBy('sales.month')
-                ->select(
-                    'sales.month',
-                    DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3,1)) AS v')
-                )
-                ->pluck('v','sales.month');
+                ->where('client_profit_center_id', $cpcId)
+                ->where('fiscal_year', $calendarYear)
+                ->whereBetween('month', [1, $capMonth])
+                ->groupBy('month')
+                ->select('month', DB::raw('SUM(cubic_meters) AS v'))
+                ->pluck('v','month');
         } else {
-            // VK-EH: sales_units “crudas”
             $rows = DB::table('sales')
                 ->where('client_profit_center_id', $cpcId)
                 ->where('fiscal_year', $calendarYear)
@@ -262,11 +228,6 @@ class BudgetCaseSimulatorController extends Controller
         return $out;
     }
 
-    /**
-     * Actuals del FY actual, por mes fiscal (Apr..Mar).
-     * - Si $asM3 = true → valores en m³.
-     * - Si $asM3 = false → valores en sales_units.
-     */
     private function currentFYActualsSeries(int $cpc_id, int $current_fy, bool $asM3): array
     {
         $fiscal = [
@@ -277,26 +238,12 @@ class BudgetCaseSimulatorController extends Controller
         ];
 
         if ($asM3) {
-            $ucAgg = DB::table('unit_conversions')
-                ->select(
-                    'profit_center_code',
-                    DB::raw('MAX(factor_to_m3) as factor_to_m3')
-                )
-                ->groupBy('profit_center_code');
-
             $rows = DB::table('sales')
-                ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
-                ->leftJoinSub($ucAgg, 'uc', function($j) {
-                    $j->on('uc.profit_center_code','=','client_profit_centers.profit_center_code');
-                })
-                ->where('sales.client_profit_center_id', $cpc_id)
-                ->where('sales.fiscal_year', $current_fy)
-                ->groupBy('sales.month')
-                ->select(
-                    'sales.month',
-                    DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3,1)) AS v')
-                )
-                ->pluck('v','sales.month');
+                ->where('client_profit_center_id', $cpc_id)
+                ->where('fiscal_year', $current_fy)
+                ->groupBy('month')
+                ->select('month', DB::raw('SUM(cubic_meters) AS v'))
+                ->pluck('v','month');
         } else {
             $rows = DB::table('sales')
                 ->where('client_profit_center_id', $cpc_id)

@@ -5,13 +5,11 @@ import api from '@/plugins/axios'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Chart from 'primevue/chart'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
 import Tag from 'primevue/tag'
+import InputNumber from 'primevue/inputnumber'
 
 const loading = ref(false)
 const overview = ref(null)
-
 const ov = computed(() => overview.value)
 
 /* ========== FORMATOS ========== */
@@ -66,6 +64,7 @@ function classificationSeverity(letter) {
 	if (v === 'A') return 'success'
 	if (v === 'B') return 'info'
 	if (v === 'PA' || v === 'PB') return 'warning'
+	if (v === 'C' || v === 'D') return 'secondary'
 	return 'secondary'
 }
 
@@ -226,32 +225,121 @@ const centerTextPlugin = {
 	},
 }
 
-/* ========== BUDGET NACH VERKÄUFER (STATE) ========== */
+/* ========== INPUTS C/D PARA ESCENARIO GLOBAL ========== */
 
-const openSellers = ref({})
-const openPcs = ref({})
+const cBestPct = ref(0)
+const cWorstPct = ref(0)
+const dBestPct = ref(0)
+const dWorstPct = ref(0)
 
-const sellerKey = (s) => s.user_id ?? s.id ?? s.full_name ?? String(Math.random())
+// A, B, C, D, PA, PB, X
+const classKeysAll = ['A', 'B', 'C', 'D', 'PA', 'PB', 'X']
 
-function toggleSeller(key) {
-	openSellers.value[key] = !openSellers.value[key]
-}
-function isSellerOpen(key) {
-	return !!openSellers.value[key]
+/**
+ * Recalcula:
+ *  - Base = suma de base_m3_all de A,B,C,D,PA,PB,X
+ *  - Best / Worst:
+ *      A,B,PA,PB → best_m3 / worst_m3 del backend (o base si faltan)
+ *      C,D       → base * (1 + % que pongas en la caja)
+ *      X         → = base (sin cambio)
+ */
+const derivedTotals = computed(() => {
+	const out = {
+		base_total: 0,
+		best_total: 0,
+		worst_total: 0,
+		base_by_class: {},
+		best_by_class: {},
+		worst_by_class: {},
+	}
+	const classes = ov.value?.classes || {}
+	for (const key of classKeysAll) {
+		const row = classes[key] || {}
+		const base = Number(row.base_m3_all ?? 0)
+		if (!Number.isFinite(base) || base === 0) continue
+
+		out.base_total += base
+		out.base_by_class[key] = base
+
+		let best = 0
+		let worst = 0
+
+		if (key === 'C') {
+			const pctBest = Number(cBestPct.value || 0)
+			const pctWorst = Number(cWorstPct.value || 0)
+			best = base * (1 + pctBest / 100)
+			worst = base * (1 + pctWorst / 100)
+		} else if (key === 'D') {
+			const pctBest = Number(dBestPct.value || 0)
+			const pctWorst = Number(dWorstPct.value || 0)
+			best = base * (1 + pctBest / 100)
+			worst = base * (1 + pctWorst / 100)
+		} else if (key === 'X') {
+			// X sin case: best = worst = base
+			best = base
+			worst = base
+		} else {
+			const rowBest = Number(row.best_m3 ?? 0)
+			const rowWorst = Number(row.worst_m3 ?? 0)
+			best = Number.isFinite(rowBest) && rowBest !== 0 ? rowBest : base
+			worst = Number.isFinite(rowWorst) && rowWorst !== 0 ? rowWorst : base
+		}
+
+		out.best_total += best
+		out.worst_total += worst
+		out.best_by_class[key] = best
+		out.worst_by_class[key] = worst
+	}
+	return out
+})
+
+const baseTotalForUI = computed(() => {
+	const d = derivedTotals.value
+	if (d.base_total > 0) return d.base_total
+	const g = ov.value?.global
+	return Number(g?.base_m3_all ?? 0)
+})
+const bestTotalForUI = computed(() => {
+	const d = derivedTotals.value
+	if (d.base_total > 0) return d.best_total
+	const g = ov.value?.global
+	return Number(g?.best_m3 ?? 0)
+})
+const worstTotalForUI = computed(() => {
+	const d = derivedTotals.value
+	if (d.base_total > 0) return d.worst_total
+	const g = ov.value?.global
+	return Number(g?.worst_m3 ?? 0)
+})
+
+const cdMeta = computed(() => {
+	const d = derivedTotals.value
+	const baseC = d.base_by_class.C || 0
+	const baseD = d.base_by_class.D || 0
+	const bestC = d.best_by_class.C || 0
+	const bestD = d.best_by_class.D || 0
+	const worstC = d.worst_by_class.C || 0
+	const worstD = d.worst_by_class.D || 0
+	const base_cd = baseC + baseD
+	const best_cd = bestC + bestD
+	const worst_cd = worstC + worstD
+	return { base_cd, best_cd, worst_cd, baseC, baseD, bestC, bestD, worstC, worstD }
+})
+
+/* ========== HELPERS COMUNES ========== */
+
+function pcDisplayName(pc) {
+	return (
+		pc.profit_center_name ??
+		pc.pc_name ??
+		pc.name ??
+		pc.profit_center_code ??
+		pc.code ??
+		'Profit Center'
+	)
 }
 
-function pcKey(sellerKeyVal, pc) {
-	const code = pc.profit_center_code ?? pc.code ?? 'pc'
-	return `${sellerKeyVal}__${code}`
-}
-function togglePc(key) {
-	openPcs.value[key] = !openPcs.value[key]
-}
-function isPcOpen(key) {
-	return !!openPcs.value[key]
-}
-
-/* ===== coverage helpers para barras ===== */
+/* ===== coverage helpers ===== */
 
 function clampPct(v) {
 	const n = Number(v || 0)
@@ -282,47 +370,179 @@ function coverageColorClass(pct) {
 	return 'cov-red'
 }
 
-/* nombre del Profit Center */
-function pcDisplayName(pc) {
-	return (
-		pc.profit_center_name ??
-		pc.pc_name ??
-		pc.name ??
-		pc.profit_center_code ??
-		pc.code ??
-		'Profit Center'
-	)
+/* ========== BUDGET NACH VERKÄUFER (STATE) ========== */
+
+const openSellers = ref({})
+const openSellerPcs = ref({})
+
+const sellerKey = (s) => s.user_id ?? s.id ?? s.full_name ?? String(Math.random())
+
+function toggleSeller(key) {
+	openSellers.value[key] = !openSellers.value[key]
+}
+function isSellerOpen(key) {
+	return !!openSellers.value[key]
 }
 
-/* ========== OFFENE BUDGET CASES AGRUPADOS POR CLIENTE ========== */
-const pendingByClient = computed(() => {
-	const list = ov.value?.pending_cases || []
-	const map = new Map()
+function pcKeySeller(sellerKeyVal, pc) {
+	const code = pc.profit_center_code ?? pc.code ?? 'pc'
+	return `${sellerKeyVal}__${code}`
+}
+function toggleSellerPc(key) {
+	openSellerPcs.value[key] = !openSellerPcs.value[key]
+}
+function isSellerPcOpen(key) {
+	return !!openSellerPcs.value[key]
+}
 
-	for (const r of list) {
-		const key = r.client_group_number
+/* ========== RESUMEN GLOBAL POR PROFIT CENTER (by_pc) ========== */
+
+const pcsRaw = computed(() => {
+	if (Array.isArray(ov.value?.by_pc) && ov.value.by_pc.length) {
+		return ov.value.by_pc
+	}
+	// Fallback a partir de by_seller (como antes)
+	const map = new Map()
+	for (const seller of ov.value?.by_seller || []) {
+		for (const pc of seller.pcs || []) {
+			const code = pc.profit_center_code ?? pc.code
+			if (code == null) continue
+			const key = String(code)
+			if (!map.has(key)) {
+				map.set(key, {
+					profit_center_code: code,
+					name: pcDisplayName(pc),
+					prev_m3: 0,
+					best_m3: 0,
+					worst_m3: 0,
+					ytd_annualized_m3: 0,
+					pending_cases: [],
+					class_mix: {},
+				})
+			}
+			const entry = map.get(key)
+			entry.prev_m3 += Number(pc.prev_m3 || 0)
+			entry.best_m3 += Number(pc.best_m3 || 0)
+			entry.worst_m3 += Number(pc.worst_m3 || 0)
+			entry.ytd_annualized_m3 += Number(pc.ytd_annualized_m3 || 0)
+		}
+	}
+	for (const row of ov.value?.pending_cases || []) {
+		const code = row.profit_center_code
+		if (code == null) continue
+		const key = String(code)
 		if (!map.has(key)) {
 			map.set(key, {
-				client_group_number: r.client_group_number,
-				client_name: r.client_name,
-				classification: r.classification,
-				pcs: [],
-				sellerSet: new Set(),
+				profit_center_code: code,
+				name: `Profit Center ${code}`,
+				prev_m3: 0,
+				best_m3: 0,
+				worst_m3: 0,
+				ytd_annualized_m3: 0,
+				pending_cases: [],
+				class_mix: {},
 			})
 		}
-		const entry = map.get(key)
-		entry.pcs.push(r.profit_center_code)
-		if (r.seller_name) entry.sellerSet.add(r.seller_name)
+		map.get(key).pending_cases.push(row)
+	}
+	return Array.from(map.values()).sort(
+		(a, b) => Number(a.profit_center_code) - Number(b.profit_center_code),
+	)
+})
+
+/**
+ * pcScenarioList:
+ *  - Usa ov.by_pc (si existe) para tener class_mix por PC
+ *  - Aplica las Annahmen C/D para calcular Best/Worst por PC
+ */
+const pcScenarioList = computed(() => {
+	const list = pcsRaw.value || []
+	const result = []
+
+	for (const pc of list) {
+		const mix = pc.class_mix || {}
+		const items = []
+
+		for (const key of classKeysAll) {
+			const row = mix[key] || {}
+			const base = Number(row.base_m3 ?? 0)
+			if (!base) continue
+
+			let best = 0
+			let worst = 0
+
+			if (key === 'C') {
+				const pctBest = Number(cBestPct.value || 0)
+				const pctWorst = Number(cWorstPct.value || 0)
+				best = base * (1 + pctBest / 100)
+				worst = base * (1 + pctWorst / 100)
+			} else if (key === 'D') {
+				const pctBest = Number(dBestPct.value || 0)
+				const pctWorst = Number(dWorstPct.value || 0)
+				best = base * (1 + pctBest / 100)
+				worst = base * (1 + pctWorst / 100)
+			} else if (key === 'X') {
+				best = base
+				worst = base
+			} else {
+				// A/B/PA/PB – si alguna vez mandas best/worst por clase, se podría usar aquí
+				best = base
+				worst = base
+			}
+
+			items.push({ key, base, best, worst })
+		}
+
+		const baseTotal = items.reduce((s, it) => s + it.base, 0)
+		const bestTotal = items.reduce((s, it) => s + it.best, 0)
+		const worstTotal = items.reduce((s, it) => s + it.worst, 0)
+
+		const mixWithShare = items.map((it) => ({
+			...it,
+			share_pct: baseTotal > 0 ? (it.base / baseTotal) * 100 : 0,
+		}))
+
+		result.push({
+			...pc,
+			name: pc.name ?? pcDisplayName(pc),
+			scenario_base: baseTotal,
+			scenario_best: bestTotal,
+			scenario_worst: worstTotal,
+			mix: mixWithShare,
+		})
 	}
 
-	return Array.from(map.values()).map((e) => ({
-		client_group_number: e.client_group_number,
-		client_name: e.client_name,
-		classification: e.classification,
-		pcs: e.pcs,
-		seller_name: Array.from(e.sellerSet).join(', '),
-	}))
+	return result
 })
+
+/* Estado de despliegue por Profit Center */
+const openPcSummary = ref({})
+const openPcCases = ref({})
+const openPcMix = ref({})
+
+function togglePcSummary(code) {
+	const key = String(code)
+	openPcSummary.value[key] = !openPcSummary.value[key]
+}
+function isPcSummaryOpen(code) {
+	return !!openPcSummary.value[String(code)]
+}
+
+function togglePcCases(code) {
+	const key = String(code)
+	openPcCases.value[key] = !openPcCases.value[key]
+}
+function isPcCasesOpen(code) {
+	return !!openPcCases.value[String(code)]
+}
+
+function togglePcMix(code) {
+	const key = String(code)
+	openPcMix.value[key] = !openPcMix.value[key]
+}
+function isPcMixOpen(code) {
+	return !!openPcMix.value[String(code)]
+}
 </script>
 
 <template>
@@ -336,7 +556,9 @@ const pendingByClient = computed(() => {
 						<div>
 							<span>Gesamtbudget</span>
 							<span v-if="ov" class="fy-pill">
-								WJ {{ ov.target_fiscal_year }}/{{ String(ov.target_fiscal_year + 1).slice(-2) }}
+								WJ {{ ov.target_fiscal_year }}/{{
+									String(ov.target_fiscal_year + 1).slice(-2)
+								}}
 							</span>
 						</div>
 						<i v-if="loading" class="pi pi-spin pi-spinner text-500" />
@@ -350,25 +572,28 @@ const pendingByClient = computed(() => {
 					</div>
 
 					<div v-else class="gesamt-body">
-						<!-- Primera fila: Basis / Best / Worst (más grandes) -->
+						<!-- Basis / Best / Worst -->
 						<div class="gesamt-main">
 							<div class="metric-block">
-								<div class="label">Basisvolumen</div>
+								<div class="label">Basisvolumen (CY11+1)</div>
 								<div class="value big">
-									{{ fmtInt(ov?.global.base_m3_with_case ?? 0) }}
+									{{ fmtInt(baseTotalForUI) }}
 									<span class="unit">m³</span>
 								</div>
-								<div class="sub">nur CPC mit Budget Case</div>
+								<div class="sub">
+									Alle Kundenklassen (A, B, C, D, PA, PB, X)
+								</div>
 							</div>
 
 							<div class="metric-block best">
 								<div class="label">Best Case</div>
 								<div class="value big green">
-									{{ fmtInt(ov?.global.best_m3 ?? 0) }}
+									{{ fmtInt(bestTotalForUI) }}
 									<span class="unit">m³</span>
 								</div>
 								<div class="sub">
-									Δ {{ fmtPctDelta(ov?.global.best_m3, ov?.global.base_m3_with_case) }}
+									Δ
+									{{ fmtPctDelta(bestTotalForUI, baseTotalForUI) }}
 									ggü. Basis
 								</div>
 							</div>
@@ -376,17 +601,18 @@ const pendingByClient = computed(() => {
 							<div class="metric-block worst">
 								<div class="label">Worst Case</div>
 								<div class="value big red">
-									{{ fmtInt(ov?.global.worst_m3 ?? 0) }}
+									{{ fmtInt(worstTotalForUI) }}
 									<span class="unit">m³</span>
 								</div>
 								<div class="sub">
-									Δ {{ fmtPctDelta(ov?.global.worst_m3, ov?.global.base_m3_with_case) }}
+									Δ
+									{{ fmtPctDelta(worstTotalForUI, baseTotalForUI) }}
 									ggü. Basis
 								</div>
 							</div>
 						</div>
 
-						<!-- Segunda fila: contexto -->
+						<!-- Meta -->
 						<div class="gesamt-meta">
 							<div>
 								<span class="meta-label">Basis:</span>
@@ -410,10 +636,101 @@ const pendingByClient = computed(() => {
 								</span>
 							</div>
 						</div>
+
+						<div
+							v-if="cdMeta.base_cd > 0"
+							class="gesamt-meta cd-meta"
+						>
+							<div>
+								<span class="meta-label">C/D-Basis:</span>
+								<span class="meta-val">
+									{{ fmtInt(cdMeta.base_cd) }} m³
+								</span>
+							</div>
+							<div>
+								<span class="meta-label">C/D Best:</span>
+								<span class="meta-val">
+									{{ fmtInt(cdMeta.best_cd) }} m³
+								</span>
+							</div>
+							<div>
+								<span class="meta-label">C/D Worst:</span>
+								<span class="meta-val">
+									{{ fmtInt(cdMeta.worst_cd) }} m³
+								</span>
+							</div>
+						</div>
+
 						<div class="gesamt-meta">
-							Nur A, B, PA, und PB Kunden berücksichtigt.
+							Best/Worst Case inkl. Annahmen für C- und D-Kunden.
 						</div>
 					</div>
+				</template>
+			</Card>
+
+			<!-- === Zusätzliche Annahmen C / D === -->
+			<Card class="card cd-card">
+				<template #title>
+					<div class="card-title-row">
+						<span>Zusätzliche Annahmen</span>
+					</div>
+				</template>
+				<template #content>
+					<div class="cd-grid">
+						<!-- C-Kunden -->
+						<div class="cd-group">
+							<div class="cd-title">C-Kunden</div>
+							<div class="cd-inputs">
+								<div class="cd-field">
+									<label>Best</label>
+									<InputNumber
+										v-model="cBestPct"
+										suffix=" %"
+										:step="1"
+										input-class="cd-input"
+									/>
+								</div>
+								<div class="cd-field">
+									<label>Worst</label>
+									<InputNumber
+										v-model="cWorstPct"
+										suffix=" %"
+										:step="1"
+										input-class="cd-input"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<!-- D-Kunden -->
+						<div class="cd-group">
+							<div class="cd-title">D-Kunden</div>
+							<div class="cd-inputs">
+								<div class="cd-field">
+									<label>Best</label>
+									<InputNumber
+										v-model="dBestPct"
+										suffix=" %"
+										:step="1"
+										input-class="cd-input"
+									/>
+								</div>
+								<div class="cd-field">
+									<label>Worst</label>
+									<InputNumber
+										v-model="dWorstPct"
+										suffix=" %"
+										:step="1"
+										input-class="cd-input"
+									/>
+								</div>
+							</div>
+						</div>
+					</div>
+					<p class="cd-hint">
+						Die Prozentwerte werden auf das Basisvolumen der C- und D-Kunden angewendet
+						und fließen in das Gesamt-Best/Worst-Szenario oben sowie in die Profit-Center-Analyse ein.
+					</p>
 				</template>
 			</Card>
 
@@ -479,9 +796,13 @@ const pendingByClient = computed(() => {
 
 		<!-- ==================== BOTTOM ROW ==================== -->
 		<div class="bottom-grid">
-			<!-- ====== BUDGET NACH VERKÄUFER (custom “tabla”) ====== -->
+			<!-- ====== BUDGET NACH VERKÄUFER ====== -->
 			<Card class="card seller-card">
-				<template #title>Budget nach Verkäufer</template>
+				<template #title>
+					<div class="card-title-row">
+						<span>Budget nach Verkäufer</span>
+					</div>
+				</template>
 				<template #content>
 					<div v-if="!ov && !loading" class="empty-state">
 						<p>Keine Daten verfügbar.</p>
@@ -493,7 +814,7 @@ const pendingByClient = computed(() => {
 							:key="sellerKey(seller)"
 							class="seller-block"
 						>
-							<!-- fila VENDEDOR (5 columnas alineadas) -->
+							<!-- fila VENDEDOR -->
 							<button
 								type="button"
 								class="seller-row"
@@ -537,24 +858,32 @@ const pendingByClient = computed(() => {
 									</div>
 								</div>
 
-								<!-- col 3: Vorjahr -->
-								<div class="seller-cell seller-cell-prev">
-									<div class="cell-label">Vorjahr</div>
+								<!-- col 3: Bud 2025/26 -->
+								<div class="seller-cell seller-cell-prev numeric-cell">
+									<div class="cell-label">Bud 2025/26</div>
 									<div class="cell-value">
 										{{ fmtInt(seller.prev_m3 ?? 0) }} m³
 									</div>
 								</div>
 
-								<!-- col 4: Best -->
-								<div class="seller-cell seller-cell-best">
+								<!-- col 4: CY11+1 -->
+								<div class="seller-cell seller-cell-cy numeric-cell">
+									<div class="cell-label">CY11+1</div>
+									<div class="cell-value">
+										{{ fmtInt(seller.ytd_annualized_m3 ?? 0) }} m³
+									</div>
+								</div>
+
+								<!-- col 5: Best -->
+								<div class="seller-cell seller-cell-best numeric-cell">
 									<div class="cell-label">Best</div>
 									<div class="cell-value txt-green">
 										{{ fmtInt(seller.best_m3 ?? 0) }} m³
 									</div>
 								</div>
 
-								<!-- col 5: Δ -->
-								<div class="seller-cell seller-cell-delta">
+								<!-- col 6: Δ -->
+								<div class="seller-cell seller-cell-delta numeric-cell">
 									<div class="cell-label">Δ</div>
 									<div
 										class="cell-value"
@@ -566,7 +895,7 @@ const pendingByClient = computed(() => {
 								</div>
 							</button>
 
-							<!-- PCs del vendedor (también 5 columnas alineadas) -->
+							<!-- PCs del vendedor -->
 							<transition name="fade">
 								<div
 									v-if="isSellerOpen(sellerKey(seller))"
@@ -574,26 +903,33 @@ const pendingByClient = computed(() => {
 								>
 									<div
 										v-for="pc in seller.pcs || []"
-										:key="pcKey(sellerKey(seller), pc)"
-										class="pc-block"
+										:key="pcKeySeller(sellerKey(seller), pc)"
+										class="pc-block-seller"
 									>
-										<div class="pc-row">
+										<div class="pc-row-seller">
 											<!-- col 1: flecha + nombre PC -->
 											<div
 												class="pc-cell pc-cell-name"
 												@click.stop="
-													togglePc(pcKey(sellerKey(seller), pc))
+													toggleSellerPc(
+														pcKeySeller(sellerKey(seller), pc),
+													)
 												"
 											>
 												<i
 													class="pi"
 													:class="
-														isPcOpen(pcKey(sellerKey(seller), pc))
+														isSellerPcOpen(
+															pcKeySeller(
+																sellerKey(seller),
+																pc,
+															),
+														)
 															? 'pi-chevron-down'
 															: 'pi-chevron-right'
 													"
 												/>
-												<div class="pc-main">
+												<div class="pc-main-seller">
 													<span class="pc-name">
 														{{ pcDisplayName(pc) }}
 													</span>
@@ -606,7 +942,7 @@ const pendingByClient = computed(() => {
 												</div>
 											</div>
 
-											<!-- col 2: barra coverage PC -->
+											<!-- col 2: coverage PC -->
 											<div class="pc-cell pc-cell-cov">
 												<div class="pc-progress">
 													<div class="cov-header-row cov-small">
@@ -619,7 +955,9 @@ const pendingByClient = computed(() => {
 														<div
 															class="cov-fill"
 															:class="coverageColorClass(pcCoveragePct(pc))"
-															:style="{ width: pcCoveragePct(pc) + '%' }"
+															:style="{
+																width: pcCoveragePct(pc) + '%',
+															}"
 														/>
 													</div>
 													<div class="cov-ratio cov-small">
@@ -630,9 +968,9 @@ const pendingByClient = computed(() => {
 												</div>
 											</div>
 
-											<!-- col 3: Vorjahr -->
-											<div class="pc-cell pc-cell-prev">
-												<div class="cell-label">Vorjahr</div>
+											<!-- col 3: Bud 2025/26 -->
+											<div class="pc-cell pc-cell-prev numeric-cell">
+												<div class="cell-label">Bud 2025/26</div>
 												<div class="cell-value">
 													{{
 														pc.prev_m3 != null
@@ -643,8 +981,19 @@ const pendingByClient = computed(() => {
 												</div>
 											</div>
 
-											<!-- col 4: Best -->
-											<div class="pc-cell pc-cell-best">
+											<!-- col 4: CY11+1 -->
+											<div class="pc-cell pc-cell-cy numeric-cell">
+												<div class="cell-label">CY11+1</div>
+												<div class="cell-value">
+													{{
+														fmtInt(pc.ytd_annualized_m3 ?? 0)
+													}}
+													m³
+												</div>
+											</div>
+
+											<!-- col 5: Best -->
+											<div class="pc-cell pc-cell-best numeric-cell">
 												<div class="cell-label">Best</div>
 												<div class="cell-value txt-green">
 													{{
@@ -656,8 +1005,8 @@ const pendingByClient = computed(() => {
 												</div>
 											</div>
 
-											<!-- col 5: Δ -->
-											<div class="pc-cell pc-cell-delta">
+											<!-- col 6: Δ -->
+											<div class="pc-cell pc-cell-delta numeric-cell">
 												<div class="cell-label">Δ</div>
 												<div
 													class="cell-value"
@@ -673,7 +1022,11 @@ const pendingByClient = computed(() => {
 										<!-- clientes del PC -->
 										<transition name="fade">
 											<div
-												v-if="isPcOpen(pcKey(sellerKey(seller), pc))"
+												v-if="
+													isSellerPcOpen(
+														pcKeySeller(sellerKey(seller), pc),
+													)
+												"
 												class="pc-client-list"
 											>
 												<div
@@ -684,7 +1037,6 @@ const pendingByClient = computed(() => {
 													Center.
 												</div>
 
-												<!-- clientes: 5 columnas alineadas -->
 												<div
 													v-else
 													v-for="client in pc.clients"
@@ -692,7 +1044,9 @@ const pendingByClient = computed(() => {
 													class="client-row"
 												>
 													<!-- col 1: icono + nombre -->
-													<div class="client-cell client-cell-name">
+													<div
+														class="client-cell client-cell-name"
+													>
 														<i
 															class="pi"
 															:class="
@@ -711,9 +1065,13 @@ const pendingByClient = computed(() => {
 														</div>
 													</div>
 
-													<!-- col 2: Vorjahr -->
-													<div class="client-cell client-cell-prev">
-														<div class="cell-label">Vorjahr</div>
+													<!-- col 2: Bud 2025/26 + CY -->
+													<div
+														class="client-cell client-cell-prev numeric-cell"
+													>
+														<div class="cell-label">
+															Bud 2025/26
+														</div>
 														<div class="cell-value">
 															{{
 																client.prev_m3 != null
@@ -722,10 +1080,23 @@ const pendingByClient = computed(() => {
 															}}
 															m³
 														</div>
+														<div class="cell-subline">
+															CY11+1:
+															<span class="cell-subline-strong">
+																{{
+																	fmtInt(
+																		client
+																			.ytd_annualized_m3 ??
+																			0,
+																	)
+																}}
+																m³
+															</span>
+														</div>
 													</div>
 
 													<!-- col 3: Best -->
-													<div class="client-cell client-cell-best">
+													<div class="client-cell client-cell-best numeric-cell">
 														<div class="cell-label">Best</div>
 														<div class="cell-value txt-green">
 															{{
@@ -738,7 +1109,9 @@ const pendingByClient = computed(() => {
 													</div>
 
 													<!-- col 4: Δ m³ -->
-													<div class="client-cell client-cell-delta-m3">
+													<div
+														class="client-cell client-cell-delta-m3 numeric-cell"
+													>
 														<div class="cell-label">Δ m³</div>
 														<div
 															class="cell-value"
@@ -759,7 +1132,9 @@ const pendingByClient = computed(() => {
 													</div>
 
 													<!-- col 5: Δ % -->
-													<div class="client-cell client-cell-delta-pct">
+													<div
+														class="client-cell client-cell-delta-pct numeric-cell"
+													>
 														<div class="cell-label">Δ %</div>
 														<div
 															class="cell-value"
@@ -789,61 +1164,233 @@ const pendingByClient = computed(() => {
 				</template>
 			</Card>
 
-			<!-- Offene Budget Cases (agrupados por cliente) -->
-			<Card class="card table-card">
+			<!-- ====== RESUMEN POR PROFIT CENTER (GLOBAL) ====== -->
+			<Card class="card pc-card">
 				<template #title>
-					Offene Budget Cases ({{ pendingByClient.length }})
+					<div class="card-title-row">
+						<span>Budget nach Profit Center</span>
+						<span v-if="pcScenarioList.length" class="pc-count-pill">
+							{{ pcScenarioList.length }} PC
+						</span>
+					</div>
 				</template>
+
 				<template #content>
-					<DataTable
-						:value="pendingByClient"
-						:rows="10"
-						paginator
-						dataKey="client_group_number"
-						:rowHover="true"
-						:loading="loading"
-						responsiveLayout="scroll"
-						:emptyMessage="'Keine offenen Budget Cases'"
-					>
-						<Column header="Kunde" style="min-width: 220px">
-							<template #body="{ data }">
-								<div class="client-cell">
-									<span class="cgn">#{{ data.client_group_number }}</span>
-									<span class="cname">{{ data.client_name }}</span>
-								</div>
-							</template>
-						</Column>
+					<div v-if="!ov && !loading" class="empty-state">
+						<p>Keine Daten verfügbar.</p>
+					</div>
 
-						<Column header="Klassifikation" style="width: 130px">
-							<template #body="{ data }">
-								<Tag
-									:value="data.classification"
-									:severity="classificationSeverity(data.classification)"
-									class="tag-slim"
-								/>
-							</template>
-						</Column>
-
-						<Column header="Profit Center" style="min-width: 180px">
-							<template #body="{ data }">
-								<div class="pc-chip-row">
-									<Tag
-										v-for="pc in data.pcs"
-										:key="pc"
-										:value="pc"
-										class="tag-slim pc-tag"
-										severity="info"
+					<div v-else class="pc-list">
+						<div
+							v-for="pc in pcScenarioList"
+							:key="pc.profit_center_code"
+							class="pc-block"
+						>
+							<!-- fila PC resumen -->
+							<button
+								type="button"
+								class="pc-row"
+								@click="togglePcSummary(pc.profit_center_code)"
+							>
+								<div class="pc-main">
+									<i
+										class="pi"
+										:class="
+											isPcSummaryOpen(pc.profit_center_code)
+												? 'pi-chevron-down'
+												: 'pi-chevron-right'
+										"
 									/>
+									<div class="pc-title">
+										<span class="pc-name">{{ pc.name }}</span>
+									</div>
 								</div>
-							</template>
-						</Column>
 
-						<Column header="Verkäufer" style="min-width: 160px">
-							<template #body="{ data }">
-								{{ data.seller_name }}
-							</template>
-						</Column>
-					</DataTable>
+								<div class="pc-metrics">
+									<div class="pc-metric">
+										<div class="metric-label">Bud 2025/26</div>
+										<div class="metric-value">
+											{{ fmtInt(pc.prev_m3) }}
+											<span class="unit">m³</span>
+										</div>
+									</div>
+									<div class="pc-metric">
+										<div class="metric-label">CY11+1</div>
+										<div class="metric-value">
+											{{ fmtInt(pc.ytd_annualized_m3 ?? 0) }}
+											<span class="unit">m³</span>
+										</div>
+									</div>
+									<div class="pc-metric">
+										<div class="metric-label">Best Szenario</div>
+										<div class="metric-value green">
+											{{ fmtInt(pc.scenario_best) }}
+											<span class="unit">m³</span>
+										</div>
+									</div>
+									<div class="pc-metric">
+										<div class="metric-label">Δ</div>
+										<div
+											class="metric-value"
+											:class="deltaClass(pc.scenario_best, pc.prev_m3)"
+										>
+											{{ fmtDeltaAbs(pc.scenario_best, pc.prev_m3) }}
+											m³
+											<span class="metric-delta-pct">
+												({{ fmtDeltaPct(pc.scenario_best, pc.prev_m3) }})
+											</span>
+										</div>
+									</div>
+								</div>
+							</button>
+
+							<!-- detalle PC -->
+							<transition name="fade">
+								<div
+									v-if="isPcSummaryOpen(pc.profit_center_code)"
+									class="pc-detail"
+								>
+									<!-- Sub-accordion: casos abiertos -->
+									<div class="pc-subsection">
+										<button
+											type="button"
+											class="pc-subtitle"
+											@click.stop="
+												togglePcCases(pc.profit_center_code)
+											"
+										>
+											<i
+												class="pi"
+												:class="
+													isPcCasesOpen(pc.profit_center_code)
+														? 'pi-chevron-down'
+														: 'pi-chevron-right'
+												"
+											/>
+											<span>
+												Offene Budget Cases ({{
+													pc.pending_cases?.length ?? 0
+												}})
+											</span>
+										</button>
+										<transition name="fade">
+											<div
+												v-if="isPcCasesOpen(pc.profit_center_code)"
+												class="pc-subcontent"
+											>
+												<div
+													v-if="
+														!pc.pending_cases ||
+														!pc.pending_cases.length
+													"
+													class="no-pending"
+												>
+													Keine offenen Budget Cases für diesen Profit
+													Center.
+												</div>
+												<div
+													v-else
+													class="pending-list"
+												>
+													<div
+														v-for="row in pc.pending_cases"
+														:key="
+															row.client_group_number +
+															'-' +
+															row.profit_center_code
+														"
+														class="pending-row"
+													>
+														<div class="pending-main">
+															<span class="pending-cgn">
+																#{{ row.client_group_number }}
+															</span>
+															<span class="pending-name">
+																{{ row.client_name }}
+															</span>
+														</div>
+														<div class="pending-meta">
+															<Tag
+																:value="row.classification"
+																:severity="
+																	classificationSeverity(
+																		row.classification,
+																	)
+																"
+																class="tag-slim"
+															/>
+															<span
+																v-if="row.seller_name"
+																class="pending-seller"
+															>
+																{{ row.seller_name }}
+															</span>
+														</div>
+													</div>
+												</div>
+											</div>
+										</transition>
+									</div>
+
+									<!-- Sub-accordion: mix por Kundentyp -->
+									<div class="pc-subsection">
+										<button
+											type="button"
+											class="pc-subtitle"
+											@click.stop="
+												togglePcMix(pc.profit_center_code)
+											"
+										>
+											<i
+												class="pi"
+												:class="
+													isPcMixOpen(pc.profit_center_code)
+														? 'pi-chevron-down'
+														: 'pi-chevron-right'
+												"
+											/>
+											<span>Verteilung nach Kundentyp</span>
+										</button>
+										<transition name="fade">
+											<div
+												v-if="isPcMixOpen(pc.profit_center_code)"
+												class="pc-subcontent pc-mix-content"
+											>
+												<div
+													v-if="!pc.mix || !pc.mix.length"
+													class="no-pending"
+												>
+													Keine Volumendaten nach Kundentyp.
+												</div>
+												<div v-else class="pc-mix-table">
+													<div class="pc-mix-header">
+														<span>Typ</span>
+														<span>Basis m³</span>
+														<span>Anteil</span>
+													</div>
+													<div
+														v-for="row in pc.mix"
+														:key="row.key"
+														class="pc-mix-row"
+													>
+														<span class="pc-mix-type">
+															{{ row.key }}
+														</span>
+														<span class="pc-mix-base">
+															{{ fmtInt(row.base) }}
+														</span>
+														<span class="pc-mix-share">
+															{{ fmtPct(row.share_pct) }}
+														</span>
+													</div>
+												</div>
+											</div>
+										</transition>
+									</div>
+								</div>
+							</transition>
+						</div>
+					</div>
 				</template>
 			</Card>
 		</div>
@@ -860,8 +1407,9 @@ const pendingByClient = computed(() => {
 /* ==== GRID LAYOUT ==== */
 .top-grid {
 	display: grid;
-	grid-template-columns: 6fr 6fr;
+	grid-template-columns: 6fr 1fr 5fr; /* Gesamt | C/D | Donuts */
 	gap: 16px;
+	align-items: stretch;
 }
 
 .bottom-grid {
@@ -977,6 +1525,12 @@ const pendingByClient = computed(() => {
 	border-top: 1px dashed #e5e7eb;
 }
 
+.cd-meta {
+	border-top-style: solid;
+	border-top-width: 1px;
+	border-top-color: #c7d2fe;
+}
+
 .meta-label {
 	font-weight: 600;
 	margin-right: 4px;
@@ -988,19 +1542,19 @@ const pendingByClient = computed(() => {
 
 /* ==== Donuts ==== */
 .donuts-card {
-	min-height: 220px;
+	min-height: 260px;
 }
 
 .donuts-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 8px;
+	gap: 12px;
 }
 
 .donut-block {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 6px;
 	align-items: stretch;
 }
 
@@ -1024,52 +1578,69 @@ const pendingByClient = computed(() => {
 	color: #9ca3af;
 }
 
-/* ==== Tabla genérica (pending cases) ==== */
-.table-card :deep(.p-datatable-thead > tr > th) {
-	padding: 0.4rem 0.6rem;
-	font-size: 0.8rem;
+/* ==== C/D card ==== */
+.cd-card {
+	align-self: stretch;
 }
 
-.table-card :deep(.p-datatable-tbody > tr > td) {
-	padding: 0.35rem 0.6rem;
-	font-size: 0.8rem;
+.cd-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 8px;
 }
 
-.client-cell {
+.cd-group {
+	background: #f9fafb;
+	border-radius: 10px;
+	padding: 8px 10px;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	text-align: left;
+	gap: 6px;
 }
 
-.client-cell .cgn {
+.cd-title {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: #374151;
+}
+
+.cd-inputs {
+	display: flex;
+	flex-direction: row;
+	gap: 6px;
+}
+
+.cd-field {
+	flex: 1 1 0;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.cd-field label {
 	font-size: 0.75rem;
 	color: #6b7280;
 }
 
-.client-cell .cname {
-	font-weight: 600;
-	color: #111827;
+.cd-input {
+	width: 100%;
+	max-width: 72px;
+	height: 28px;
+	font-size: 0.8rem;
 }
 
-.pc-chip-row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
+/* ajustar el input de PrimeVue */
+.cd-field :deep(.p-inputtext.cd-input) {
+	padding: 2px 4px;
+	height: 28px;
+	font-size: 0.8rem;
 }
 
-/* Tags */
-.tag-slim.p-tag {
-	padding: 2px 6px;
-	border-radius: 999px;
-	font-size: 0.72rem;
-	font-weight: 500;
-}
-
-.pc-tag {
-	background: #e0f2fe;
-	color: #0369a1;
-	border: 0;
+.cd-hint {
+	margin-top: 8px;
+	font-size: 0.78rem;
+	color: #6b7280;
 }
 
 /* ==== Seller "tabla" custom ==== */
@@ -1101,7 +1672,7 @@ const pendingByClient = computed(() => {
 	padding-right: 4px;
 }
 
-/* fila vendedor - 5 columnas */
+/* fila vendedor - 6 columnas */
 .seller-block {
 	padding: 2px 0;
 }
@@ -1113,8 +1684,14 @@ const pendingByClient = computed(() => {
 	border-radius: 10px;
 	padding: 7px 10px 7px 4px;
 	display: grid;
-	grid-template-columns: minmax(0, 2.5fr) minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1.7fr);
-	column-gap: 16px;
+	grid-template-columns:
+		minmax(0, 1.8fr) /* nombre */
+		minmax(0, 2.2fr) /* barra */
+		minmax(0, 1.2fr) /* Bud */
+		minmax(0, 1.2fr) /* CY */
+		minmax(0, 1.2fr) /* Best */
+		minmax(0, 1.6fr); /* Δ */
+	column-gap: 12px;
 	align-items: center;
 	cursor: pointer;
 	transition: box-shadow 0.12s ease-out, transform 0.12s ease-out, background 0.12s ease-out;
@@ -1140,7 +1717,7 @@ const pendingByClient = computed(() => {
 .seller-cell-name {
 	flex-direction: row;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 }
 
 .seller-cell-name .pi {
@@ -1151,7 +1728,7 @@ const pendingByClient = computed(() => {
 .seller-name {
 	font-weight: 700;
 	color: #111827;
-	font-size: 0.92rem;
+	font-size: 0.9rem;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1168,7 +1745,7 @@ const pendingByClient = computed(() => {
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
-	margin-right: 10px;
+	margin-right: 4px;
 }
 
 /* etiquetas genéricas de celda */
@@ -1188,8 +1765,17 @@ const pendingByClient = computed(() => {
 	text-align: left;
 }
 
-/* ===== barras de coverage (seller + PC) ===== */
+/* numeric cells centradas */
+.numeric-cell {
+	align-items: center;
+	text-align: center;
+}
+.numeric-cell .cell-value,
+.numeric-cell .cell-label {
+	text-align: center;
+}
 
+/* barras coverage */
 .cov-header-row {
 	display: flex;
 	align-items: baseline;
@@ -1259,9 +1845,7 @@ const pendingByClient = computed(() => {
 	font-size: 0.68rem;
 }
 
-
-/* PCs del vendedor - también en 5 columnas */
-
+/* PCs del vendedor */
 .seller-pc-list {
 	margin-top: 5px;
 	padding-left: 10px;
@@ -1270,17 +1854,23 @@ const pendingByClient = computed(() => {
 	gap: 4px;
 }
 
-.pc-block {
+.pc-block-seller {
 	background: #f9fafb;
 	border-radius: 8px;
 	padding: 4px 6px 4px;
 	border: 1px solid #e5e7eb;
 }
 
-.pc-row {
+.pc-row-seller {
 	display: grid;
-	grid-template-columns: minmax(0, 2.5fr) minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1.7fr);
-	column-gap: 16px;
+	grid-template-columns:
+		minmax(0, 1.8fr) /* nombre */
+		minmax(0, 2.2fr) /* barra */
+		minmax(0, 1.2fr) /* Bud */
+		minmax(0, 1.2fr) /* CY */
+		minmax(0, 1.2fr) /* Best */
+		minmax(0, 1.6fr); /* Δ */
+	column-gap: 12px;
 	align-items: center;
 }
 
@@ -1293,7 +1883,6 @@ const pendingByClient = computed(() => {
 	text-align: left;
 }
 
-/* col 1: nombre PC + flecha */
 .pc-cell-name {
 	flex-direction: row;
 	align-items: center;
@@ -1306,7 +1895,7 @@ const pendingByClient = computed(() => {
 	color: #6b7280;
 }
 
-.pc-main {
+.pc-main-seller {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
@@ -1325,20 +1914,7 @@ const pendingByClient = computed(() => {
 	color: #9ca3af;
 }
 
-/* col 2: coverage PC */
-.pc-cell-cov {
-	align-items: flex-start;
-}
-
-.pc-progress {
-	width: 100%;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-/* ===== Clientes dentro del PC (alineados a columnas) ===== */
-
+/* clientes del PC (seller card) */
 .pc-client-list {
 	margin-top: 4px;
 	border-top: 1px dashed #e5e7eb;
@@ -1350,8 +1926,13 @@ const pendingByClient = computed(() => {
 
 .client-row {
 	display: grid;
-	grid-template-columns: minmax(0, 2.5fr) minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1.7fr);
-	column-gap: 16px;
+	grid-template-columns:
+		minmax(0, 2.2fr) /* nombre */
+		minmax(0, 1.8fr) /* Bud+CY */
+		minmax(0, 1.3fr) /* Best */
+		minmax(0, 1.2fr) /* Δ m3 */
+		minmax(0, 1.2fr); /* Δ % */
+	column-gap: 12px;
 	align-items: center;
 	padding: 3px 2px;
 	border-radius: 4px;
@@ -1370,7 +1951,6 @@ const pendingByClient = computed(() => {
 	text-align: left;
 }
 
-/* col 1: icono + nombre cliente */
 .client-cell-name {
 	flex-direction: row !important;
 	align-items: center;
@@ -1399,7 +1979,6 @@ const pendingByClient = computed(() => {
 	color: #111827;
 }
 
-/* iconos para clientes */
 .icon-ok {
 	color: #16a34a;
 	font-size: 0.9rem;
@@ -1413,6 +1992,290 @@ const pendingByClient = computed(() => {
 .no-clients {
 	font-size: 0.78rem;
 	color: #9ca3af;
+}
+
+.cell-subline {
+	font-size: 0.7rem;
+	color: #6b7280;
+}
+.cell-subline-strong {
+	font-weight: 600;
+	color: #111827;
+	margin-left: 2px;
+}
+
+/* ==== PC SUMMARY CARD (GLOBAL) ==== */
+
+.pc-card :deep(.p-card-body) {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+.pc-card :deep(.p-card-content) {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.pc-count-pill {
+	margin-left: auto;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: #e0f2fe;
+	color: #0369a1;
+	font-size: 0.75rem;
+	font-weight: 600;
+}
+
+.pc-list {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 4px;
+}
+
+.pc-block {
+	border-radius: 10px;
+	border: 1px solid #e5e7eb;
+	background: #f9fafb;
+	overflow: hidden;
+}
+
+/* fila principal del PC */
+.pc-row {
+	width: 100%;
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
+	column-gap: 16px;
+	padding: 10px 10px;
+	background: linear-gradient(90deg, #f9fafb 0%, #f3f4f6 60%, #eef2ff 100%);
+	cursor: pointer;
+	border: none;
+	outline: none;
+	text-align: left;
+	transition: box-shadow 0.12s ease-out, transform 0.12s ease-out,
+		background 0.12s ease-out;
+}
+
+.pc-row:hover {
+	box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07);
+	transform: translateY(-1px);
+	background: linear-gradient(90deg, #f9fafb 0%, #e5e7eb 60%, #e0e7ff 100%);
+}
+
+.pc-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.pc-main .pi {
+	font-size: 0.85rem;
+	color: #4b5563;
+}
+
+.pc-title {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pc-name {
+	font-weight: 700;
+	color: #111827;
+	font-size: 0.9rem;
+}
+
+/* métricas lado derecho */
+.pc-metrics {
+	display: flex;
+	justify-content: flex-end;
+	gap: 14px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.pc-metric {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 90px;
+	text-align: center;
+}
+
+.metric-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #6b7280;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.metric-value {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: #111827;
+}
+
+.metric-value.green {
+	color: #16a34a;
+}
+
+.metric-delta-pct {
+	margin-left: 4px;
+	font-weight: 500;
+	font-size: 0.78rem;
+	color: #4b5563;
+}
+
+/* detalle PC / casos abiertos + mix */
+.pc-detail {
+	border-top: 1px solid #e5e7eb;
+	background: #fefefe;
+	padding: 6px 10px 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.pc-subsection {
+	border-radius: 8px;
+	background: #f9fafb;
+	border: 1px dashed #e5e7eb;
+}
+
+.pc-subtitle {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border: none;
+	outline: none;
+	background: transparent;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: #374151;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pc-subtitle .pi {
+	font-size: 0.8rem;
+	color: #4b5563;
+}
+
+.pc-subcontent {
+	padding: 4px 8px 6px;
+}
+
+/* casos pendientes */
+.no-pending {
+	font-size: 0.78rem;
+	color: #9ca3af;
+}
+
+.pending-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pending-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 4px;
+	border-radius: 6px;
+}
+
+.pending-row:nth-child(odd) {
+	background: #f3f4f6;
+}
+
+.pending-main {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	text-align: left;
+}
+
+.pending-cgn {
+	font-size: 0.74rem;
+	color: #6b7280;
+}
+
+.pending-name {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: #111827;
+}
+
+.pending-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pending-seller {
+	font-size: 0.75rem;
+	color: #6b7280;
+}
+
+/* mix por Kundentyp */
+.pc-mix-content {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pc-mix-table {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 0.78rem;
+}
+
+.pc-mix-header,
+.pc-mix-row {
+	display: grid;
+	grid-template-columns: 1fr 2fr 1.5fr;
+	column-gap: 8px;
+	align-items: center;
+}
+
+.pc-mix-header {
+	font-weight: 600;
+	color: #4b5563;
+}
+
+.pc-mix-row {
+	padding: 2px 0;
+}
+
+.pc-mix-row:nth-child(odd) {
+	background: #f3f4f6;
+}
+
+.pc-mix-type {
+	font-weight: 600;
+}
+
+.pc-mix-base,
+.pc-mix-share {
+	text-align: right;
+}
+
+/* Tags */
+.tag-slim.p-tag {
+	padding: 2px 6px;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 500;
 }
 
 /* ==== Misc ==== */
@@ -1457,29 +2320,49 @@ const pendingByClient = computed(() => {
 	color: #374151;
 }
 
+/* ==== Responsive ==== */
 @media (max-width: 1200px) {
-	.top-grid,
+	.top-grid {
+		grid-template-columns: 1fr;
+	}
 	.bottom-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.donuts-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.cd-grid {
 		grid-template-columns: 1fr;
 	}
 }
 
 @media (max-width: 900px) {
 	.seller-row,
-	.pc-row,
+	.pc-row-seller,
 	.client-row {
 		grid-template-columns: minmax(0, 2.5fr) minmax(0, 2fr) minmax(0, 1.5fr);
 		grid-auto-rows: auto;
 		row-gap: 4px;
 	}
+	.seller-cell-prev,
+	.seller-cell-cy,
 	.seller-cell-best,
 	.seller-cell-delta,
+	.pc-cell-prev,
+	.pc-cell-cy,
 	.pc-cell-best,
-	.pc-cell-delta,
-	.client-cell-best,
-	.client-cell-delta-m3,
-	.client-cell-delta-pct {
+	.pc-cell-delta {
 		margin-top: 2px;
+	}
+
+	.pc-row {
+		grid-template-columns: 1fr;
+		row-gap: 6px;
+	}
+	.pc-metrics {
+		justify-content: flex-start;
 	}
 }
 
@@ -1489,7 +2372,7 @@ const pendingByClient = computed(() => {
 	}
 
 	.donut-chart {
-		height: 140px;
+		height: 180px;
 	}
 
 	.gesamt-main {

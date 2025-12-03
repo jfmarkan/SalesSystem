@@ -2,19 +2,19 @@
 	<Toast />
 	<div class="users-page">
 		<div class="grid2-10">
-			<!-- 2: listas/filtros -->
+			<!-- 2: Listen / Filter -->
 			<aside class="pane left">
 				<div class="pane-head">
 					<div class="search">
 						<IconField>
 							<InputIcon class="pi pi-search" />
-							<InputText v-model="q" placeholder="Search" />
+							<InputText v-model="q" placeholder="Suche" />
 						</IconField>
 					</div>
 					<Button icon="pi pi-plus" class="btn-new" @click="dlgCreate = true" />
 				</div>
 
-				<!-- La lista ocupa TODO el alto -->
+				<!-- Liste nimmt die volle Höhe ein -->
 				<div class="list-wrap">
 					<Listbox
 						v-model="selectedId"
@@ -26,7 +26,6 @@
 					>
 						<template #option="{ option }">
 							<div class="lb-row">
-								<!-- Estado (solo ícono) -->
 								<Tag
 									class="state-dot"
 									:icon="option.disabled ? 'pi pi-times' : 'pi pi-check'"
@@ -39,11 +38,10 @@
 				</div>
 			</aside>
 
-			<!-- 10: workbench -->
+			<!-- 10: Workbench -->
 			<section class="right">
-				<!-- ⬇️ Nada se renderiza si no hay usuario seleccionado -->
 				<template v-if="selected">
-					<!-- Card de TÍTULO -->
+					<!-- Titelkarte -->
 					<Card class="title-card">
 						<template #content>
 							<div class="title-head">
@@ -65,25 +63,19 @@
 											/>
 										</div>
 
-										<!-- 🔹 Chips SIEMPRE visibles: company (neutro), team (gris), rol (azul) -->
 										<div class="meta-chips">
-											<!-- Companies -->
 											<Tag
 												v-for="(c, ci) in (selected.companies || [])"
 												:key="'c' + ci"
 												class="tag-slim tag-company"
 												:value="c.name || c"
 											/>
-
-											<!-- Teams (gris) -->
 											<Tag
 												v-for="tid in selected.teamIds || []"
 												:key="'t' + tid"
 												class="tag-slim tag-team"
 												:value="teamName(tid)"
 											/>
-
-											<!-- Rol (azul) -->
 											<Tag
 												v-if="roleDisplay(selected)"
 												class="tag-slim tag-role"
@@ -141,7 +133,7 @@
 										text
 										size="small"
 										@click="openTransferPanel"
-										v-tooltip.bottom="'Transfer'"
+										v-tooltip.bottom="'Kundenübertragungen'"
 									/>
 									<Button
 										icon="pi pi-percentage"
@@ -149,30 +141,25 @@
 										text
 										size="small"
 										@click="openExtraPanel"
-										v-tooltip.bottom="'Extra Quotas'"
+										v-tooltip.bottom="'Extra-Quoten'"
 									/>
 								</div>
 							</div>
 						</template>
 					</Card>
 
-					<!-- ================= RIGHT PANELS ================= -->
-
-					<!-- TRANSFER PANEL -->
+					<!-- ================= TRANSFER PANEL ================= -->
 					<Card v-if="selected && ws === 'transfer'" class="content-card">
 						<template #title>Kunden übertragen</template>
 
 						<template #content>
-							<!-- Toolbar -->
 							<div class="transfer-toolbar">
 								<div class="tb-left">
-									<!-- Suche -->
 									<IconField class="tb-search">
 										<InputIcon class="pi pi-search" />
-										<InputText v-model="transfer.search" placeholder="Suchen" />
+										<InputText v-model="transfer.search" placeholder="Suche" />
 									</IconField>
 
-									<!-- Modus -->
 									<div class="tb-mode">
 										<label class="tb-label">Modus</label>
 										<SelectButton
@@ -183,7 +170,6 @@
 										/>
 									</div>
 
-									<!-- Zielbenutzer (solo ALL/AUSWAHL) -->
 									<div class="tb-target" v-if="transfer.mode !== 'perRow'">
 										<label class="tb-label" for="target">Zielbenutzer</label>
 										<Select
@@ -209,7 +195,6 @@
 								</div>
 							</div>
 
-							<!-- Hint -->
 							<div class="transfer-hint">
 								<Message v-if="transfer.mode === 'all'" severity="info" :closable="false">
 									Alle Kunden (alle Profitcenter) werden vollständig übertragen.
@@ -218,11 +203,10 @@
 									Nur ausgewählte Kunden werden übertragen.
 								</Message>
 								<Message v-else severity="info" :closable="false">
-									Pro Zeile Kunden einem Ziel zuordnen.
+									Pro Zeile Kunden einem Zielbenutzer zuordnen.
 								</Message>
 							</div>
 
-							<!-- Tabla -->
 							<DataTable
 								:value="filteredClients"
 								dataKey="clientGroupNumber"
@@ -241,7 +225,6 @@
 									headerStyle="width:3rem"
 								/>
 
-								<!-- 🔹 Clasificación ABC -->
 								<Column header="Klassifikation" style="width: 120px">
 									<template #body="{ data }">
 										<span v-if="data.classLetter" class="class-chip">
@@ -251,29 +234,23 @@
 									</template>
 								</Column>
 
-								<!-- 🔹 Kundenartikelklassifikation -->
 								<Column
 									field="clientGroupNumber"
 									header="Kundenartikelklassifikation"
 									style="width: 220px"
 								/>
 
-								<!-- 🔹 Nombre del cliente -->
-								<Column field="clientName" header="Kunde Name" />
+								<Column field="clientName" header="Kundenname" />
 
-								<!-- 🔹 Profit Centers (lista) -->
-								<Column header="Profit Centers" style="width: 260px">
+								<Column header="Profitcenter" style="width: 260px">
 									<template #body="{ data }">
-										<span
-											v-if="Array.isArray(data.profitCenters) && data.profitCenters.length"
-										>
+										<span v-if="Array.isArray(data.profitCenters) && data.profitCenters.length">
 											{{ data.profitCenters.join(', ') }}
 										</span>
 										<span v-else>-</span>
 									</template>
 								</Column>
 
-								<!-- 🔹 Target por fila -->
 								<Column
 									v-if="transfer.mode === 'perRow'"
 									header="Zielbenutzer"
@@ -294,42 +271,45 @@
 						</template>
 					</Card>
 
-					<!-- EXTRA QUOTAS PANEL (inline) -->
+					<!-- ============= EXTRA QUOTAS PANEL ============= -->
 					<Card v-if="selected && ws === 'extra'" class="content-card">
-						<template #title>Extra Quotas</template>
+						<template #title>
+							<div class="xq-title-bar">
+								<span>Extra-Quoten</span>
+								<div class="xq-title-actions">
+									<Button
+										icon="pi pi-chevron-left"
+										text
+										rounded
+										size="small"
+										@click="xqPrevYear"
+										v-tooltip.bottom="'Vorheriges Geschäftsjahr'"
+									/>
+									<span class="xq-fy-label">{{ xqFyLabel }}</span>
+									<Button
+										icon="pi pi-chevron-right"
+										text
+										rounded
+										size="small"
+										@click="xqNextYear"
+										v-tooltip.bottom="'Nächstes Geschäftsjahr'"
+									/>
+									<Button
+										:label="xqSaveAllLabel"
+										icon="pi pi-save"
+										size="small"
+										class="xq-save-all-btn"
+										:disabled="xqDirtyCount === 0 || xq.loading"
+										@click="xqSaveAll"
+									/>
+								</div>
+							</div>
+						</template>
 
 						<template #content>
 							<div class="xq-wrap">
 								<div class="xq-bar">
-									<label>ID Usuario</label>
-									<input
-										type="number"
-										v-model.number="xq.localUserId"
-										min="1"
-										placeholder="userId"
-									/>
-
-									<label>Fiscal Year</label>
-									<input type="number" v-model.number="xq.fy" min="2000" />
-
-									<label>PC Code</label>
-									<input type="text" v-model="xq.pc" placeholder="(opcional)" />
-
-									<Button
-										label="Cargar"
-										size="small"
-										:disabled="!xqEffectiveUserId || xq.loading"
-										@click="xqFetchRows"
-									/>
 									<span class="xq-spacer"></span>
-									<Button
-										label="Guardar"
-										icon="pi pi-check"
-										size="small"
-										:disabled="xqDirtyCount === 0 || xq.loading"
-										@click="xqSaveAll"
-									/>
-									<span class="xq-dirty" v-if="xqDirtyCount">({{ xqDirtyCount }})</span>
 								</div>
 
 								<div v-if="xq.error" class="xq-err">{{ xq.error }}</div>
@@ -338,127 +318,179 @@
 									<table class="xq-tbl">
 										<thead>
 											<tr>
-												<th style="width:120px">PC Code</th>
-												<th>Profit Center</th>
-												<th style="width:90px">FY</th>
-												<th style="width:220px">Volumen</th>
-												<th style="width:90px" class="tc">Acciones</th>
+												<th>Profitcenter</th>
+												<th class="tc" style="width:220px">Volumen</th>
+												<th class="tc" style="width:80px"></th>
 											</tr>
 										</thead>
 										<tbody>
 											<tr v-for="r in xq.rows" :key="r._key">
-												<td>{{ r.profit_center_code }}</td>
 												<td>{{ r.profit_center_name }}</td>
-												<td class="tc">{{ r.fiscal_year }}</td>
-												<td>
+												<td class="tc">
 													<div class="xq-vol">
 														<input
-															type="number"
-															min="0"
-															step="1"
-															v-model.number="r.volume"
-															@input="xqMarkDirty(r)"
+															type="text"
+															:value="formatThousandInput(r.volume)"
+															@input="onVolumeInput($event, r)"
 														/>
 														<small
-															v-if="
-																xq.original[r._key] !== undefined &&
-																xq.original[r._key] !== r.volume
-															"
+															v-if="xq.original[r._key] !== undefined && xq.original[r._key] !== r.volume"
 															class="old"
 														>
-															old: {{ xq.original[r._key] }}
+															alt: {{ formatThousand(xq.original[r._key]) }}
 														</small>
 													</div>
 												</td>
 												<td class="tc">
 													<Button
-														text
-														size="small"
 														icon="pi pi-save"
-														:disabled="!xqIsDirty(r._key) || xq.loading"
+														size="small"
+														class="xq-save-btn"
+														:class="{
+															'xq-save-btn--active': xqIsDirty(r._key) && !xq.loading,
+														}"
+														:disabled="xq.loading || !xqIsDirty(r._key)"
 														@click="xqSaveOne(r)"
 													/>
 												</td>
 											</tr>
 											<tr v-if="!xq.loading && xq.rows.length === 0">
-												<td colspan="5" class="empty">Sin cuotas para este filtro.</td>
+												<td colspan="3" class="empty">Keine Quoten für diesen Benutzer.</td>
 											</tr>
 										</tbody>
 									</table>
 
 									<div v-if="xq.loading" class="xq-overlay">
 										<i class="pi pi-spin pi-spinner" />
-										<div>Cargando…</div>
+										<div>Lädt…</div>
 									</div>
 								</div>
 							</div>
 						</template>
 					</Card>
 				</template>
-			</section>
 
-			<!-- ===================== DIALOG: CREAR USUARIO ===================== -->
-			<Dialog
-				v-model:visible="dlgCreate"
-				modal
-				:draggable="false"
-				:breakpoints="{ '960px': '70vw', '640px': '92vw' }"
-				:style="{ width: '620px' }"
-				header="Neuen Benutzer erstellen"
-				appendTo="body"
-			>
-				<div class="grid form-grid">
-					<div class="col-12 md:col-6">
-						<div class="p-float-label">
-							<InputText id="fn" v-model.trim="newUser.first_name" class="w-full" />
-							<label for="fn">Vorname</label>
+				<!-- ===================== DIALOG: BENUTZER ERSTELLEN ===================== -->
+				<Dialog
+					v-model:visible="dlgCreate"
+					modal
+					:draggable="false"
+					:breakpoints="{ '960px': '70vw', '640px': '92vw' }"
+					:style="{ width: '620px' }"
+					header="Neuen Benutzer erstellen"
+					appendTo="body"
+				>
+					<div class="grid form-grid dialog-body">
+						<div class="col-12 md:col-6">
+							<div class="form-field">
+								<label for="fn" class="field-label">Vorname</label>
+								<InputText id="fn" v-model.trim="newUser.first_name" class="w-full" />
+							</div>
+						</div>
+						<div class="col-12 md:col-6">
+							<div class="form-field">
+								<label for="ln" class="field-label">Nachname</label>
+								<InputText id="ln" v-model.trim="newUser.last_name" class="w-full" />
+							</div>
+						</div>
+						<div class="col-12 md:col-6">
+							<div class="form-field">
+								<label for="un" class="field-label">Benutzername</label>
+								<InputText id="un" v-model.trim="newUser.username" class="w-full" />
+							</div>
+						</div>
+						<div class="col-12 md:col-6">
+							<div class="form-field">
+								<label for="em" class="field-label">E-Mail</label>
+								<InputText id="em" v-model.trim="newUser.email" class="w-full" />
+							</div>
+						</div>
+						<div class="col-12 md:col-6">
+							<div class="form-field">
+								<label for="pw" class="field-label">Passwort</label>
+								<Password
+									id="pw"
+									v-model="newUser.password"
+									toggleMask
+									:feedback="false"
+									class="w-full"
+								/>
+							</div>
+						</div>
+
+						<div class="col-12 md:col-6">
+							<div class="row-inline">
+								<div class="flex-1">
+									<div class="form-field">
+										<label for="role_id" class="field-label">Rolle</label>
+										<Select
+											id="role_id"
+											v-model="newUser.role_id"
+											:options="rolesOptions"
+											optionLabel="label"
+											optionValue="value"
+											class="w-full"
+											placeholder="Rolle auswählen"
+										/>
+									</div>
+								</div>
+								<Button
+									icon="pi pi-plus"
+									rounded
+									text
+									class="ml-2"
+									v-tooltip.bottom="'Neue Rolle'"
+									@click="dlgCreateRole = true"
+								/>
+							</div>
+						</div>
+
+						<div class="col-12" v-if="createError">
+							<Message severity="error" :closable="false">{{ createError }}</Message>
 						</div>
 					</div>
-					<div class="col-12 md:col-6">
-						<div class="p-float-label">
-							<InputText id="ln" v-model.trim="newUser.last_name" class="w-full" />
-							<label for="ln">Nachname</label>
-						</div>
-					</div>
-					<div class="col-12 md:col-6">
-						<div class="p-float-label">
-							<InputText id="un" v-model.trim="newUser.username" class="w-full" />
-							<label for="un">Benutzername</label>
-						</div>
-					</div>
-					<div class="col-12 md:col-6">
-						<div class="p-float-label">
-							<InputText id="em" v-model.trim="newUser.email" class="w-full" />
-							<label for="em">E-Mail</label>
-						</div>
-					</div>
-					<div class="col-12 md:col-6">
-						<div class="p-float-label">
-							<Password
-								id="pw"
-								v-model="newUser.password"
-								toggleMask
-								:feedback="false"
-								class="w-full"
+
+					<template #footer>
+						<div class="dialog-footer">
+							<Button
+								label="Abbrechen"
+								severity="secondary"
+								@click="onCancelCreate"
+								:disabled="createLoading"
 							/>
-							<label for="pw">Passwort</label>
+							<Button
+								label="Erstellen"
+								icon="pi pi-check"
+								:loading="createLoading"
+								:disabled="!isCreateValid || createLoading"
+								@click="onCreateUser"
+							/>
 						</div>
-					</div>
+					</template>
+				</Dialog>
 
-					<div class="col-12 md:col-6">
+				<!-- DIALOG: Rolle ändern -->
+				<Dialog
+					v-model:visible="dlgRole"
+					modal
+					header="Rolle ändern"
+					:style="{ width: '28rem' }"
+					appendTo="body"
+				>
+					<div class="dialog-body">
 						<div class="row-inline">
 							<div class="flex-1">
-								<div class="p-float-label">
+								<div class="form-field">
+									<label for="role" class="field-label">Rolle</label>
 									<Select
-										id="role_id"
-										v-model="newUser.role_id"
+										id="role"
+										v-model="roleLocal"
 										:options="rolesOptions"
 										optionLabel="label"
 										optionValue="value"
 										class="w-full"
 										placeholder="Rolle auswählen"
 									/>
-									<label for="role_id">Rolle</label>
 								</div>
 							</div>
 							<Button
@@ -471,172 +503,131 @@
 							/>
 						</div>
 					</div>
-
-					<div class="col-12" v-if="createError">
-						<Message severity="error" :closable="false">{{ createError }}</Message>
-					</div>
-				</div>
-
-				<template #footer>
-					<Button
-						label="Abbrechen"
-						severity="secondary"
-						@click="onCancelCreate"
-						:disabled="createLoading"
-					/>
-					<Button
-						label="Erstellen"
-						icon="pi pi-check"
-						:loading="createLoading"
-						:disabled="!isCreateValid || createLoading"
-						@click="onCreateUser"
-					/>
-				</template>
-			</Dialog>
-			<!-- ================================================================ -->
-
-			<!-- DIALOG: Cambiar rol -->
-			<Dialog
-				v-model:visible="dlgRole"
-				modal
-				header="Rolle ändern"
-				:style="{ width: '28rem' }"
-				appendTo="body"
-			>
-				<div class="row-inline">
-					<div class="flex-1">
-						<div class="p-float-label">
-							<Select
-								id="role"
-								v-model="roleLocal"
-								:options="rolesOptions"
-								optionLabel="label"
-								optionValue="value"
-								class="w-full"
-								placeholder="Rolle auswählen"
+					<template #footer>
+						<div class="dialog-footer">
+							<Button label="Abbrechen" text severity="secondary" @click="dlgRole = false" />
+							<Button
+								label="Speichern"
+								icon="pi pi-check"
+								severity="warning"
+								:disabled="!roleLocal"
+								@click="confirmRole"
 							/>
-							<label for="role">Rolle</label>
 						</div>
-					</div>
-					<Button
-						icon="pi pi-plus"
-						rounded
-						text
-						class="ml-2"
-						v-tooltip.bottom="'Neue Rolle'"
-						@click="dlgCreateRole = true"
-					/>
-				</div>
-				<template #footer>
-					<Button label="Abbrechen" text severity="secondary" @click="dlgRole = false" />
-					<Button
-						label="Speichern"
-						icon="pi pi-check"
-						severity="warning"
-						:disabled="!roleLocal"
-						@click="confirmRole"
-					/>
-				</template>
-			</Dialog>
+					</template>
+				</Dialog>
 
-			<!-- DIALOG: Cambiar teams -->
-			<Dialog
-				v-model:visible="dlgTeams"
-				modal
-				header="Teams ändern"
-				:style="{ width: '32rem' }"
-				appendTo="body"
-			>
-				<div class="row-inline mb-2">
-					<div class="flex-1">
-						<div class="p-float-label">
-							<MultiSelect
-								id="teams"
-								v-model="teamsLocal"
-								:options="teams"
-								optionLabel="name"
-								optionValue="id"
-								display="chip"
-								class="w-full"
-								placeholder="Teams wählen"
+				<!-- DIALOG: Teams ändern -->
+				<Dialog
+					v-model:visible="dlgTeams"
+					modal
+					header="Teams ändern"
+					:style="{ width: '32rem' }"
+					appendTo="body"
+				>
+					<div class="dialog-body">
+						<div class="row-inline mb-2">
+							<div class="flex-1">
+								<div class="form-field">
+									<label for="teams" class="field-label">Teams</label>
+									<MultiSelect
+										id="teams"
+										v-model="teamsLocal"
+										:options="teams"
+										optionLabel="name"
+										optionValue="id"
+										display="chip"
+										class="w-full"
+										placeholder="Teams auswählen"
+									/>
+								</div>
+							</div>
+							<Button
+								icon="pi pi-plus"
+								rounded
+								text
+								class="ml-2"
+								v-tooltip.bottom="'Neues Team'"
+								@click="dlgCreateTeam = true"
 							/>
-							<label for="teams">Teams</label>
 						</div>
+						<Message severity="warn" :closable="false">
+							Die gesamte Team-Zuordnung wird ersetzt.
+						</Message>
 					</div>
-					<Button
-						icon="pi pi-plus"
-						rounded
-						text
-						class="ml-2"
-						v-tooltip.bottom="'Neues Team'"
-						@click="dlgCreateTeam = true"
-					/>
-				</div>
-				<Message severity="warn" :closable="false">
-					Das gesamte Set wird ersetzt.
-				</Message>
-				<template #footer>
-					<Button label="Abbrechen" text severity="secondary" @click="dlgTeams = false" />
-					<Button
-						label="Speichern"
-						icon="pi pi-check"
-						:loading="savingTeams"
-						@click="confirmTeams"
-					/>
-				</template>
-			</Dialog>
+					<template #footer>
+						<div class="dialog-footer">
+							<Button label="Abbrechen" text severity="secondary" @click="dlgTeams = false" />
+							<Button
+								label="Speichern"
+								icon="pi pi-check"
+								:loading="savingTeams"
+								@click="confirmTeams"
+							/>
+						</div>
+					</template>
+				</Dialog>
 
-			<!-- DIALOG: Crear rol -->
-			<Dialog
-				v-model:visible="dlgCreateRole"
-				modal
-				header="Neue Rolle"
-				:style="{ width: '24rem' }"
-				appendTo="body"
-			>
-				<div class="p-float-label mb-3">
-					<InputText id="rname" v-model.trim="newRoleName" class="w-full" />
-					<label for="rname">Rollenname</label>
-				</div>
-				<Message v-if="createRoleError" severity="error" :closable="false">
-					{{ createRoleError }}
-				</Message>
-				<template #footer>
-					<Button label="Abbrechen" text severity="secondary" @click="closeCreateRole" />
-					<Button
-						label="Erstellen"
-						icon="pi pi-check"
-						:disabled="!newRoleName"
-						@click="createRole"
-					/>
-				</template>
-			</Dialog>
+				<!-- DIALOG: Neue Rolle -->
+				<Dialog
+					v-model:visible="dlgCreateRole"
+					modal
+					header="Neue Rolle"
+					:style="{ width: '24rem' }"
+					appendTo="body"
+				>
+					<div class="dialog-body">
+						<div class="form-field mb-3">
+							<label for="rname" class="field-label">Rollenname</label>
+							<InputText id="rname" v-model.trim="newRoleName" class="w-full" />
+						</div>
+						<Message v-if="createRoleError" severity="error" :closable="false">
+							{{ createRoleError }}
+						</Message>
+					</div>
+					<template #footer>
+						<div class="dialog-footer">
+							<Button label="Abbrechen" text severity="secondary" @click="closeCreateRole" />
+							<Button
+								label="Erstellen"
+								icon="pi pi-check"
+								:disabled="!newRoleName"
+								@click="createRole"
+							/>
+						</div>
+					</template>
+				</Dialog>
 
-			<!-- DIALOG: Crear team -->
-			<Dialog
-				v-model:visible="dlgCreateTeam"
-				modal
-				header="Neues Team"
-				:style="{ width: '24rem' }"
-				appendTo="body"
-			>
-				<div class="p-float-label mb-3">
-					<InputText id="tname" v-model.trim="newTeamName" class="w-full" />
-					<label for="tname">Teamname</label>
-				</div>
-				<Message v-if="createTeamError" severity="error" :closable="false">
-					{{ createTeamError }}
-				</Message>
-				<template #footer>
-					<Button label="Abbrechen" text severity="secondary" @click="closeCreateTeam" />
-					<Button
-						label="Erstellen"
-						icon="pi pi-check"
-						:disabled="!newTeamName"
-						@click="createTeam"
-					/>
-				</template>
-			</Dialog>
+				<!-- DIALOG: Neues Team -->
+				<Dialog
+					v-model:visible="dlgCreateTeam"
+					modal
+					header="Neues Team"
+					:style="{ width: '24rem' }"
+					appendTo="body"
+				>
+					<div class="dialog-body">
+						<div class="form-field mb-3">
+							<label for="tname" class="field-label">Teamname</label>
+							<InputText id="tname" v-model.trim="newTeamName" class="w-full" />
+						</div>
+						<Message v-if="createTeamError" severity="error" :closable="false">
+							{{ createTeamError }}
+						</Message>
+					</div>
+					<template #footer>
+						<div class="dialog-footer">
+							<Button label="Abbrechen" text severity="secondary" @click="closeCreateTeam" />
+							<Button
+								label="Erstellen"
+								icon="pi pi-check"
+								:disabled="!newTeamName"
+								@click="createTeam"
+							/>
+						</div>
+					</template>
+				</Dialog>
+			</section>
 		</div>
 	</div>
 </template>
@@ -667,20 +658,18 @@ import Column from 'primevue/column'
 const vTooltip = Tooltip
 
 const users = ref([])
-const allUsers = ref([]) // para transfer targets
-const rolesRaw = ref([]) // /roles
-const teams = ref([]) // [{id,name}]
+const allUsers = ref([])
+const rolesRaw = ref([])
+const teams = ref([])
 
 const q = ref('')
 const selectedId = ref(null)
 const ws = ref('overview')
 
-/* Header: role/team status */
 const roleLocal = ref(null)
 const teamsLocal = ref([])
 const savingTeams = ref(false)
 
-/* Crear usuario */
 const dlgCreate = ref(false)
 const createLoading = ref(false)
 const createError = ref('')
@@ -693,7 +682,6 @@ const newUser = ref({
 	role_id: null,
 })
 
-/* Crear rol/team inline */
 const dlgRole = ref(false)
 const dlgTeams = ref(false)
 const dlgCreateRole = ref(false)
@@ -703,10 +691,9 @@ const newTeamName = ref('')
 const createRoleError = ref('')
 const createTeamError = ref('')
 
-/* Transfer inline */
 const transfer = ref({
 	loading: false,
-	mode: 'all', // 'all' | 'pick' | 'perRow'
+	mode: 'all',
 	globalTarget: null,
 	clients: [],
 	selection: [],
@@ -719,7 +706,6 @@ const modeOptions = [
 	{ label: 'Pro Zeile', value: 'perRow' },
 ]
 
-/* ====== LOAD ====== */
 onMounted(async () => {
 	const [u, r, t, au] = await Promise.all([
 		api.get('/api/settings/users'),
@@ -737,7 +723,6 @@ onMounted(async () => {
 		if (Array.isArray(u.teamIds)) {
 			teamIds = [...u.teamIds]
 		} else if (Array.isArray(u.teams)) {
-			// puede venir como [{id,name}] o [{team_id,...}]
 			teamIds = u.teams
 				.map((tt) => tt.id ?? tt.team_id)
 				.filter(Boolean)
@@ -758,7 +743,6 @@ onMounted(async () => {
 	allUsers.value = (au.data || []).map(normalizeUser)
 })
 
-/* ====== COMPUTED ====== */
 const selected = computed(() =>
 	users.value.find((x) => x.id === selectedId.value),
 )
@@ -785,7 +769,7 @@ const usersFiltered = computed(() => {
 
 const rolesOptions = computed(() =>
 	(rolesRaw.value || []).map((r) => {
-		if (typeof r === 'string') return { label: r, value: r } // fallback
+		if (typeof r === 'string') return { label: r, value: r }
 		return { label: r.name ?? String(r.id), value: r.id ?? r.name }
 	}),
 )
@@ -835,7 +819,6 @@ const canConfirmTransfer = computed(() => {
 	return false
 })
 
-/* ====== HELPERS ====== */
 function fullName(u) {
 	return (
 		u?.name?.trim?.() ||
@@ -860,7 +843,45 @@ function roleDisplay(u) {
 	return opt?.label || null
 }
 
-/* ====== WATCH ====== */
+/** Formatear número con . como miles (alemán) para mostrar */
+function formatThousand(value) {
+	const n = Number(value)
+	if (!Number.isFinite(n)) return ''
+	return n.toLocaleString('de-DE', {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 0,
+	})
+}
+
+/** Formato usado en el input (texto) */
+function formatThousandInput(value) {
+	if (value === null || value === undefined || value === '') return ''
+	const n = Number(value)
+	if (!Number.isFinite(n)) return ''
+	return n.toLocaleString('de-DE', {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 0,
+	})
+}
+
+/** Manejar input de volumen: string -> número interno -> re-formatear */
+function onVolumeInput(event, row) {
+	const raw = event.target.value
+
+	// Normalizar: quitar puntos de miles, cambiar coma por punto
+	const normalized = raw.replace(/\./g, '').replace(',', '.')
+	const n = Number(normalized)
+
+	// Internamente siempre número
+	row.volume = Number.isFinite(n) ? n : 0
+
+	// Reescribir input con formato miles
+	event.target.value = raw === '' ? '' : formatThousandInput(row.volume)
+
+	// Marcar dirty
+	xqMarkDirty(row)
+}
+
 watch(selected, (u) => {
 	ws.value = 'overview'
 	if (!u) return
@@ -871,14 +892,12 @@ watch(selected, (u) => {
 		: []
 })
 
-/* ====== ACCIONES HEADER ====== */
 function openRoleDlg() {
 	if (selected.value) dlgRole.value = true
 }
 function openTeamsDlg() {
 	if (selected.value) dlgTeams.value = true
 }
-
 function openTransferPanel() {
 	if (!selected.value) return
 	ws.value = 'transfer'
@@ -889,7 +908,6 @@ function openExtraPanel() {
 	ws.value = 'extra'
 }
 
-/* ====== CREATE USER ====== */
 const emailOk = (e) =>
 	/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim())
 const isCreateValid = computed(() => {
@@ -989,7 +1007,6 @@ async function onCreateUser() {
 	}
 }
 
-/* ====== BLOCK/UNBLOCK ====== */
 async function toggleBlock(u, disabled) {
 	const { data } = await api.patch(
 		`/api/settings/users/${u.id}/block`,
@@ -999,7 +1016,6 @@ async function toggleBlock(u, disabled) {
 	if (i !== -1) users.value[i] = { ...users.value[i], ...data }
 }
 
-/* ====== ROLE CHANGE ====== */
 async function confirmRole() {
 	if (!selected.value || !roleLocal.value) return
 	const roleVal = roleLocal.value
@@ -1019,7 +1035,6 @@ async function confirmRole() {
 	dlgRole.value = false
 }
 
-/* ====== TEAMS CHANGE ====== */
 async function confirmTeams() {
 	if (!selected.value) return
 	try {
@@ -1044,7 +1059,6 @@ async function confirmTeams() {
 	}
 }
 
-/* ====== CREATE ROLE/TEAM INLINE ====== */
 function closeCreateRole() {
 	dlgCreateRole.value = false
 	newRoleName.value = ''
@@ -1096,15 +1110,12 @@ async function createTeam() {
 	}
 }
 
-/* ====== TRANSFER ====== */
 async function loadClientsForUser() {
 	if (!selected.value) return
 	transfer.value.loading = true
 	try {
 		const userId = selected.value.id
 
-		// 🔹 Nueva ruta específica para clientes del usuario
-		// (en el backend: /api/settings/user-clients -> UserAdminController@clients)
 		const { data } = await api.get(
 			'/api/settings/user-clients',
 			{
@@ -1115,21 +1126,18 @@ async function loadClientsForUser() {
 		const raw = Array.isArray(data) ? data : []
 
 		transfer.value.clients = raw.map((r) => {
-			// client group
 			const cgn =
 				r.clientGroupNumber ??
 				r.client_group_number ??
 				r.cgn ??
 				null
 
-			// nombre cliente
 			const name =
 				r.clientName ??
 				r.client_name ??
 				r.name ??
 				''
 
-			// clasificación: puede venir como id o letra
 			const classId =
 				r.classification_id ??
 				r.classificationId ??
@@ -1151,7 +1159,6 @@ async function loadClientsForUser() {
 					  }[classId] || null
 					: null)
 
-			// profit centers: pueden venir de muchas formas
 			const rawPcs =
 				r.profitCenters ??
 				r.profit_centers ??
@@ -1252,13 +1259,27 @@ async function confirmTransfer() {
 	ws.value = 'overview'
 }
 
-/* ===================== EXTRA QUOTA STATE/LOGIC ===================== */
+/* ===================== EXTRA-QUOTEN ===================== */
 function fyOf(d = new Date()) {
 	const y = d.getFullYear()
 	const m = d.getMonth() + 1
 	return m >= 4 ? y : y - 1
 }
-const thisFy = fyOf()
+const nowConst = new Date()
+const currentMonth = nowConst.getMonth() + 1
+const currentFy = fyOf(nowConst)
+const thisFy = currentFy
+
+/* Max FY permitido:
+ * - Oct (10) a Mar (3): currentFy + 1
+ * - Abr (4) a Sep (9): currentFy
+ */
+const maxFyAllowed = computed(() => {
+	if (currentMonth >= 10 || currentMonth <= 3) {
+		return currentFy + 1
+	}
+	return currentFy
+})
 
 const eqMonths = [
 	{ key: '04', label: 'Apr' },
@@ -1325,19 +1346,18 @@ async function eqLoad() {
 	}
 }
 
-// ===== Extra Quota (tu lógica, integrada) =====
+// === Extra Quota ===
 const xq = ref({
 	localUserId: null,
-	fy: Number(new Date().getFullYear()),
+	fy: thisFy,
 	pc: '',
 	rows: [],
 	original: {},
-_dirty: new Map(),
+	_dirty: new Map(),
 	loading: false,
 	error: '',
 })
 
-// corrige ref a dirty (lo dejo como estaba en tu versión)
 xq.value.dirty = new Map()
 
 const xqEffectiveUserId = computed(
@@ -1346,20 +1366,45 @@ const xqEffectiveUserId = computed(
 const xqDirtyCount = computed(() => xq.value.dirty.size)
 const xqIsDirty = (key) => xq.value.dirty.has(key)
 
+/* Label WJ2025/26 */
+const xqFyLabel = computed(() => {
+	const fy = Number(xq.value.fy || currentFy)
+	const nextShort = String((fy + 1) % 100).padStart(2, '0')
+	return `WJ${fy}/${nextShort}`
+})
+
+/* Label Alle speichern (+ contador) */
+const xqSaveAllLabel = computed(() => {
+	const base = 'Alle speichern'
+	const count = xqDirtyCount.value
+	return count > 0 ? `${base} (${count})` : base
+})
+
 function xqMarkDirty(row) {
 	const key = row._key
-	if (xq.value.original[key] === undefined)
-		xq.value.original[key] = row.volume
-	xq.value.dirty.set(key, {
-		id: row.id ?? null,
-	volume: Number(row.volume) || 0,
-	})
+	const vol = Number(row.volume) || 0
+	const original = xq.value.original[key]
+
+	if (original === undefined) {
+		xq.value.original[key] = vol
+		xq.value.dirty.delete(key)
+		return
+	}
+
+	if (vol === original) {
+		xq.value.dirty.delete(key)
+	} else {
+		xq.value.dirty.set(key, {
+			id: row.id ?? null,
+			volume: vol,
+		})
+	}
 }
 
 async function xqFetchRows() {
 	xq.value.error = ''
 	if (!xqEffectiveUserId.value) {
-		xq.value.error = 'Falta userId'
+		xq.value.error = 'Benutzer-ID fehlt'
 		return
 	}
 	xq.value.loading = true
@@ -1393,7 +1438,7 @@ async function xqFetchRows() {
 		xq.value.error =
 			e?.response?.data?.message ||
 			e?.message ||
-			'Error al cargar'
+			'Fehler beim Laden'
 	} finally {
 		xq.value.loading = false
 	}
@@ -1434,7 +1479,7 @@ async function xqSaveOne(row) {
 		xq.value.error =
 			e?.response?.data?.message ||
 			e?.message ||
-			'No se pudo guardar'
+			'Speichern fehlgeschlagen'
 	} finally {
 		xq.value.loading = false
 	}
@@ -1486,10 +1531,28 @@ async function xqSaveAll() {
 		xq.value.error =
 			e?.response?.data?.message ||
 			e?.message ||
-			'Error guardando cambios'
+			'Fehler beim Speichern der Änderungen'
 	} finally {
 		xq.value.loading = false
 	}
+}
+
+/* Navegación de año fiscal con límites según mes actual */
+function xqPrevYear() {
+	const curFy = Number(xq.value.fy || currentFy)
+	const newFy = curFy - 1
+	xq.value.fy = newFy
+	eq.value.fy = newFy
+	xqFetchRows()
+}
+
+function xqNextYear() {
+	const curFy = Number(xq.value.fy || currentFy)
+	const candidate = curFy + 1
+	if (candidate > maxFyAllowed.value) return
+	xq.value.fy = candidate
+	eq.value.fy = candidate
+	xqFetchRows()
 }
 
 watch(
@@ -1497,6 +1560,8 @@ watch(
 	([u, tab]) => {
 		if (u && tab === 'extra') {
 			xq.value.localUserId = u.id
+			xq.value.fy = thisFy
+			eq.value.fy = thisFy
 			xqFetchRows()
 		}
 	},
@@ -1555,7 +1620,7 @@ watch(
 	white-space: nowrap;
 }
 
-/* Lista full height */
+/* Liste full height */
 .list-wrap {
 	flex: 1 1 auto;
 	min-height: 0;
@@ -1598,7 +1663,7 @@ watch(
 	white-space: nowrap;
 }
 
-/* Estado */
+/* Status */
 .state-dot {
 	width: 22px;
 	height: 22px;
@@ -1632,7 +1697,7 @@ watch(
 	height: 70%;
 }
 
-/* Título/encabezado */
+/* Titel */
 .title-head {
 	display: flex;
 	align-items: center;
@@ -1700,21 +1765,18 @@ watch(
 	line-height: 1;
 }
 
-/* Company chip (neutro) */
 .tag-company {
 	background: #e5e7eb;
 	color: #111827;
 	border: none;
 }
 
-/* Team chip (gris) */
 .tag-team {
 	background: #f3f4f6;
 	color: #374151;
 	border: none;
 }
 
-/* Role chip (azul) */
 .tag-role {
 	background: #dbeafe;
 	color: #1d4ed8;
@@ -1728,7 +1790,7 @@ watch(
 	font-weight: 300;
 }
 
-/* Acciones */
+/* Aktionen */
 .th-right {
 	display: flex;
 	align-items: center;
@@ -1785,7 +1847,7 @@ watch(
 	margin-bottom: 8px;
 }
 
-/* Clasificación chip */
+/* Klassifikation chip */
 .class-chip {
 	display: inline-flex;
 	align-items: center;
@@ -1800,6 +1862,32 @@ watch(
 }
 
 /* ===== Extra Quota ===== */
+.xq-title-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 1rem;
+	font-weight: 600;
+	color: #1f2937;
+}
+
+.xq-title-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.xq-fy-label {
+	min-width: 6.5rem;
+	text-align: center;
+	font-weight: 700;
+	color: #111827;
+}
+
+.xq-save-all-btn {
+	margin-left: 4px;
+}
+
 .xq-wrap {
 	display: grid;
 	gap: 12px;
@@ -1811,22 +1899,9 @@ watch(
 	gap: 8px;
 	flex-wrap: wrap;
 }
-.xq-bar label {
-	font-size: 0.85rem;
-	color: #475569;
-}
-.xq-bar input {
-	padding: 6px 8px;
-	border: 1px solid #cbd5e1;
-	border-radius: 8px;
-	min-width: 120px;
-}
+
 .xq-spacer {
 	flex: 1;
-}
-.xq-dirty {
-	color: #111827;
-	font-weight: 600;
 }
 
 .xq-err {
@@ -1854,31 +1929,41 @@ watch(
 	border-bottom: 1px solid #e2e8f0;
 }
 .xq-tbl th {
-	text-align: left;
+	text-align: center;
 	background: #f8fafc;
 	font-weight: 700;
 	font-size: 0.9rem;
 	color: #334155;
 }
+.xq-tbl th:first-child,
+.xq-tbl td:first-child {
+	text-align: left;
+}
 .tc {
 	text-align: center;
 }
 
+/* Volumen input */
 .xq-vol {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	justify-content: center;
+	gap: 6px;
 }
 .xq-vol input {
-	width: 140px;
-	padding: 6px;
+	width: 80px;
+	padding: 4px 6px;
 	border: 1px solid #cbd5e1;
-	border-radius: 8px;
+	border-radius: 6px;
+	font-size: 0.85rem;
 }
+
+/* old value */
 .old {
 	color: #64748b;
 	font-size: 0.8rem;
 }
+
 .empty {
 	text-align: center;
 	color: #64748b;
@@ -1892,5 +1977,71 @@ watch(
 	place-items: center;
 	gap: 8px;
 	background: rgba(0, 0, 0, 0.08);
+}
+
+/* Save button por fila: base blanco, activo negro */
+.xq-save-btn.p-button {
+	background: #ffffff;
+	border-color: #d1d5db;
+	color: #111827;
+	padding: 4px 6px;
+}
+.xq-save-btn.p-button .p-button-icon {
+	color: #111827;
+}
+.xq-save-btn.p-button.xq-save-btn--active {
+	background: #111827;
+	border-color: #111827;
+	color: #f9fafb;
+}
+.xq-save-btn.p-button.xq-save-btn--active .p-button-icon {
+	color: #f9fafb;
+}
+.xq-save-btn.p-button.p-disabled {
+	opacity: 0.6;
+}
+
+/* ===== Dialog Styling ===== */
+:deep(.p-dialog) {
+	border-radius: 12px;
+	box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+
+:deep(.p-dialog .p-dialog-header) {
+	padding: 0.8rem 1rem;
+	border-bottom: 1px solid #e5e7eb;
+	background: #f9fafb;
+}
+
+:deep(.p-dialog .p-dialog-title) {
+	font-weight: 700;
+	font-size: 0.95rem;
+	color: #111827;
+}
+
+.dialog-body {
+	padding-top: 0.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+/* Campos de formulario en diálogos */
+.form-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+.field-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: #4b5563;
+}
+
+.dialog-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	padding-top: 0.25rem;
 }
 </style>

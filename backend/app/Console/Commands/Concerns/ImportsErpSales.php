@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\DB;
 
 trait ImportsErpSales
 {
-    // Control de redondeos (puedes ajustar si quieres)
     protected int $roundDecimalsCubicMeters = 3;
     protected int $roundDecimalsSalesUnits  = 3;
     protected int $roundDecimalsEuros       = 2;
@@ -20,7 +19,6 @@ trait ImportsErpSales
     ): array {
         $from = \Carbon\Carbon::parse($from)->toDateString();
 
-        // CPC map: "CG5|PC3" -> id
         $cpcMap = [];
         foreach (DB::table('client_profit_centers')->select('id','client_group_number','profit_center_code')->get() as $r) {
             $cg5 = strtoupper(trim((string)$r->client_group_number));
@@ -28,7 +26,6 @@ trait ImportsErpSales
             $cpcMap["{$cg5}|{$pc3}"] = (int)$r->id;
         }
 
-        // NUEVO SQL, usando @from como parámetro (IMPORTANTE: sin fecha fija)
         $sql = <<<SQL
 DECLARE @from DATE = ?;
 
@@ -52,6 +49,7 @@ BaseReal AS (
         CASE
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (26,27,30,585) THEN '130'
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (182,183,573) THEN '160'
+            WHEN LEFT(SI.ProfitCenter, 3) = '172' THEN '170'
             ELSE LEFT(SI.ProfitCenter, 3)
         END AS ProfitCenterCode,
         PM.ClientGroupNumber,
@@ -72,6 +70,7 @@ BaseReal AS (
         CASE
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (26,27,30,585) THEN '130'
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (182,183,573) THEN '160'
+            WHEN LEFT(SI.ProfitCenter, 3) = '172' THEN '170'
             ELSE LEFT(SI.ProfitCenter, 3)
         END,
         PM.ClientGroupNumber,
@@ -83,6 +82,7 @@ BaseFut AS (
         CASE
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (26,27,30,585) THEN '130'
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (182,183,573) THEN '160'
+            WHEN LEFT(SI.ProfitCenter, 3) = '172' THEN '170'
             ELSE LEFT(SI.ProfitCenter, 3)
         END AS ProfitCenterCode,
         PM.ClientGroupNumber,
@@ -101,6 +101,7 @@ BaseFut AS (
         CASE
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (26,27,30,585) THEN '130'
             WHEN LEFT(SI.ProfitCenter, 3) = '190' AND SI.ProductGroup_ID IN (182,183,573) THEN '160'
+            WHEN LEFT(SI.ProfitCenter, 3) = '172' THEN '170'
             ELSE LEFT(SI.ProfitCenter, 3)
         END,
         PM.ClientGroupNumber,

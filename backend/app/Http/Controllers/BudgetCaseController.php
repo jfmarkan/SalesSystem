@@ -15,7 +15,7 @@ class BudgetCaseController extends Controller
             'client_profit_center_id' => ['nullable','integer','min:1'],
             'client_group_number'     => ['nullable','integer'],
             'profit_center_code'      => ['nullable','integer'],
-            'fiscal_year'             => ['required','integer','min:1900'],
+            'fiscal_year'             => ['required','integer','min:2000'],
         ]);
 
         // resolve CPC id
@@ -51,7 +51,7 @@ class BudgetCaseController extends Controller
     public function exists(Request $request)
     {
         $v = $request->validate([
-            'fiscal_year' => ['required','integer','min:1900'],
+            'fiscal_year' => ['required','integer','min:2000'],
             'cpc_ids'     => ['required','string'], // comma-separated
         ]);
 
@@ -84,20 +84,19 @@ class BudgetCaseController extends Controller
             'client_group_number'     => ['nullable','integer'],
             'profit_center_code'      => ['nullable','integer'],
 
-            // values to save
-            'best_case'               => ['required','numeric','between:-100,100'],
-            'worst_case'              => ['required','numeric','between:-100,100'],
+            // 👉 porcentajes SIN límite artificial
+            'best_case'               => ['nullable','numeric'],
+            'worst_case'              => ['nullable','numeric'],
             'skip_budget'             => ['nullable','boolean'],
 
             // optional override for FY
-            'fiscal_year'             => ['nullable','integer','min:1900'],
+            'fiscal_year'             => ['nullable','integer','min:2000'],
         ]);
 
         // 1) Resolve CPC id
         $cpcId = $data['client_profit_center_id'] ?? null;
 
         if (!$cpcId) {
-            // need CGN + PCC
             if (!isset($data['client_group_number'], $data['profit_center_code'])) {
                 return response()->json([
                     'message' => 'Missing client_profit_center_id or (client_group_number + profit_center_code).'
@@ -117,18 +116,59 @@ class BudgetCaseController extends Controller
         }
 
         // 2) Fiscal year = current year + 1 if not provided
-        $fy = isset($data['fiscal_year']) ? (int)$data['fiscal_year'] : (int) Carbon::now()->year + 1;
+        $fy = isset($data['fiscal_year'])
+            ? (int)$data['fiscal_year']
+            : (int) Carbon::now()->year + 1;
 
-        // 3) Upsert
+        $skip = (bool)($data['skip_budget'] ?? false);
+
+        // 3) Leemos si ya existe para NO pisar best/worst si no vienen
+        $existing = BudgetCase::query()
+            ->where('client_profit_center_id', (int)$cpcId)
+            ->where('fiscal_year', $fy)
+            ->first();
+
+        $bestExisting  = $existing?->best_case;
+        $worstExisting = $existing?->worst_case;
+
+        // Regla:
+        //  - si skip_budget = false → best/worst OBLIGATORIOS
+        //  - si skip_budget = true  → best/worst OPCIONALES, y si no vienen se conserva lo guardado
+        if (!$skip) {
+            if (!array_key_exists('best_case', $data) || $data['best_case'] === null) {
+                return response()->json(['message' => 'best_case ist erforderlich, wenn skip_budget = false ist.'], 422);
+            }
+            if (!array_key_exists('worst_case', $data) || $data['worst_case'] === null) {
+                return response()->json(['message' => 'worst_case ist erforderlich, wenn skip_budget = false ist.'], 422);
+            }
+        }
+
+        // Partimos de lo que ya había
+        $best  = $bestExisting;
+        $worst = $worstExisting;
+
+        // Si vienen en el request, se actualizan
+        if (array_key_exists('best_case', $data) && $data['best_case'] !== null) {
+            $best = (float)$data['best_case'];
+        }
+        if (array_key_exists('worst_case', $data) && $data['worst_case'] !== null) {
+            $worst = (float)$data['worst_case'];
+        }
+
+        // Si no había nada antes (nuevo caso) ponemos 0 por defecto
+        if ($best === null)  $best  = 0.0;
+        if ($worst === null) $worst = 0.0;
+
+        // 4) Upsert
         $case = BudgetCase::updateOrCreate(
             [
                 'client_profit_center_id' => (int)$cpcId,
                 'fiscal_year'             => $fy,
             ],
             [
-                'best_case'  => (float)$data['best_case'],
-                'worst_case' => (float)$data['worst_case'],
-                'skip_budget' => (bool) ($data['skip_budget'] ?? false),
+                'best_case'   => $best,
+                'worst_case'  => $worst,
+                'skip_budget' => $skip,
             ]
         );
 

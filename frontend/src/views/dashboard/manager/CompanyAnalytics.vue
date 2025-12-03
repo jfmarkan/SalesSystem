@@ -2,46 +2,43 @@
 	<div class="analytics-grid">
 		<!-- === COLUMNA IZQUIERDA === -->
 		<aside class="pane left">
-	<!-- Opcional: barra superior con input o botón -->
-
-	<!-- Lista ocupa todo el alto -->
-	<div class="list-wrap">
-		<Tree
-			:value="nodes"
-			:expandedKeys="expandedKeys"
-			v-model:selectionKeys="selectionKeys"
-			selectionMode="single"
-			:filter="true"
-			:filterValue="treeFilter"
-			filterMode="lenient"
-			:filterBy="'label'"
-			class="w-full"
-			@node-expand="onNodeExpand"
-			@node-select="onNodeSelect"
-			@node-unselect="onNodeUnselect"
-			@update:selectionKeys="onSelectionUpdate"
-		>
-			<template #default="{ node }">
-				<div class="tree-node-content">
-					<i v-if="node.data?.type === 'company'" class="pi pi-home text-primary" />
-					<i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500" />
-					<i v-else-if="node.data?.type === 'user'" class="pi pi-user" />
-					<i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500" />
-					<template v-else-if="node.data?.type === 'client'">
-						<span
-							class="classification-badge"
-							:class="'class-' + (node.data.classification || 'x').toLowerCase()"
-						>
-							{{ node.data.classification }}
-						</span>
+			<!-- Lista ocupa todo el alto -->
+			<div class="list-wrap">
+				<Tree
+					:value="nodes"
+					:expandedKeys="expandedKeys"
+					v-model:selectionKeys="selectionKeys"
+					selectionMode="single"
+					:filter="true"
+					:filterValue="treeFilter"
+					filterMode="lenient"
+					:filterBy="'label'"
+					class="w-full"
+					@node-expand="onNodeExpand"
+					@node-select="onNodeSelect"
+					@node-unselect="onNodeUnselect"
+					@update:selectionKeys="onSelectionUpdate"
+				>
+					<template #default="{ node }">
+						<div class="tree-node-content">
+							<i v-if="node.data?.type === 'company'" class="pi pi-home text-primary" />
+							<i v-else-if="node.data?.type === 'team'" class="pi pi-sitemap text-500" />
+							<i v-else-if="node.data?.type === 'user'" class="pi pi-user" />
+							<i v-else-if="node.data?.type === 'pc'" class="pi pi-database text-500" />
+							<template v-else-if="node.data?.type === 'client'">
+								<span
+									class="classification-badge"
+									:class="'class-' + (node.data.classification || 'x').toLowerCase()"
+								>
+									{{ node.data.classification }}
+								</span>
+							</template>
+							<span class="node-label">{{ node.label }}</span>
+						</div>
 					</template>
-					<span>{{ node.label }}</span>
-				</div>
-			</template>
-		</Tree>
-	</div>
-</aside>
-
+				</Tree>
+			</div>
+		</aside>
 
 		<!-- === COLUMNA DERECHA === -->
 		<main class="main-col">
@@ -67,7 +64,7 @@
 								icon="pi pi-angle-right"
 								text
 								@click="nextFY"
-								:disabled="fyStart >= currentFYStart"
+								:disabled="fyStart >= maxFYStart"
 							/>
 						</div>
 					</template>
@@ -140,9 +137,17 @@ const selectionKeys = ref({})
 const selectedKey = ref('')
 const treeFilter = ref('')
 
+// === LÓGICA AÑO FISCAL ===
 const now = new Date()
-const initialFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
-const currentFYStart = initialFYStart
+const month = now.getMonth() // 0 = enero, 11 = diciembre
+
+// Año fiscal actual: empieza en abril (mes 3)
+const initialFYStart = month >= 3 ? now.getFullYear() : now.getFullYear() - 1
+
+// Entre octubre (mes 9) y marzo (0–2) se permite ver el siguiente FY
+const canSeeNextFY = month >= 9 || month <= 2
+const maxFYStart = canSeeNextFY ? initialFYStart + 1 : initialFYStart
+
 const fyStart = ref(initialFYStart)
 const fyLabel = computed(() => `WJ ${fyStart.value}/${String(fyStart.value + 1).slice(-2)}`)
 
@@ -154,11 +159,11 @@ const unitOptions = computed(() =>
 				{ label: 'm³', value: 'm3' },
 				{ label: '€', value: 'euro' },
 				{ label: 'VK-EH', value: 'units' },
-			]
+		  ]
 		: [
 				{ label: 'm³', value: 'm3' },
 				{ label: '€', value: 'euro' },
-			],
+		  ],
 )
 
 // helpers numéricos
@@ -217,10 +222,11 @@ const fcstArr = computed(() => {
 	return base.map((v, i) => v + (eqf[i] || 0))
 })
 
-// Cargar árbol (el backend ya aplica scope por rol y ordena clientes por €)
+// Cargar árbol
 async function loadRoot() {
 	const { data } = await api.get('/api/analytics/tree', { params: { node_id: 'root' } })
-	nodes.value = (data || []).map(toNode)
+	// 🔥 filtramos clientes X en el mapeo
+	nodes.value = (data || []).map(toNode).filter(Boolean)
 
 	const rootNode = nodes.value?.[0]
 	const ek = {}
@@ -236,12 +242,13 @@ async function loadRoot() {
 	await fetchSeries()
 }
 
-// No hacemos lazy load; pero si se diera el caso, re-ordenamos clientes por €
+// No lazy load, pero por si acaso, ordenamos clientes por volumen €
 async function onNodeExpand({ node }) {
 	if (!node) return
 	if (!node.children) {
 		const { data } = await api.get('/api/analytics/tree', { params: { node_id: node.key } })
-		node.children = (data || []).map(toNode)
+		// 🔥 también aquí filtramos clientes X
+		node.children = (data || []).map(toNode).filter(Boolean)
 	}
 	if (node.data?.type === 'pc' && Array.isArray(node.children)) {
 		node.children.sort((a, b) => (b.data.volume ?? 0) - (a.data.volume ?? 0))
@@ -273,14 +280,18 @@ function selectByKey(key) {
 	selectionKeys.value = { [key]: true }
 	fetchSeries()
 }
+
 function prevFY() {
+	// límite inferior hardcodeado por ahora (2024)
 	if (fyStart.value > 2024) {
 		fyStart.value--
 		fetchSeries()
 	}
 }
+
 function nextFY() {
-	if (fyStart.value < currentFYStart) {
+	// solo avanzamos si no superamos el máximo permitido según la fecha actual
+	if (fyStart.value < maxFYStart) {
 		fyStart.value++
 		fetchSeries()
 	}
@@ -307,33 +318,40 @@ async function fetchSeries() {
 
 	// Si el modo actual no es válido en este contexto, forzamos uno válido
 	if (!allowedModes.includes(unitMode.value)) {
-		// intentamos usar el default que viene del backend, si es válido
 		unitMode.value = allowedModes.includes(apiDefault) ? apiDefault : allowedModes[0]
 	}
 }
 
-
 // Mapeo de items a TreeNode (agregamos clasificación + volume)
+// 🔥 Aquí hacemos que los clientes clasificación X NO se mapeen
 function toNode(item) {
 	const t = item.type
 	const classification = item.meta?.classification ?? ''
 	const volume = item.meta?.volume ?? 0
+
+	// Si es cliente tipo X -> no lo mostramos en el árbol
+	if (t === 'client' && String(classification).toLowerCase() === 'x') {
+		return null
+	}
 
 	return {
 		key: item.id,
 		label: item.label, // ya viene "LETTER - Nombre" desde backend
 		leaf: !item.has_children,
 		data: { type: t, classification, volume, ...(item.meta || {}) },
-		children: Array.isArray(item.children) ? item.children.map(toNode) : undefined,
+		children: Array.isArray(item.children)
+			? item.children.map(toNode).filter(Boolean)
+			: undefined,
 	}
 }
 
-// Gráficos (igual que tu versión)
+// Gráficos
 const cum = (arr) =>
 	arr.reduce((acc, v, i) => {
 		acc.push((acc[i - 1] || 0) + v)
 		return acc
 	}, [])
+
 const chartData = computed(() => {
 	if (!series.value) return { labels: [], datasets: [] }
 	const s = series.value
@@ -380,6 +398,7 @@ const chartData = computed(() => {
 		],
 	}
 })
+
 const chartOptions = computed(() => ({
 	maintainAspectRatio: false,
 	plugins: {
@@ -391,11 +410,12 @@ const chartOptions = computed(() => ({
 	scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtThousand(v) } } },
 }))
 
-// Stacked: igual que tu versión
+// Stacked
 const showStacked = computed(() => {
 	const t = series.value?.context?.type
 	return ['company', 'team', 'user', 'pc'].includes(t)
 })
+
 const stackedData = computed(() => {
 	if (!series.value) return { labels: [], datasets: [] }
 	const k = unitMode.value
@@ -410,6 +430,7 @@ const stackedData = computed(() => {
 		],
 	}
 })
+
 const stackedOptions = computed(() => ({
 	maintainAspectRatio: false,
 	responsive: true,
@@ -425,7 +446,6 @@ const stackedOptions = computed(() => ({
 	},
 }))
 
-
 onMounted(() => {
 	loadRoot()
 })
@@ -436,7 +456,7 @@ onMounted(() => {
 	display: grid;
 	grid-template-columns: 3fr 9fr;
 	gap: 16px;
-	min-height:0;
+	min-height: 0;
 	height: 100%;
 	box-sizing: border-box;
 }
@@ -471,22 +491,28 @@ onMounted(() => {
 
 .tree-node-content i,
 .tree-node-content .classification-badge {
-  flex: 0 0 auto;
+	flex: 0 0 auto;
 }
 
 .tree-node-content .node-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-:deep(.p-tree .p-treenode-content) { min-width: 0; }
-:deep(.p-tree .p-treenode-label)   { min-width: 0; }
+:deep(.p-tree .p-treenode-content) {
+	min-width: 0;
+}
+:deep(.p-tree .p-treenode-label) {
+	min-width: 0;
+}
 
 /* Evita cortes raros en palabras largas */
-.tree-node-content .node-label { word-break: normal; }
+.tree-node-content .node-label {
+	word-break: normal;
+}
 
 /* === MAIN === */
 .main-col {
@@ -503,8 +529,8 @@ onMounted(() => {
 	gap: 12px;
 }
 
-.header-card{
-    font-size: .85rem;
+.header-card {
+	font-size: 0.85rem;
 }
 
 .fy-card,
@@ -536,7 +562,6 @@ onMounted(() => {
 	overflow: hidden;
 }
 
-
 .line-card.wide {
 	grid-column: span 2;
 }
@@ -545,7 +570,7 @@ onMounted(() => {
 	height: 480px;
 	width: 100%;
 	max-width: 100%;
-    padding: 1rem;
+	padding: 1rem;
 }
 
 @media (max-width: 1024px) {
@@ -625,7 +650,7 @@ onMounted(() => {
 	padding: 10px;
 	background: var(--surface-card, #fff);
 	border-radius: 10px;
-	box-shadow: 0 1px 8px rgba(0, 0, 0, .06);
+	box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
 	min-height: 0;
 }
 
@@ -642,7 +667,7 @@ onMounted(() => {
 	display: flex;
 	height: 100%;
 	overflow-y: auto;
-	overflow-x:hidden
+	overflow-x: hidden;
 }
 
 .p-tree {
@@ -652,5 +677,4 @@ onMounted(() => {
 	overflow-y: auto;
 	overflow-x: hidden;
 }
-
 </style>

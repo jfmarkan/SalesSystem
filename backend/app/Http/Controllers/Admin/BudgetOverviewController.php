@@ -11,15 +11,20 @@ class BudgetOverviewController extends Controller
 {
     /**
      * Vista general de Budgetierung:
-     * - Sólo clientes A, B, PA, PB (classification_id 1,2,6,7)
+     * - Sólo clientes A, B, PA, PB (classification_id 1,2,6,7) para vendedores
+     * - C, D, X se usan para el Basisvolumen global y por Profit Center
      * - Basisvolumen en m³:
-     *      · Por vendedor/PC/cliente: ventas YTD calendario (sales.cubic_meters) anualizadas por seasonality
-     *      · Global: usa TODAS las ventas del año base (todas las clasificaciones), anualizadas (computeGlobalBasisM3)
-     * - Best/Worst a partir de budget_cases
+     *      · Por vendedor/PC/cliente: ventas YTD calendario (sales.cubic_meters)
+     *        anualizadas por seasonality
+     *      · Global: usa TODAS las ventas del año base (todas las clasificaciones),
+     *        anualizadas (computeGlobalBasisM3)
+     * - Best/Worst a partir de budget_cases (sólo A/B/PA/PB por CPC)
+     *   ⚠️ si budget_cases.skip_budget = 1 → Best/Worst m³ = 0 (no se planea nada)
      * - Vorjahr = budget completo del año fiscal anterior en m³ (budgets.volume * factor_to_m3)
      * - Cobertura por clasificación y global
      * - Totales por vendedor + detalle por PC + clientes
      * - Lista de CPC sin budget case (pendientes)
+     * - by_pc: resumen global por Profit Center + mix por Kundentyp
      *
      * GET /api/budget-cases/overview
      *   ?target_fiscal_year=2026 (opcional, por defecto = FY siguiente al actual)
@@ -59,22 +64,26 @@ class BudgetOverviewController extends Controller
         // 🔹 Basisvolumen GLOBAL (usa TODAS las ventas del año calendario base anualizadas)
         $globalBasisM3 = $this->computeGlobalBasisM3($baseCalendarYear, $capMonth);
 
+        // 🔹 Basisvolumen por Profit Center + Kundentyp (A,B,C,D,PA,PB,X)
+        $classBasis = $this->loadClassBasisByPcAndClass($baseCalendarYear, $capMonth);
+        $basisByPc    = $classBasis['by_pc'];    // [pcCode => [classKey => ['base_m3', 'count_cpc']]]
+        $basisByClass = $classBasis['by_class']; // [classKey => base_m3]
+
         // === 2) Traer todos los CPC asignados a vendedores para A/B/PA/PB ===
-        $classIds = [1, 2, 6, 7];
+        $classIdsForSellers = [1, 2, 6, 7];
 
         $rows = DB::table('assignments')
             ->join('client_profit_centers', 'client_profit_centers.id', '=', 'assignments.client_profit_center_id')
-            // 👇 NUEVO: join con profit_centers para traer el nombre
             ->join('profit_centers', 'profit_centers.profit_center_code', '=', 'client_profit_centers.profit_center_code')
             ->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
             ->leftJoin('users', 'users.id', '=', 'assignments.user_id')
             ->whereNotNull('assignments.user_id')
-            ->whereIn('clients.classification_id', $classIds)
+            ->whereIn('clients.classification_id', $classIdsForSellers)
             ->select(
                 'assignments.user_id',
                 'client_profit_centers.id as cpc_id',
                 'client_profit_centers.profit_center_code',
-                'profit_centers.profit_center_name as profit_center_name', // 👈 NOMBRE DEL PC
+                'profit_centers.profit_center_name as profit_center_name',
                 'clients.client_group_number',
                 'clients.client_name',
                 'clients.classification_id',
@@ -93,6 +102,7 @@ class BudgetOverviewController extends Controller
                 'classes'            => [],
                 'global'             => [],
                 'by_seller'          => [],
+                'by_pc'              => [],
                 'pending_cases'      => [],
             ]);
         }
@@ -100,7 +110,7 @@ class BudgetOverviewController extends Controller
         $cpcIds  = $rows->pluck('cpc_id')->unique()->map(fn ($v) => (int) $v)->values()->all();
         $pcCodes = $rows->pluck('profit_center_code')->unique()->values()->all();
 
-        // === 3) Budget Cases por CPC para el FY objetivo ===
+        // === 3) Budget Cases por CPC para el FY objetivo (incluye skip_budget) ===
         $casesRaw = DB::table('budget_cases')
             ->where('fiscal_year', $targetFy)
             ->whereIn('client_profit_center_id', $cpcIds)
@@ -108,7 +118,8 @@ class BudgetOverviewController extends Controller
                 'client_profit_center_id',
                 DB::raw('MAX(id) as id'),
                 DB::raw('MAX(best_case)  as best_case'),
-                DB::raw('MAX(worst_case) as worst_case')
+                DB::raw('MAX(worst_case) as worst_case'),
+                DB::raw('MAX(skip_budget) as skip_budget')
             )
             ->groupBy('client_profit_center_id')
             ->get();
@@ -117,9 +128,10 @@ class BudgetOverviewController extends Controller
         foreach ($casesRaw as $c) {
             $cid = (int) $c->client_profit_center_id;
             $casesByCpc[$cid] = [
-                'id'         => (int) $c->id,
-                'best_case'  => $c->best_case !== null ? (float) $c->best_case : 0.0,
-                'worst_case' => $c->worst_case !== null ? (float) $c->worst_case : 0.0,
+                'id'          => (int) $c->id,
+                'best_case'   => $c->best_case !== null ? (float) $c->best_case : 0.0,
+                'worst_case'  => $c->worst_case !== null ? (float) $c->worst_case : 0.0,
+                'skip_budget' => (bool) ($c->skip_budget ?? false),
             ];
         }
 
@@ -136,9 +148,9 @@ class BudgetOverviewController extends Controller
         // === 6) Vorjahr: budget FY anterior completo en m³ por CPC ===
         $prevBudgetByCpc = $this->loadBudgetFyM3ByCpc($cpcIds, $prevFyStart);
 
-        // === 7) Agregados por clasificación y por vendedor ===
+        // === 7) Agregados por clasificación (A/B/PA/PB) y por vendedor ===
 
-        $classMap = [
+        $classMapForSellers = [
             1 => 'A',
             2 => 'B',
             6 => 'PA',
@@ -155,6 +167,8 @@ class BudgetOverviewController extends Controller
                 'best_m3'             => 0.0,
                 'worst_m3'            => 0.0,
                 'prev_m3'             => 0.0,
+                'ytd_m3'              => 0.0,
+                'ytd_annualized_m3'   => 0.0,
             ];
         };
 
@@ -168,9 +182,9 @@ class BudgetOverviewController extends Controller
             $userId    = (int) $r->user_id;
             $cpcId     = (int) $r->cpc_id;
             $pcCode    = (string) $r->profit_center_code;
-            $pcName    = (string) ($r->profit_center_name ?? ''); // 👈 NOMBRE PC DESDE profit_centers
+            $pcName    = (string) ($r->profit_center_name ?? '');
             $classId   = (int) $r->classification_id;
-            $classKey  = $classMap[$classId] ?? 'X';
+            $classKey  = $classMapForSellers[$classId] ?? 'X';
             $clientCgn = (string) $r->client_group_number;
 
             if (!isset($statsByClass[$classKey])) {
@@ -191,13 +205,16 @@ class BudgetOverviewController extends Controller
             if (!isset($sellerPcs[$userId][$pcCode])) {
                 $sellerPcs[$userId][$pcCode] = [
                     'profit_center_code'   => $pcCode,
-                    'profit_center_name'   => $pcName,  // 👈 lo mandamos al front
+                    'profit_center_name'   => $pcName,
                     'total_cpcs'           => 0,
                     'with_case'            => 0,
                     'coverage_pct'         => 0.0,
                     'base_m3_with_case'    => 0.0,
                     'best_m3'              => 0.0,
+                    'worst_m3'             => 0.0,
                     'prev_m3'              => 0.0,
+                    'ytd_m3'               => 0.0,
+                    'ytd_annualized_m3'    => 0.0,
                     'clients'              => [],
                 ];
             }
@@ -213,9 +230,10 @@ class BudgetOverviewController extends Controller
             $global['total_cpcs']      += 1;
             $pcStats['total_cpcs']     += 1;
 
-            $hasCase   = isset($casesByCpc[$cpcId]);
-            $caseBest  = $hasCase ? $casesByCpc[$cpcId]['best_case']  : 0.0;
-            $caseWorst = $hasCase ? $casesByCpc[$cpcId]['worst_case'] : 0.0;
+            $hasCase    = isset($casesByCpc[$cpcId]);
+            $caseBest   = $hasCase ? $casesByCpc[$cpcId]['best_case']  : 0.0;
+            $caseWorst  = $hasCase ? $casesByCpc[$cpcId]['worst_case'] : 0.0;
+            $skipBudget = $hasCase ? (bool) $casesByCpc[$cpcId]['skip_budget'] : false;
 
             // 7.2) YTD m³ de este CPC (enero..capMonth)
             $ytdM3  = $ytdByCpcM3[$cpcId] ?? 0.0;
@@ -226,9 +244,16 @@ class BudgetOverviewController extends Controller
                 ? ($ytdM3 / ($ytdPct / 100.0))
                 : 0.0;
 
-            // 7.3) Best/Worst para este CPC (sólo si tiene case)
-            $bestM3  = $hasCase ? $baseM3 * (1.0 + $caseBest  / 100.0)  : 0.0;
-            $worstM3 = $hasCase ? $baseM3 * (1.0 + $caseWorst / 100.0) : 0.0;
+            // 7.3) Best/Worst para este CPC:
+            //  - si tiene case y NO está skip → normal
+            //  - si está skip → 0 (no se planea nada)
+            if ($hasCase && !$skipBudget) {
+                $bestM3  = $baseM3 * (1.0 + $caseBest  / 100.0);
+                $worstM3 = $baseM3 * (1.0 + $caseWorst / 100.0);
+            } else {
+                $bestM3  = 0.0;
+                $worstM3 = 0.0;
+            }
 
             // 7.4) Vorjahr (budget FY anterior) para este CPC
             $prevM3 = $prevBudgetByCpc[$cpcId] ?? 0.0;
@@ -244,53 +269,89 @@ class BudgetOverviewController extends Controller
             $global['prev_m3']      += $prevM3;
             $pcStats['prev_m3']     += $prevM3;
 
-            // 7.7) Si tiene budget case, acumular "con case" + best/worst
+            // 7.7) YTD y anualizado
+            $classStats['ytd_m3']            += $ytdM3;
+            $classStats['ytd_annualized_m3'] += $baseM3;
+
+            $sellerStats['ytd_m3']            += $ytdM3;
+            $sellerStats['ytd_annualized_m3'] += $baseM3;
+
+            $global['ytd_m3']            += $ytdM3;
+            $global['ytd_annualized_m3'] += $baseM3;
+
+            $pcStats['ytd_m3']            += $ytdM3;
+            $pcStats['ytd_annualized_m3'] += $baseM3;
+
+            // 7.8) Coverage y volumen:
             if ($hasCase) {
+                // Siempre cuenta como "con case" (decidido), incluso si es skip
                 $classStats['with_case']         += 1;
                 $classStats['base_m3_with_case'] += $baseM3;
-                $classStats['best_m3']           += $bestM3;
-                $classStats['worst_m3']          += $worstM3;
 
                 $sellerStats['with_case']         += 1;
                 $sellerStats['base_m3_with_case'] += $baseM3;
-                $sellerStats['best_m3']           += $bestM3;
-                $sellerStats['worst_m3']          += $bestM3;
 
                 $global['with_case']         += 1;
                 $global['base_m3_with_case'] += $baseM3;
-                $global['best_m3']           += $bestM3;
-                $global['worst_m3']          += $worstM3;
 
                 $pcStats['with_case']         += 1;
                 $pcStats['base_m3_with_case'] += $baseM3;
-                $pcStats['best_m3']           += $bestM3;
+
+                // Sólo sumamos volumen de Best/Worst si NO está skip
+                if (!$skipBudget) {
+                    $classStats['best_m3']   += $bestM3;
+                    $classStats['worst_m3']  += $worstM3;
+
+                    $sellerStats['best_m3']  += $bestM3;
+                    $sellerStats['worst_m3'] += $worstM3;
+
+                    $global['best_m3']       += $bestM3;
+                    $global['worst_m3']      += $worstM3;
+
+                    $pcStats['best_m3']      += $bestM3;
+                    $pcStats['worst_m3']     += $worstM3;
+                }
             } else {
                 // Pendiente → lo añadimos a la lista
                 $pending[] = [
                     'client_group_number' => $clientCgn,
                     'client_name'         => $r->client_name,
                     'classification_id'   => $classId,
-                    'classification'      => $classKey,
+                    'classification'      => $this->classificationLetter($classId),
                     'profit_center_code'  => $pcCode,
                     'user_id'             => $userId,
                     'seller_name'         => $this->formatUserName($r->first_name, $r->last_name, $r->email),
                 ];
             }
 
-            // 7.8) Detalle de cliente dentro del PC
+            // 7.9) Detalle de cliente dentro del PC (para la vista vendedor)
             $pcStats['clients'][] = [
                 'client_group_number' => $clientCgn,
                 'client_name'         => $r->client_name,
                 'has_case'            => $hasCase,
+                'skip_budget'         => $skipBudget,
                 'prev_m3'             => $prevM3,
                 'best_m3'             => $bestM3,
+                'ytd_m3'              => $ytdM3,
+                'ytd_annualized_m3'   => $baseM3,
             ];
 
             unset($classStats, $sellerStats, $global, $pcStats);
         }
 
+        // === 7.bis) Integrar Basis por clase (A,B,C,D,PA,PB,X) usando ventas de TODOS los clientes ===
+
+        foreach ($basisByClass as $classKey => $baseVal) {
+            if (!isset($statsByClass[$classKey])) {
+                $statsByClass[$classKey] = $makeStats();
+            }
+            $statsByClass[$classKey]['base_m3_all'] = (float) $baseVal;
+        }
+
         // === 8) Calcular coverage_pct y formatear números ===
-        $fmt = fn($n) => (float) number_format((float) $n, 2, '.', '');
+        $fmt = function ($n) {
+            return (float) number_format((float) $n, 2, '.', '');
+        };
 
         // Clases
         foreach ($statsByClass as $k => &$st) {
@@ -300,6 +361,8 @@ class BudgetOverviewController extends Controller
             $st['best_m3']           = $fmt($st['best_m3']);
             $st['worst_m3']          = $fmt($st['worst_m3']);
             $st['prev_m3']           = $fmt($st['prev_m3']);
+            $st['ytd_m3']            = $fmt($st['ytd_m3']);
+            $st['ytd_annualized_m3'] = $fmt($st['ytd_annualized_m3']);
         }
         unset($st);
 
@@ -314,6 +377,8 @@ class BudgetOverviewController extends Controller
         $statsGlobal['best_m3']           = $fmt($statsGlobal['best_m3']);
         $statsGlobal['worst_m3']          = $fmt($statsGlobal['worst_m3']);
         $statsGlobal['prev_m3']           = $fmt($statsGlobal['prev_m3']);
+        $statsGlobal['ytd_m3']            = $fmt($statsGlobal['ytd_m3']);
+        $statsGlobal['ytd_annualized_m3'] = $fmt($statsGlobal['ytd_annualized_m3']);
 
         // PCs por vendedor
         foreach ($sellerPcs as $uid => &$pcs) {
@@ -323,7 +388,10 @@ class BudgetOverviewController extends Controller
                     : 0.0;
                 $pc['prev_m3']           = $fmt($pc['prev_m3']);
                 $pc['best_m3']           = $fmt($pc['best_m3']);
+                $pc['worst_m3']          = $fmt($pc['worst_m3']);
                 $pc['base_m3_with_case'] = $fmt($pc['base_m3_with_case']);
+                $pc['ytd_m3']            = $fmt($pc['ytd_m3']);
+                $pc['ytd_annualized_m3'] = $fmt($pc['ytd_annualized_m3']);
             }
             unset($pc);
         }
@@ -337,9 +405,104 @@ class BudgetOverviewController extends Controller
             $st['best_m3']           = $fmt($st['best_m3']);
             $st['worst_m3']          = $fmt($st['worst_m3']);
             $st['prev_m3']           = $fmt($st['prev_m3']);
+            $st['ytd_m3']            = $fmt($st['ytd_m3']);
+            $st['ytd_annualized_m3'] = $fmt($st['ytd_annualized_m3']);
             $st['pcs']               = array_values($sellerPcs[$uid] ?? []);
         }
         unset($st);
+
+        // === 9) by_pc: resumen global por Profit Center ===
+
+        $byPc = [];
+
+        // 9.1) Partimos de los PCs que ya aparecen en sellerPcs (A/B/PA/PB)
+        foreach ($sellerPcs as $uid => $pcs) {
+            foreach ($pcs as $pcCode => $pcStats) {
+                if (!isset($byPc[$pcCode])) {
+                    $byPc[$pcCode] = [
+                        'profit_center_code' => $pcStats['profit_center_code'],
+                        'profit_center_name' => $pcStats['profit_center_name'],
+                        'prev_m3'            => 0.0,
+                        'best_m3'            => 0.0,
+                        'worst_m3'           => 0.0,
+                        'base_m3_with_case'  => 0.0,
+                        'ytd_m3'             => 0.0,
+                        'ytd_annualized_m3'  => 0.0,
+                        'class_mix'          => [],
+                        'pending_cases'      => [],
+                    ];
+                }
+                $byPc[$pcCode]['prev_m3']           += (float) $pcStats['prev_m3'];
+                $byPc[$pcCode]['best_m3']           += (float) $pcStats['best_m3'];   // ya viene 0 si skip
+                $byPc[$pcCode]['worst_m3']          += (float) $pcStats['worst_m3'];  // idem
+                $byPc[$pcCode]['base_m3_with_case'] += (float) $pcStats['base_m3_with_case'];
+                $byPc[$pcCode]['ytd_m3']            += (float) $pcStats['ytd_m3'];
+                $byPc[$pcCode]['ytd_annualized_m3'] += (float) $pcStats['ytd_annualized_m3'];
+            }
+        }
+
+        // 9.2) Integrar class_mix (A,B,C,D,PA,PB,X) por PC
+        foreach ($basisByPc as $pcCode => $classes) {
+            if (!isset($byPc[$pcCode])) {
+                $byPc[$pcCode] = [
+                    'profit_center_code' => $pcCode,
+                    'profit_center_name' => null,
+                    'prev_m3'            => 0.0,
+                    'best_m3'            => 0.0,
+                    'worst_m3'           => 0.0,
+                    'base_m3_with_case'  => 0.0,
+                    'ytd_m3'             => 0.0,
+                    'ytd_annualized_m3'  => 0.0,
+                    'class_mix'          => [],
+                    'pending_cases'      => [],
+                ];
+            }
+            $mix = [];
+            foreach ($classes as $classKey => $data) {
+                $mix[$classKey] = [
+                    'base_m3'   => $fmt($data['base_m3']),
+                    'count_cpc' => (int) $data['count_cpc'],
+                ];
+            }
+            $byPc[$pcCode]['class_mix'] = $mix;
+        }
+
+        // 9.3) Adjuntar casos pendientes a cada PC
+        foreach ($pending as $p) {
+            $pcCode = (string) $p['profit_center_code'];
+            if (!isset($byPc[$pcCode])) {
+                $byPc[$pcCode] = [
+                    'profit_center_code' => $pcCode,
+                    'profit_center_name' => null,
+                    'prev_m3'            => 0.0,
+                    'best_m3'            => 0.0,
+                    'worst_m3'           => 0.0,
+                    'base_m3_with_case'  => 0.0,
+                    'ytd_m3'             => 0.0,
+                    'ytd_annualized_m3'  => 0.0,
+                    'class_mix'          => [],
+                    'pending_cases'      => [],
+                ];
+            }
+            $byPc[$pcCode]['pending_cases'][] = $p;
+        }
+
+        // Formatear algunos campos de by_pc
+        foreach ($byPc as $pcCode => &$pc) {
+            $pc['prev_m3']           = $fmt($pc['prev_m3']);
+            $pc['best_m3']           = $fmt($pc['best_m3']);
+            $pc['worst_m3']          = $fmt($pc['worst_m3']);
+            $pc['base_m3_with_case'] = $fmt($pc['base_m3_with_case']);
+            $pc['ytd_m3']            = $fmt($pc['ytd_m3']);
+            $pc['ytd_annualized_m3'] = $fmt($pc['ytd_annualized_m3']);
+        }
+        unset($pc);
+
+        // Ordenar PCs por código
+        $byPcArr = array_values($byPc);
+        usort($byPcArr, function ($a, $b) {
+            return (int) $a['profit_center_code'] <=> (int) $b['profit_center_code'];
+        });
 
         return response()->json([
             'target_fiscal_year' => $targetFy,
@@ -348,6 +511,7 @@ class BudgetOverviewController extends Controller
             'classes'            => $statsByClass,
             'global'             => $statsGlobal,
             'by_seller'          => array_values($statsBySeller),
+            'by_pc'              => $byPcArr,
             'pending_cases'      => $pending,
         ]);
     }
@@ -359,6 +523,30 @@ class BudgetOverviewController extends Controller
         $fy = $date->year;
         if ($date->month < 4) $fy -= 1; // FY empieza en abril
         return $fy;
+    }
+
+    /**
+     * Mapea classification_id a letra.
+     * Ajustá los IDs si en tu DB son otros.
+     */
+    private function classificationLetter(int $id): string
+    {
+        switch ($id) {
+            case 1:
+                return 'A';
+            case 2:
+                return 'B';
+            case 3:
+                return 'C';
+            case 4:
+                return 'D';
+            case 6:
+                return 'PA';
+            case 7:
+                return 'PB';
+            default:
+                return 'X'; // resto
+        }
     }
 
     /**
@@ -409,6 +597,80 @@ class BudgetOverviewController extends Controller
         }
 
         return (float) $totalBase;
+    }
+
+    /**
+     * Basisvolumen por Profit Center y clasificación (A,B,C,D,PA,PB,X)
+     * usando ventas YTD (enero..capMonth) y seasonality.
+     *
+     * @return array{by_pc: array, by_class: array}
+     */
+    private function loadClassBasisByPcAndClass(int $baseCalendarYear, int $capMonth): array
+    {
+        if ($capMonth < 1) {
+            return [
+                'by_pc'   => [],
+                'by_class'=> [],
+            ];
+        }
+
+        $rows = DB::table('sales')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+            ->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+            ->where('sales.fiscal_year', $baseCalendarYear)
+            ->whereBetween('sales.month', [1, $capMonth])
+            ->groupBy('sales.client_profit_center_id', 'client_profit_centers.profit_center_code', 'clients.classification_id')
+            ->select(
+                'sales.client_profit_center_id as cpc_id',
+                'client_profit_centers.profit_center_code',
+                'clients.classification_id',
+                DB::raw('SUM(sales.cubic_meters) AS ytd_m3')
+            )
+            ->get();
+
+        $byPc    = [];
+        $byClass = [];
+
+        foreach ($rows as $r) {
+            $pcCode  = (string) $r->profit_center_code;
+            $classId = (int) $r->classification_id;
+            $ytdM3   = (float) $r->ytd_m3;
+
+            if ($ytdM3 <= 0.0) {
+                continue;
+            }
+
+            $ytdPct = $this->seasonalityYtdPct($pcCode, $capMonth);
+            if ($ytdPct <= 0.0) {
+                continue;
+            }
+
+            $base = $ytdM3 / ($ytdPct / 100.0);
+            $letter = $this->classificationLetter($classId);
+
+            if (!isset($byPc[$pcCode])) {
+                $byPc[$pcCode] = [];
+            }
+            if (!isset($byPc[$pcCode][$letter])) {
+                $byPc[$pcCode][$letter] = [
+                    'base_m3'   => 0.0,
+                    'count_cpc' => 0,
+                ];
+            }
+
+            $byPc[$pcCode][$letter]['base_m3']   += $base;
+            $byPc[$pcCode][$letter]['count_cpc'] += 1;
+
+            if (!isset($byClass[$letter])) {
+                $byClass[$letter] = 0.0;
+            }
+            $byClass[$letter] += $base;
+        }
+
+        return [
+            'by_pc'   => $byPc,
+            'by_class'=> $byClass,
+        ];
     }
 
     /**

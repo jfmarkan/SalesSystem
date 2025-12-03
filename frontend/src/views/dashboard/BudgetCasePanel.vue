@@ -1,18 +1,39 @@
 <template>
 	<Toast />
 	<div class="budget-case-grid">
-		<Dialog v-model:visible="confirmVisible" modal dismissable-mask header="Ungespeicherte Änderungen"
-			:style="{ width: '520px' }">
-			<p class="mb-3">Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?</p>
+		<Dialog
+			v-model:visible="confirmVisible"
+			modal
+			dismissable-mask
+			header="Ungespeicherte Änderungen"
+			:style="{ width: '520px' }"
+		>
+			<p class="mb-3">
+				Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?
+			</p>
 			<div class="flex justify-content-end gap-2">
-				<Button label="Abbrechen" severity="secondary" @click="
-					() => {
-						confirmVisible = false
-						pendingChange.value = null
-					}
-				" />
-				<Button label="Verwerfen" severity="danger" icon="pi pi-trash" @click="discardAndApply" />
-				<Button label="Speichern" severity="success" icon="pi pi-save" @click="saveAndApply" />
+				<Button
+					label="Abbrechen"
+					severity="secondary"
+					@click="
+						() => {
+							confirmVisible = false
+							pendingChange.value = null
+						}
+					"
+				/>
+				<Button
+					label="Verwerfen"
+					severity="danger"
+					icon="pi pi-trash"
+					@click="discardAndApply"
+				/>
+				<Button
+					label="Speichern"
+					severity="success"
+					icon="pi pi-save"
+					@click="saveAndApply"
+				/>
 			</div>
 		</Dialog>
 
@@ -23,12 +44,18 @@
 					<div class="filters-inner">
 						<div class="field-block flex-1 min-h-0">
 							<div class="selector-host">
-								<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
-									:primary-id="primaryId" :secondary-options="secondaryOptionsWithDots"
+								<ForecastFilters
+									class="ff-host"
+									:mode="mode"
+									:primary-options="primaryOptions"
+									:primary-id="primaryId"
+									:secondary-options="secondaryOptionsWithDots"
 									:secondary-id="secondaryId"
 									@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
 									@update:primary-id="(v) => guardedChange('primary', v)"
-									@update:secondary-id="(v) => guardedChange('secondary', v)" @next="handleNext" />
+									@update:secondary-id="(v) => guardedChange('secondary', v)"
+									@next="handleNext"
+								/>
 								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
 							</div>
 						</div>
@@ -64,8 +91,13 @@
 							</div>
 						</div>
 						<div class="actions">
-							<Button label="Speichern" icon="pi pi-save" :disabled="!budgetDirty"
-								:outlined="!budgetDirty" @click="saveBudgetCase" />
+							<Button
+								label="Speichern"
+								icon="pi pi-save"
+								:disabled="!budgetDirty"
+								:outlined="!budgetDirty"
+								@click="saveBudgetCase"
+							/>
 						</div>
 					</div>
 				</template>
@@ -77,9 +109,16 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<LineChartSmart v-if="hasSelection" type="cumulative" :client-id="currentClientId"
-									:profit-center-id="currentPcId" api-prefix="/api" :auto-fetch="false"
-									:cum-data="cumDataForChart" :busy="loading" />
+								<LineChartSmart
+									v-if="hasSelection"
+									type="cumulative"
+									:client-id="currentClientId"
+									:profit-center-id="currentPcId"
+									api-prefix="/api"
+									:auto-fetch="false"
+									:cum-data="cumDataForChart"
+									:busy="loading"
+								/>
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -90,11 +129,16 @@
 					<template #content>
 						<div class="chart-pad">
 							<div class="chart-body">
-								<BudgetCasePanel v-if="hasSelection" :key="`${currentClientId}-${currentPcId}`"
-									ref="bcRef" :client-group-number="cgnForChild" :profit-center-code="pccForChild"
-									:disabled="false" :prefill="prefillFromDb"
-									@dirty-change="(v) => (budgetDirty = !!v)" @values-change="onChildValues"
-									@simulated="onSimulated" />
+								<BudgetCasePanel
+									v-if="hasSelection"
+									:key="`${currentClientId}-${currentPcId}`"
+									ref="bcRef"
+									:client-group-number="cgnForChild"
+									:profit-center-code="pccForChild"
+									@dirty-change="(v) => (budgetDirty = !!v)"
+									@values-change="onChildValues"
+									@simulated="onSimulated"
+								/>
 								<div v-else class="card-placeholder">Keine Auswahl</div>
 							</div>
 						</div>
@@ -107,9 +151,17 @@
 				<template #content>
 					<div class="table-pad">
 						<template v-if="hasSelection">
-							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
-								:forecast="forecast" :viewport-start="0" :viewport-size="12"
-								:is-editable-ym="() => false" @edit-forecast="() => { }" />
+							<ForecastTable
+								ref="tableRef"
+								:months="months"
+								:ventas="sales"
+								:budget="budget"
+								:forecast="forecast"
+								:viewport-start="0"
+								:viewport-size="12"
+								:is-editable-ym="() => false"
+								@edit-forecast="() => {}"
+							/>
 						</template>
 						<div v-else class="card-placeholder">Keine Auswahl</div>
 					</div>
@@ -120,7 +172,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Toast from 'primevue/toast'
 import Dialog from 'primevue/dialog'
@@ -232,7 +284,7 @@ async function restoreSelectionFromRoute() {
 		if (s != null) secondaryId.value = s
 		if (hasSelection.value) {
 			await refreshCaseFlagsForSecondary()
-			await Promise.all([loadSeries(), loadBudgetCasePrefill()])
+			await loadSeries()
 		}
 	} finally {
 		suspendGuard.value = false
@@ -358,70 +410,9 @@ async function refreshCaseFlagsForSecondary() {
 	}
 }
 
-/* Prefill */
-const prefillFromDb = ref({ best_case: null, worst_case: null })
-const savedBest = ref(0)
-const savedWorst = ref(0)
-const skipBudget = ref(false)
-const savedSkip = ref(false)
-async function loadBudgetCasePrefill() {
-	prefillFromDb.value = { best_case: null, worst_case: null }
-	savedBest.value = 0
-	savedWorst.value = 0
-	if (!hasSelection.value) return
-
-	const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
-	try {
-		await ensureCsrf()
-		if (Number.isFinite(cpcId) && cpcId > 0) {
-			const { data } = await api.get('/api/budget-cases', {
-				params: { client_profit_center_id: cpcId, fiscal_year: budgetFiscalYear.value },
-			})
-			if (data?.data) {
-				const b = Number(data.data.best_case) || 0
-				const w = Number(data.data.worst_case) || 0
-				prefillFromDb.value = { best_case: b, worst_case: w }
-				savedBest.value = b
-				savedWorst.value = w
-				addReadyCpc(cpcId)
-			} else {
-				prefillFromDb.value = { best_case: null, worst_case: null }
-			}
-		} else {
-			const cgn = Number(cgnForChild.value),
-				pcc = Number(pccForChild.value)
-			if (Number.isFinite(cgn) && Number.isFinite(pcc)) {
-				const { data } = await api.get('/api/budget-cases', {
-					params: {
-						client_group_number: cgn,
-						profit_center_code: pcc,
-						fiscal_year: budgetFiscalYear.value,
-					},
-				})
-				if (data?.data) {
-					const b = Number(data.data.best_case) || 0
-					const w = Number(data.data.worst_case) || 0
-					prefillFromDb.value = { best_case: b, worst_case: w }
-					savedBest.value = b
-					savedWorst.value = w
-				}
-			}
-		}
-	} catch {
-		// ignore
-	}
-	budgetDirty.value = false
-	await nextTick()
-	budgetDirty.value = false
-}
-
-// const hasCaseForSelection = computed(() => {
-// 	if (!hasSelection.value) return false
-// 	const cpcId = cpcIdFor(currentClientId.value, currentPcId.value)
-// 	return Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
-// })
-
-/* Secondary options + icons */
+/* ---------------------------------------------------
+   Secondary options + icons
+---------------------------------------------------- */
 const secondaryOptions = computed(() => {
 	if (!mode.value || primaryId.value == null) return []
 	if (mode.value === 'client') {
@@ -589,19 +580,20 @@ const confirmVisible = ref(false)
 const pendingChange = ref(null)
 const hasUnsaved = computed(() => !!budgetDirty.value)
 
-const bestLatest = ref(0)
-const worstLatest = ref(0)
-const round4 = (n) => Math.round((Number(n) || 0) * 10000) / 10000
+// último snapshot que manda el hijo
+const lastChildValues = ref({
+	best_case: 0,
+	worst_case: 0,
+	skip_budget: false,
+})
 
 function onChildValues({ best_case, worst_case, skip_budget }) {
-	const b = Number(best_case) || 0
-	const w = Number(worst_case) || 0
-	const s = !!skip_budget
-	bestLatest.value = b
-	worstLatest.value = w
-	skipBudget.value = s
-	budgetDirty.value =
-		round4(b) !== round4(savedBest.value) || round4(w) !== round4(savedWorst.value) || s !== savedSkip.value
+	lastChildValues.value = {
+		best_case: Number(best_case ?? 0),
+		worst_case: Number(worst_case ?? 0),
+		skip_budget: !!skip_budget,
+	}
+	// OJO: dirty lo maneja solo el hijo vía @dirty-change
 }
 
 function sanitize(v, fb = 0) {
@@ -618,13 +610,21 @@ async function saveBudgetCase() {
 	const cgn = Number(cgnForChild.value)
 	const pcc = Number(pccForChild.value)
 
-	const fromChild = bcRef.value.getValues?.()
-	const best = sanitize(fromChild?.best_case, bestLatest.value)
-	const worst = sanitize(fromChild?.worst_case, worstLatest.value)
-	const skip = !!fromChild?.skip_budget
+	// Intentamos leer directamente del hijo; si no, usamos el último snapshot
+	const fromChild = bcRef.value.getValues?.() || lastChildValues.value
+
+	const best = sanitize(fromChild.best_case, lastChildValues.value.best_case)
+	const worst = sanitize(fromChild.worst_case, lastChildValues.value.worst_case)
+	const skip = !!fromChild.skip_budget
+
 	try {
 		await ensureCsrf()
-		const payload = { fiscal_year: budgetFiscalYear.value, best_case: best, worst_case: worst, skip_budget: skip }
+		const payload = {
+			fiscal_year: budgetFiscalYear.value,
+			best_case: best,
+			worst_case: worst,
+			skip_budget: skip,
+		}
 
 		if (Number.isFinite(cpcId) && cpcId > 0) {
 			payload.client_profit_center_id = cpcId
@@ -642,7 +642,9 @@ async function saveBudgetCase() {
 			payload.profit_center_code = pcc
 		}
 
-		const { data } = await api.post('/api/budget-cases', payload, { withCredentials: true })
+		const { data } = await api.post('/api/budget-cases', payload, {
+			withCredentials: true,
+		})
 
 		const savedCpcId = Number(data?.data?.client_profit_center_id)
 		if (Number.isFinite(savedCpcId) && savedCpcId > 0) {
@@ -650,11 +652,10 @@ async function saveBudgetCase() {
 			addReadyCpc(savedCpcId)
 		}
 
-		savedBest.value = best
-		savedWorst.value = worst
-		savedSkip.value = skip
-		budgetDirty.value = false
+		// avisamos al hijo que se guardó, y limpiamos "dirty"
 		bcRef.value?.markSaved?.()
+		budgetDirty.value = false
+
 		toast.add({
 			severity: 'success',
 			summary: 'Gespeichert',
@@ -664,7 +665,8 @@ async function saveBudgetCase() {
 
 		await refreshCaseFlagsForSecondary()
 	} catch (e) {
-		const msg = e?.response?.data?.message || e?.message || 'Speichern fehlgeschlagen'
+		const msg =
+			e?.response?.data?.message || e?.message || 'Speichern fehlgeschlagen'
 		toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 3000 })
 		throw e
 	}
@@ -682,13 +684,11 @@ function clearAll() {
 	originalForecast.value = fillZeros(12)
 	overlayBest.value = []
 	overlayWorst.value = []
-	bestLatest.value = 0
-	worstLatest.value = 0
-	savedBest.value = 0
-	savedWorst.value = 0
-	skipBudget.value = false
-	savedSkip.value = false
-	prefillFromDb.value = { best_case: null, worst_case: null }
+	lastChildValues.value = {
+		best_case: 0,
+		worst_case: 0,
+		skip_budget: false,
+	}
 	budgetDirty.value = false
 	bcRef.value?.hardReset?.()
 }
@@ -708,7 +708,7 @@ async function applyChange(kind, value) {
 		secondaryId.value = value
 		clearAll()
 	}
-	await Promise.all([loadSeries(), loadBudgetCasePrefill()])
+	await loadSeries()
 }
 
 function guardedChange(kind, value) {
@@ -758,7 +758,6 @@ watch([mode, primaryId], () => {
 })
 watch(secondaryId, () => {
 	loadSeries()
-	loadBudgetCasePrefill()
 })
 
 onMounted(async () => {
@@ -915,14 +914,13 @@ const selectedPCName = computed(() => {
 	grid-column: span 3;
 }
 
-/* El contenedor del Card ocupa todo y permite que el body crezca */
+/* Card / chart layout */
 .chart-card {
 	min-height: 0;
 	height: 100%;
 	overflow: hidden;
 }
 
-/* PrimeVue Card: header fijo, body estirable */
 .chart-card :deep(.p-card) {
 	display: flex;
 	flex-direction: column;
@@ -938,7 +936,6 @@ const selectedPCName = computed(() => {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
-	/* si querés margen interno, ajustá aquí: */
 	padding: 8px 10px;
 }
 
@@ -948,7 +945,6 @@ const selectedPCName = computed(() => {
 	display: flex;
 }
 
-/* Tus wrappers internos también llenan el alto */
 .chart-pad,
 .chart-body {
 	flex: 1 1 auto;
@@ -956,7 +952,6 @@ const selectedPCName = computed(() => {
 	display: flex;
 }
 
-/* El lienzo del chart ocupa 100% del espacio disponible */
 .chart-card :deep(canvas),
 .chart-card :deep(svg) {
 	width: 100% !important;
@@ -966,23 +961,20 @@ const selectedPCName = computed(() => {
 }
 
 .chart-card :deep(.p-card-header) {
-	padding: .25rem .5rem !important;
-	/* lo que pediste */
+	padding: 0.25rem 0.5rem !important;
 	display: flex;
 	align-items: center;
-	gap: .5rem;
-
-	/* toques suaves opcionales (no rompen nada) */
+	gap: 0.5rem;
 	font-weight: 600;
-	font-size: .95rem;
+	font-size: 0.95rem;
 	color: var(--text, #334155);
 	background: color-mix(in oklab, var(--surface) 94%, transparent);
-	border-bottom: 1px solid color-mix(in oklab, var(--border, #e5e7eb) 70%, transparent);
+	border-bottom: 1px solid
+		color-mix(in oklab, var(--border, #e5e7eb) 70%, transparent);
 }
 
-/* Si incluís iconos en el header en algún momento */
 .chart-card :deep(.p-card-header .pi) {
-	margin-right: .25rem;
+	margin-right: 0.25rem;
 }
 
 /* Table */

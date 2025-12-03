@@ -391,7 +391,6 @@ class ClientsSynchronizer
         ON CC.ID = P.CustomerClassification001_ID
     WHERE
         P.IsCustomer_0004 = 1
-        AND P.CustomerStatus = 1
         AND TRY_CONVERT(INT, CC.Code) BETWEEN 10000 AND 19999
 ),
 MostFrequentResponsible AS (
