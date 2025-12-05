@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '@/plugins/axios'
 
 import Card from 'primevue/card'
@@ -11,6 +11,11 @@ import InputNumber from 'primevue/inputnumber'
 const loading = ref(false)
 const overview = ref(null)
 const ov = computed(() => overview.value)
+
+/* ===== AUTO REFRESH ===== */
+// Refresca el overview entero (incluye Budget nach Verkäufer)
+const REFRESH_INTERVAL_MS = 15000
+let refreshTimer = null
 
 /* ========== FORMATOS ========== */
 const nfInt = new Intl.NumberFormat('de-DE', {
@@ -89,12 +94,21 @@ function fmtDeltaPct(curr, prev) {
 	const sign = d > 0 ? '+' : ''
 	return `${sign}${nfPct.format(d / 100)}`
 }
+
+/**
+ * Colores:
+ *  - sin prev      → neutro
+ *  - d >= 0        → verde
+ *  - 0 > d >= -10  → amarillo
+ *  - d < -10       → rojo
+ */
 function deltaClass(curr, prev) {
+	const p = Number(prev || 0)
+	if (!p) return 'chip-neutral'
 	const d = relDelta(curr, prev)
-	if (!prev) return 'chip-neutral'
-	if (d > 5) return 'chip-positive'
-	if (d < -5) return 'chip-negative'
-	return 'chip-neutral'
+	if (d >= 0) return 'chip-positive'
+	if (d > -10) return 'chip-warning'
+	return 'chip-negative'
 }
 
 /* ========== LOAD OVERVIEW ========== */
@@ -110,13 +124,27 @@ async function loadOverview() {
 		loading.value = false
 	}
 }
-onMounted(loadOverview)
+
+onMounted(() => {
+	loadOverview()
+	refreshTimer = setInterval(() => {
+		loadOverview()
+	}, REFRESH_INTERVAL_MS)
+})
+
+onUnmounted(() => {
+	if (refreshTimer) {
+		clearInterval(refreshTimer)
+		refreshTimer = null
+	}
+})
 
 /* ========== DONUTS ========== */
 function baseDonutOptions() {
 	return {
 		maintainAspectRatio: false,
 		cutout: '60%',
+		animation: false, // sin animación para refrescos frecuentes
 		plugins: {
 			legend: { display: false },
 			tooltip: {
@@ -235,14 +263,6 @@ const dWorstPct = ref(0)
 // A, B, C, D, PA, PB, X
 const classKeysAll = ['A', 'B', 'C', 'D', 'PA', 'PB', 'X']
 
-/**
- * Recalcula:
- *  - Base = suma de base_m3_all de A,B,C,D,PA,PB,X
- *  - Best / Worst:
- *      A,B,PA,PB → best_m3 / worst_m3 del backend (o base si faltan)
- *      C,D       → base * (1 + % que pongas en la caja)
- *      X         → = base (sin cambio)
- */
 const derivedTotals = computed(() => {
 	const out = {
 		base_total: 0,
@@ -275,7 +295,6 @@ const derivedTotals = computed(() => {
 			best = base * (1 + pctBest / 100)
 			worst = base * (1 + pctWorst / 100)
 		} else if (key === 'X') {
-			// X sin case: best = worst = base
 			best = base
 			worst = base
 		} else {
@@ -401,7 +420,6 @@ const pcsRaw = computed(() => {
 	if (Array.isArray(ov.value?.by_pc) && ov.value.by_pc.length) {
 		return ov.value.by_pc
 	}
-	// Fallback a partir de by_seller (como antes)
 	const map = new Map()
 	for (const seller of ov.value?.by_seller || []) {
 		for (const pc of seller.pcs || []) {
@@ -450,11 +468,7 @@ const pcsRaw = computed(() => {
 	)
 })
 
-/**
- * pcScenarioList:
- *  - Usa ov.by_pc (si existe) para tener class_mix por PC
- *  - Aplica las Annahmen C/D para calcular Best/Worst por PC
- */
+/* PC scenarios (C/D assumptions aplicadas) */
 const pcScenarioList = computed(() => {
 	const list = pcsRaw.value || []
 	const result = []
@@ -485,7 +499,6 @@ const pcScenarioList = computed(() => {
 				best = base
 				worst = base
 			} else {
-				// A/B/PA/PB – si alguna vez mandas best/worst por clase, se podría usar aquí
 				best = base
 				worst = base
 			}
@@ -515,7 +528,7 @@ const pcScenarioList = computed(() => {
 	return result
 })
 
-/* Estado de despliegue por Profit Center */
+/* Estado de sub-acordeones por PC */
 const openPcSummary = ref({})
 const openPcCases = ref({})
 const openPcMix = ref({})
@@ -824,11 +837,7 @@ function isPcMixOpen(code) {
 								<div class="seller-cell seller-cell-name">
 									<i
 										class="pi"
-										:class="
-											isSellerOpen(sellerKey(seller))
-												? 'pi-chevron-down'
-												: 'pi-chevron-right'
-										"
+										:class="isSellerOpen(sellerKey(seller)) ? 'pi-chevron-down' : 'pi-chevron-right'"
 									/>
 									<span class="seller-name">
 										{{ seller.full_name ?? seller.name ?? 'Unbekannt' }}
@@ -882,15 +891,19 @@ function isPcMixOpen(code) {
 									</div>
 								</div>
 
-								<!-- col 6: Δ -->
+								<!-- col 6: Δ (m³ arriba, % abajo) -->
 								<div class="seller-cell seller-cell-delta numeric-cell">
 									<div class="cell-label">Δ</div>
 									<div
-										class="cell-value"
+										class="delta-box"
 										:class="deltaClass(seller.best_m3, seller.prev_m3)"
 									>
-										{{ fmtDeltaAbs(seller.best_m3, seller.prev_m3) }} m³
-										({{ fmtDeltaPct(seller.best_m3, seller.prev_m3) }})
+										<div class="delta-main">
+											{{ fmtDeltaAbs(seller.best_m3, seller.prev_m3) }} m³
+										</div>
+										<div class="delta-sub">
+											{{ fmtDeltaPct(seller.best_m3, seller.prev_m3) }}
+										</div>
 									</div>
 								</div>
 							</button>
@@ -910,21 +923,12 @@ function isPcMixOpen(code) {
 											<!-- col 1: flecha + nombre PC -->
 											<div
 												class="pc-cell pc-cell-name"
-												@click.stop="
-													toggleSellerPc(
-														pcKeySeller(sellerKey(seller), pc),
-													)
-												"
+												@click.stop="toggleSellerPc(pcKeySeller(sellerKey(seller), pc))"
 											>
 												<i
 													class="pi"
 													:class="
-														isSellerPcOpen(
-															pcKeySeller(
-																sellerKey(seller),
-																pc,
-															),
-														)
+														isSellerPcOpen(pcKeySeller(sellerKey(seller), pc))
 															? 'pi-chevron-down'
 															: 'pi-chevron-right'
 													"
@@ -933,16 +937,10 @@ function isPcMixOpen(code) {
 													<span class="pc-name">
 														{{ pcDisplayName(pc) }}
 													</span>
-													<span
-														v-if="pc.profit_center_code"
-														class="pc-code-small"
-													>
-														(#{{ pc.profit_center_code }})
-													</span>
 												</div>
 											</div>
 
-											<!-- col 2: coverage PC -->
+											<!-- col 2: coverage PC (barra más ancha) -->
 											<div class="pc-cell pc-cell-cov">
 												<div class="pc-progress">
 													<div class="cov-header-row cov-small">
@@ -955,9 +953,7 @@ function isPcMixOpen(code) {
 														<div
 															class="cov-fill"
 															:class="coverageColorClass(pcCoveragePct(pc))"
-															:style="{
-																width: pcCoveragePct(pc) + '%',
-															}"
+															:style="{ width: pcCoveragePct(pc) + '%' }"
 														/>
 													</div>
 													<div class="cov-ratio cov-small">
@@ -972,12 +968,7 @@ function isPcMixOpen(code) {
 											<div class="pc-cell pc-cell-prev numeric-cell">
 												<div class="cell-label">Bud 2025/26</div>
 												<div class="cell-value">
-													{{
-														pc.prev_m3 != null
-															? fmtInt(pc.prev_m3)
-															: '—'
-													}}
-													m³
+													{{ pc.prev_m3 != null ? fmtInt(pc.prev_m3) : '—' }} m³
 												</div>
 											</div>
 
@@ -985,10 +976,7 @@ function isPcMixOpen(code) {
 											<div class="pc-cell pc-cell-cy numeric-cell">
 												<div class="cell-label">CY11+1</div>
 												<div class="cell-value">
-													{{
-														fmtInt(pc.ytd_annualized_m3 ?? 0)
-													}}
-													m³
+													{{ fmtInt(pc.ytd_annualized_m3 ?? 0) }} m³
 												</div>
 											</div>
 
@@ -996,25 +984,23 @@ function isPcMixOpen(code) {
 											<div class="pc-cell pc-cell-best numeric-cell">
 												<div class="cell-label">Best</div>
 												<div class="cell-value txt-green">
-													{{
-														pc.best_m3 != null
-															? fmtInt(pc.best_m3)
-															: '—'
-													}}
-													m³
+													{{ pc.best_m3 != null ? fmtInt(pc.best_m3) : '—' }} m³
 												</div>
 											</div>
 
-											<!-- col 6: Δ -->
+											<!-- col 6: Δ (m³ y %) -->
 											<div class="pc-cell pc-cell-delta numeric-cell">
 												<div class="cell-label">Δ</div>
 												<div
-													class="cell-value"
+													class="delta-box"
 													:class="deltaClass(pc.best_m3, pc.prev_m3)"
 												>
-													{{ fmtDeltaAbs(pc.best_m3, pc.prev_m3) }}
-													m³
-													({{ fmtDeltaPct(pc.best_m3, pc.prev_m3) }})
+													<div class="delta-main">
+														{{ fmtDeltaAbs(pc.best_m3, pc.prev_m3) }} m³
+													</div>
+													<div class="delta-sub">
+														{{ fmtDeltaPct(pc.best_m3, pc.prev_m3) }}
+													</div>
 												</div>
 											</div>
 										</div>
@@ -1022,31 +1008,24 @@ function isPcMixOpen(code) {
 										<!-- clientes del PC -->
 										<transition name="fade">
 											<div
-												v-if="
-													isSellerPcOpen(
-														pcKeySeller(sellerKey(seller), pc),
-													)
-												"
+												v-if="isSellerPcOpen(pcKeySeller(sellerKey(seller), pc))"
 												class="pc-client-list"
 											>
 												<div
 													v-if="!pc.clients || !pc.clients.length"
 													class="no-clients"
 												>
-													Keine Kundendetails für diesen Profit
-													Center.
+													Keine Kundendetails für diesen Profit Center.
 												</div>
 
 												<div
 													v-else
 													v-for="client in pc.clients"
 													:key="client.client_group_number"
-													class="client-row"
+													:class="['client-row', { 'client-skipped': client.skip_budget }]"
 												>
-													<!-- col 1: icono + nombre -->
-													<div
-														class="client-cell client-cell-name"
-													>
+													<!-- col 1: icono + nombre + skip -->
+													<div class="client-cell client-cell-name">
 														<i
 															class="pi"
 															:class="
@@ -1059,98 +1038,66 @@ function isPcMixOpen(code) {
 															<span class="cgn">
 																#{{ client.client_group_number }}
 															</span>
-															<span class="cname">
-																{{ client.client_name }}
-															</span>
+															<div class="client-name-line">
+																<span class="cname">
+																	{{ client.client_name }}
+																</span>
+															</div>
 														</div>
 													</div>
 
-													<!-- col 2: Bud 2025/26 + CY -->
-													<div
-														class="client-cell client-cell-prev numeric-cell"
-													>
-														<div class="cell-label">
-															Bud 2025/26
+													<!-- col 2: Best/Worst % -->
+													<div class="client-cell client-cell-bw numeric-cell">
+														<div class="cell-label">Best / Worst</div>
+														<div class="bw-box">
+															<div class="bw-line bw-best">
+																Best {{ fmtPct(client.best_pct ?? 0) }}
+															</div>
+															<div class="bw-line bw-worst">
+																Worst {{ fmtPct(client.worst_pct ?? 0) }}
+															</div>
 														</div>
+													</div>
+
+													<!-- col 3: Bud 2025/26 -->
+													<div class="client-cell client-cell-prev numeric-cell">
+														<div class="cell-label">Bud 2025/26</div>
 														<div class="cell-value">
-															{{
-																client.prev_m3 != null
-																	? fmtInt(client.prev_m3)
-																	: '—'
-															}}
+															{{ client.prev_m3 != null ? fmtInt(client.prev_m3) : '—' }}
 															m³
-														</div>
-														<div class="cell-subline">
-															CY11+1:
-															<span class="cell-subline-strong">
-																{{
-																	fmtInt(
-																		client
-																			.ytd_annualized_m3 ??
-																			0,
-																	)
-																}}
-																m³
-															</span>
 														</div>
 													</div>
 
-													<!-- col 3: Best -->
+													<!-- col 4: CY11+1 -->
+													<div class="client-cell client-cell-cy numeric-cell">
+														<div class="cell-label">CY11+1</div>
+														<div class="cell-value">
+															{{ fmtInt(client.ytd_annualized_m3 ?? 0) }} m³
+														</div>
+													</div>
+
+													<!-- col 5: Best m³ -->
 													<div class="client-cell client-cell-best numeric-cell">
-														<div class="cell-label">Best</div>
+														<div class="cell-label">Best m³</div>
 														<div class="cell-value txt-green">
-															{{
-																client.best_m3 != null
-																	? fmtInt(client.best_m3)
-																	: '—'
-															}}
+															{{ client.best_m3 != null ? fmtInt(client.best_m3) : '—' }}
 															m³
 														</div>
 													</div>
 
-													<!-- col 4: Δ m³ -->
-													<div
-														class="client-cell client-cell-delta-m3 numeric-cell"
-													>
-														<div class="cell-label">Δ m³</div>
+													<!-- col 6: Δ (m³ y %) -->
+													<div class="client-cell client-cell-delta numeric-cell">
+														<div class="cell-label">Δ</div>
 														<div
-															class="cell-value"
-															:class="
-																deltaClass(
-																	client.best_m3,
-																	client.prev_m3,
-																)
-															"
+															class="delta-box"
+															:class="deltaClass(client.best_m3, client.prev_m3)"
 														>
-															{{
-																fmtDeltaAbs(
-																	client.best_m3,
-																	client.prev_m3,
-																)
-															}}
-														</div>
-													</div>
-
-													<!-- col 5: Δ % -->
-													<div
-														class="client-cell client-cell-delta-pct numeric-cell"
-													>
-														<div class="cell-label">Δ %</div>
-														<div
-															class="cell-value"
-															:class="
-																deltaClass(
-																	client.best_m3,
-																	client.prev_m3,
-																)
-															"
-														>
-															{{
-																fmtDeltaPct(
-																	client.best_m3,
-																	client.prev_m3,
-																)
-															}}
+															<div class="delta-main">
+																{{ fmtDeltaAbs(client.best_m3, client.prev_m3) }} m³
+															</div>
+															<div class="delta-sub">
+																{{ fmtDeltaPct(client.best_m3, client.prev_m3) }}
+															</div>
 														</div>
 													</div>
 												</div>
@@ -1195,11 +1142,7 @@ function isPcMixOpen(code) {
 								<div class="pc-main">
 									<i
 										class="pi"
-										:class="
-											isPcSummaryOpen(pc.profit_center_code)
-												? 'pi-chevron-down'
-												: 'pi-chevron-right'
-										"
+										:class="isPcSummaryOpen(pc.profit_center_code) ? 'pi-chevron-down' : 'pi-chevron-right'"
 									/>
 									<div class="pc-title">
 										<span class="pc-name">{{ pc.name }}</span>
@@ -1222,7 +1165,7 @@ function isPcMixOpen(code) {
 										</div>
 									</div>
 									<div class="pc-metric">
-										<div class="metric-label">Best Szenario</div>
+										<div class="metric-label">Best</div>
 										<div class="metric-value green">
 											{{ fmtInt(pc.scenario_best) }}
 											<span class="unit">m³</span>
@@ -1232,13 +1175,18 @@ function isPcMixOpen(code) {
 										<div class="metric-label">Δ</div>
 										<div
 											class="metric-value"
-											:class="deltaClass(pc.scenario_best, pc.prev_m3)"
 										>
-											{{ fmtDeltaAbs(pc.scenario_best, pc.prev_m3) }}
-											m³
-											<span class="metric-delta-pct">
-												({{ fmtDeltaPct(pc.scenario_best, pc.prev_m3) }})
-											</span>
+											<div
+												class="delta-box"
+												:class="deltaClass(pc.scenario_best, pc.prev_m3)"
+											>
+												<div class="delta-main">
+													{{ fmtDeltaAbs(pc.scenario_best, pc.prev_m3) }} m³
+												</div>
+												<div class="delta-sub">
+													{{ fmtDeltaPct(pc.scenario_best, pc.prev_m3) }}
+												</div>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -1255,22 +1203,14 @@ function isPcMixOpen(code) {
 										<button
 											type="button"
 											class="pc-subtitle"
-											@click.stop="
-												togglePcCases(pc.profit_center_code)
-											"
+											@click.stop="togglePcCases(pc.profit_center_code)"
 										>
 											<i
 												class="pi"
-												:class="
-													isPcCasesOpen(pc.profit_center_code)
-														? 'pi-chevron-down'
-														: 'pi-chevron-right'
-												"
+												:class="isPcCasesOpen(pc.profit_center_code) ? 'pi-chevron-down' : 'pi-chevron-right'"
 											/>
 											<span>
-												Offene Budget Cases ({{
-													pc.pending_cases?.length ?? 0
-												}})
+												Offene Budget Cases ({{ pc.pending_cases?.length ?? 0 }})
 											</span>
 										</button>
 										<transition name="fade">
@@ -1279,14 +1219,10 @@ function isPcMixOpen(code) {
 												class="pc-subcontent"
 											>
 												<div
-													v-if="
-														!pc.pending_cases ||
-														!pc.pending_cases.length
-													"
+													v-if="!pc.pending_cases || !pc.pending_cases.length"
 													class="no-pending"
 												>
-													Keine offenen Budget Cases für diesen Profit
-													Center.
+													Keine offenen Budget Cases für diesen Profit Center.
 												</div>
 												<div
 													v-else
@@ -1294,11 +1230,7 @@ function isPcMixOpen(code) {
 												>
 													<div
 														v-for="row in pc.pending_cases"
-														:key="
-															row.client_group_number +
-															'-' +
-															row.profit_center_code
-														"
+														:key="row.client_group_number + '-' + row.profit_center_code"
 														class="pending-row"
 													>
 														<div class="pending-main">
@@ -1312,11 +1244,7 @@ function isPcMixOpen(code) {
 														<div class="pending-meta">
 															<Tag
 																:value="row.classification"
-																:severity="
-																	classificationSeverity(
-																		row.classification,
-																	)
-																"
+																:severity="classificationSeverity(row.classification)"
 																class="tag-slim"
 															/>
 															<span
@@ -1337,17 +1265,11 @@ function isPcMixOpen(code) {
 										<button
 											type="button"
 											class="pc-subtitle"
-											@click.stop="
-												togglePcMix(pc.profit_center_code)
-											"
+											@click.stop="togglePcMix(pc.profit_center_code)"
 										>
 											<i
 												class="pi"
-												:class="
-													isPcMixOpen(pc.profit_center_code)
-														? 'pi-chevron-down'
-														: 'pi-chevron-right'
-												"
+												:class="isPcMixOpen(pc.profit_center_code) ? 'pi-chevron-down' : 'pi-chevron-right'"
 											/>
 											<span>Verteilung nach Kundentyp</span>
 										</button>
@@ -1672,7 +1594,7 @@ function isPcMixOpen(code) {
 	padding-right: 4px;
 }
 
-/* fila vendedor - 6 columnas */
+/* fila vendedor - columnas alineadas */
 .seller-block {
 	padding: 2px 0;
 }
@@ -1685,12 +1607,9 @@ function isPcMixOpen(code) {
 	padding: 7px 10px 7px 4px;
 	display: grid;
 	grid-template-columns:
-		minmax(0, 1.8fr) /* nombre */
-		minmax(0, 2.2fr) /* barra */
-		minmax(0, 1.2fr) /* Bud */
-		minmax(0, 1.2fr) /* CY */
-		minmax(0, 1.2fr) /* Best */
-		minmax(0, 1.6fr); /* Δ */
+		minmax(0, 2.2fr) /* nombre */
+		minmax(0, 2fr)   /* barra */
+		repeat(4, minmax(0, 1.2fr)); /* Bud, CY, Best, Δ */
 	column-gap: 12px;
 	align-items: center;
 	cursor: pointer;
@@ -1861,15 +1780,13 @@ function isPcMixOpen(code) {
 	border: 1px solid #e5e7eb;
 }
 
+/* fila PC dentro de vendedor: misma estructura de columnas */
 .pc-row-seller {
 	display: grid;
 	grid-template-columns:
-		minmax(0, 1.8fr) /* nombre */
-		minmax(0, 2.2fr) /* barra */
-		minmax(0, 1.2fr) /* Bud */
-		minmax(0, 1.2fr) /* CY */
-		minmax(0, 1.2fr) /* Best */
-		minmax(0, 1.6fr); /* Δ */
+		minmax(0, 2.2fr) /* nombre */
+		minmax(0, 2fr)   /* barra */
+		repeat(4, minmax(0, 1.2fr)); /* Bud, CY, Best, Δ */
 	column-gap: 12px;
 	align-items: center;
 }
@@ -1883,6 +1800,7 @@ function isPcMixOpen(code) {
 	text-align: left;
 }
 
+
 .pc-cell-name {
 	flex-direction: row;
 	align-items: center;
@@ -1894,6 +1812,7 @@ function isPcMixOpen(code) {
 	font-size: 0.8rem;
 	color: #6b7280;
 }
+
 
 .pc-main-seller {
 	display: flex;
@@ -1909,9 +1828,8 @@ function isPcMixOpen(code) {
 	text-align: left;
 }
 
-.pc-code-small {
-	font-size: 0.72rem;
-	color: #9ca3af;
+.pc-progress {
+	width: 90%;
 }
 
 /* clientes del PC (seller card) */
@@ -1924,22 +1842,30 @@ function isPcMixOpen(code) {
 	gap: 3px;
 }
 
+/* ==== FILA CLIENTE ==== */
 .client-row {
 	display: grid;
 	grid-template-columns:
-		minmax(0, 2.2fr) /* nombre */
-		minmax(0, 1.8fr) /* Bud+CY */
-		minmax(0, 1.3fr) /* Best */
-		minmax(0, 1.2fr) /* Δ m3 */
-		minmax(0, 1.2fr); /* Δ % */
+		minmax(0, 2.4fr) /* nombre */
+		minmax(0, 2fr)   /* Best/Worst % */
+		repeat(4, minmax(0, 1.2fr)); /* Bud, CY, Best m³, Δ */
 	column-gap: 12px;
-	align-items: center;
-	padding: 3px 2px;
-	border-radius: 4px;
+	align-items: stretch;
+	padding: 4px 6px;
+	border-radius: 6px;
+	border: 1px solid transparent;
+	background: #f9fafb;
 }
 
 .client-row:nth-child(odd) {
 	background: #f3f4f6;
+}
+
+/* cuando está marcado como skipped */
+.client-row.client-skipped {
+	background: #EBCDD0;
+	border-color: #D49399;
+	opacity: 0.9;
 }
 
 .client-row .client-cell {
@@ -1947,14 +1873,16 @@ function isPcMixOpen(code) {
 	display: flex;
 	flex-direction: column;
 	justify-content: start;
-	align-items: flex-start;
-	text-align: left;
+	align-items: center;
+	text-align: center;
 }
 
 .client-cell-name {
 	flex-direction: row !important;
 	align-items: center;
+	justify-content: flex-start;
 	gap: 6px;
+	text-align: left;
 }
 
 .client-cell-name .pi {
@@ -1979,6 +1907,43 @@ function isPcMixOpen(code) {
 	color: #111827;
 }
 
+.client-name-line {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.skip-tag.p-tag {
+	padding: 1px 6px;
+	font-size: 0.7rem;
+	border-radius: 999px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+/* Best/Worst box */
+.bw-box {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	font-size: 0.75rem;
+}
+
+.bw-line {
+	white-space: nowrap;
+}
+
+.bw-best {
+	color: #166534;
+	font-weight: 600;
+}
+
+.bw-worst {
+	color: #b91c1c;
+	font-weight: 600;
+}
+
 .icon-ok {
 	color: #16a34a;
 	font-size: 0.9rem;
@@ -1992,16 +1957,6 @@ function isPcMixOpen(code) {
 .no-clients {
 	font-size: 0.78rem;
 	color: #9ca3af;
-}
-
-.cell-subline {
-	font-size: 0.7rem;
-	color: #6b7280;
-}
-.cell-subline-strong {
-	font-weight: 600;
-	color: #111827;
-	margin-left: 2px;
 }
 
 /* ==== PC SUMMARY CARD (GLOBAL) ==== */
@@ -2046,7 +2001,7 @@ function isPcMixOpen(code) {
 .pc-row {
 	width: 100%;
 	display: grid;
-	grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
+	grid-template-columns: minmax(0, 3.5fr) minmax(0, 4.5fr);
 	column-gap: 16px;
 	padding: 10px 10px;
 	background: linear-gradient(90deg, #f9fafb 0%, #f3f4f6 60%, #eef2ff 100%);
@@ -2278,6 +2233,23 @@ function isPcMixOpen(code) {
 	font-weight: 500;
 }
 
+/* ==== Delta box reutilizable ==== */
+
+.delta-box {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	font-size: 0.78rem;
+}
+
+.delta-main {
+	font-weight: 600;
+}
+
+.delta-sub {
+	font-size: 0.75rem;
+}
+
 /* ==== Misc ==== */
 .empty-state {
 	padding: 8px 4px 10px;
@@ -2300,22 +2272,27 @@ function isPcMixOpen(code) {
 	transform: translateY(-2px);
 }
 
-/* colores texto extra */
-.txt-green {
-	color: #16a34a;
-}
-
-.chip-positive .cell-value,
+/* colores texto delta */
+.chip-positive .delta-main,
+.chip-positive .delta-sub,
 .chip-positive {
 	color: #166534;
 }
 
-.chip-negative .cell-value,
+.chip-negative .delta-main,
+.chip-negative .delta-sub,
 .chip-negative {
 	color: #b91c1c;
 }
 
-.chip-neutral .cell-value,
+.chip-warning .delta-main,
+.chip-warning .delta-sub,
+.chip-warning {
+	color: #b45309;
+}
+
+.chip-neutral .delta-main,
+.chip-neutral .delta-sub,
 .chip-neutral {
 	color: #374151;
 }

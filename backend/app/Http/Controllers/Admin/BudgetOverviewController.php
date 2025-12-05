@@ -14,10 +14,13 @@ class BudgetOverviewController extends Controller
      * - Sólo clientes A, B, PA, PB (classification_id 1,2,6,7) para vendedores
      * - C, D, X se usan para el Basisvolumen global y por Profit Center
      * - Basisvolumen en m³:
-     *      · Por vendedor/PC/cliente: ventas YTD calendario (sales.cubic_meters)
-     *        anualizadas por seasonality
+     *      · Por vendedor/PC/cliente:
+     *          - PCs normales: ventas YTD en UNIDADES (sales.sales_units)
+     *            convertidas a m³ con unit_conversions.factor_to_m3 DEL AÑO OBJETIVO (target FY),
+     *            anualizadas por seasonality
+     *          - PCs 110,170,171,175: ventas YTD en m³ (sales.cubic_meters) sin conversión
      *      · Global: usa TODAS las ventas del año base (todas las clasificaciones),
-     *        anualizadas (computeGlobalBasisM3)
+     *        con misma lógica (units*factor o m³ directo según PC), anualizadas (computeGlobalBasisM3)
      * - Best/Worst a partir de budget_cases (sólo A/B/PA/PB por CPC)
      *   ⚠️ si budget_cases.skip_budget = 1 → Best/Worst m³ = 0 (no se planea nada)
      * - Vorjahr = budget completo del año fiscal anterior en m³ (budgets.volume * factor_to_m3)
@@ -61,13 +64,13 @@ class BudgetOverviewController extends Controller
         // Año fiscal previo para Vorjahr
         $prevFyStart = $targetFy - 1;
 
-        // 🔹 Basisvolumen GLOBAL (usa TODAS las ventas del año calendario base anualizadas)
-        $globalBasisM3 = $this->computeGlobalBasisM3($baseCalendarYear, $capMonth);
+        // 🔹 Basisvolumen GLOBAL
+        $globalBasisM3 = $this->computeGlobalBasisM3($baseCalendarYear, $capMonth, $targetFy);
 
         // 🔹 Basisvolumen por Profit Center + Kundentyp (A,B,C,D,PA,PB,X)
-        $classBasis = $this->loadClassBasisByPcAndClass($baseCalendarYear, $capMonth);
-        $basisByPc    = $classBasis['by_pc'];    // [pcCode => [classKey => ['base_m3', 'count_cpc']]]
-        $basisByClass = $classBasis['by_class']; // [classKey => base_m3]
+        $classBasis = $this->loadClassBasisByPcAndClass($baseCalendarYear, $capMonth, $targetFy);
+        $basisByPc    = $classBasis['by_pc'];
+        $basisByClass = $classBasis['by_class'];
 
         // === 2) Traer todos los CPC asignados a vendedores para A/B/PA/PB ===
         $classIdsForSellers = [1, 2, 6, 7];
@@ -135,8 +138,8 @@ class BudgetOverviewController extends Controller
             ];
         }
 
-        // === 4) Ventas YTD en m³ por CPC (enero..capMonth del año base) ===
-        $ytdByCpcM3 = $this->loadSalesYtdM3ByCpc($cpcIds, $baseCalendarYear, $capMonth);
+        // === 4) Ventas YTD en m³ por CPC (enero..capMonth del año base)
+        $ytdByCpcM3 = $this->loadSalesYtdM3ByCpc($cpcIds, $baseCalendarYear, $capMonth, $targetFy);
 
         // === 5) Seasonality YTD % por Profit Center Code ===
         $ytdPctByPc = [];
@@ -149,7 +152,6 @@ class BudgetOverviewController extends Controller
         $prevBudgetByCpc = $this->loadBudgetFyM3ByCpc($cpcIds, $prevFyStart);
 
         // === 7) Agregados por clasificación (A/B/PA/PB) y por vendedor ===
-
         $classMapForSellers = [
             1 => 'A',
             2 => 'B',
@@ -174,9 +176,9 @@ class BudgetOverviewController extends Controller
 
         $statsByClass  = [];
         $statsGlobal   = $makeStats();
-        $statsBySeller = []; // user_id => stats + user info
-        $sellerPcs     = []; // user_id => [pc_code => pcStats]
-        $pending       = []; // CPC sin budget case
+        $statsBySeller = [];
+        $sellerPcs     = [];
+        $pending       = [];
 
         foreach ($rows as $r) {
             $userId    = (int) $r->user_id;
@@ -245,8 +247,6 @@ class BudgetOverviewController extends Controller
                 : 0.0;
 
             // 7.3) Best/Worst para este CPC:
-            //  - si tiene case y NO está skip → normal
-            //  - si está skip → 0 (no se planea nada)
             if ($hasCase && !$skipBudget) {
                 $bestM3  = $baseM3 * (1.0 + $caseBest  / 100.0);
                 $worstM3 = $baseM3 * (1.0 + $caseWorst / 100.0);
@@ -284,7 +284,6 @@ class BudgetOverviewController extends Controller
 
             // 7.8) Coverage y volumen:
             if ($hasCase) {
-                // Siempre cuenta como "con case" (decidido), incluso si es skip
                 $classStats['with_case']         += 1;
                 $classStats['base_m3_with_case'] += $baseM3;
 
@@ -297,7 +296,6 @@ class BudgetOverviewController extends Controller
                 $pcStats['with_case']         += 1;
                 $pcStats['base_m3_with_case'] += $baseM3;
 
-                // Sólo sumamos volumen de Best/Worst si NO está skip
                 if (!$skipBudget) {
                     $classStats['best_m3']   += $bestM3;
                     $classStats['worst_m3']  += $worstM3;
@@ -312,7 +310,6 @@ class BudgetOverviewController extends Controller
                     $pcStats['worst_m3']     += $worstM3;
                 }
             } else {
-                // Pendiente → lo añadimos a la lista
                 $pending[] = [
                     'client_group_number' => $clientCgn,
                     'client_name'         => $r->client_name,
@@ -334,13 +331,14 @@ class BudgetOverviewController extends Controller
                 'best_m3'             => $bestM3,
                 'ytd_m3'              => $ytdM3,
                 'ytd_annualized_m3'   => $baseM3,
+                'best_pct'            => $hasCase ? $caseBest  : 0.0,
+                'worst_pct'           => $hasCase ? $caseWorst : 0.0,
             ];
 
             unset($classStats, $sellerStats, $global, $pcStats);
         }
 
         // === 7.bis) Integrar Basis por clase (A,B,C,D,PA,PB,X) usando ventas de TODOS los clientes ===
-
         foreach ($basisByClass as $classKey => $baseVal) {
             if (!isset($statsByClass[$classKey])) {
                 $statsByClass[$classKey] = $makeStats();
@@ -371,7 +369,6 @@ class BudgetOverviewController extends Controller
             ? $fmt($statsGlobal['with_case'] * 100.0 / $statsGlobal['total_cpcs'])
             : 0.0;
 
-        // Basis GLOBAL = computeGlobalBasisM3
         $statsGlobal['base_m3_all']       = $fmt($globalBasisM3);
         $statsGlobal['base_m3_with_case'] = $fmt($globalBasisM3);
         $statsGlobal['best_m3']           = $fmt($statsGlobal['best_m3']);
@@ -412,10 +409,8 @@ class BudgetOverviewController extends Controller
         unset($st);
 
         // === 9) by_pc: resumen global por Profit Center ===
-
         $byPc = [];
 
-        // 9.1) Partimos de los PCs que ya aparecen en sellerPcs (A/B/PA/PB)
         foreach ($sellerPcs as $uid => $pcs) {
             foreach ($pcs as $pcCode => $pcStats) {
                 if (!isset($byPc[$pcCode])) {
@@ -433,15 +428,15 @@ class BudgetOverviewController extends Controller
                     ];
                 }
                 $byPc[$pcCode]['prev_m3']           += (float) $pcStats['prev_m3'];
-                $byPc[$pcCode]['best_m3']           += (float) $pcStats['best_m3'];   // ya viene 0 si skip
-                $byPc[$pcCode]['worst_m3']          += (float) $pcStats['worst_m3'];  // idem
+                $byPc[$pcCode]['best_m3']           += (float) $pcStats['best_m3'];
+                $byPc[$pcCode]['worst_m3']          += (float) $pcStats['worst_m3'];
                 $byPc[$pcCode]['base_m3_with_case'] += (float) $pcStats['base_m3_with_case'];
                 $byPc[$pcCode]['ytd_m3']            += (float) $pcStats['ytd_m3'];
                 $byPc[$pcCode]['ytd_annualized_m3'] += (float) $pcStats['ytd_annualized_m3'];
             }
         }
 
-        // 9.2) Integrar class_mix (A,B,C,D,PA,PB,X) por PC
+        // 9.2) Integrar class_mix por PC
         foreach ($basisByPc as $pcCode => $classes) {
             if (!isset($byPc[$pcCode])) {
                 $byPc[$pcCode] = [
@@ -487,7 +482,6 @@ class BudgetOverviewController extends Controller
             $byPc[$pcCode]['pending_cases'][] = $p;
         }
 
-        // Formatear algunos campos de by_pc
         foreach ($byPc as $pcCode => &$pc) {
             $pc['prev_m3']           = $fmt($pc['prev_m3']);
             $pc['best_m3']           = $fmt($pc['best_m3']);
@@ -498,7 +492,6 @@ class BudgetOverviewController extends Controller
         }
         unset($pc);
 
-        // Ordenar PCs por código
         $byPcArr = array_values($byPc);
         usort($byPcArr, function ($a, $b) {
             return (int) $a['profit_center_code'] <=> (int) $b['profit_center_code'];
@@ -521,41 +514,39 @@ class BudgetOverviewController extends Controller
     private function fiscalYearFromDate(Carbon $date): int
     {
         $fy = $date->year;
-        if ($date->month < 4) $fy -= 1; // FY empieza en abril
+        if ($date->month < 4) $fy -= 1;
         return $fy;
     }
 
-    /**
-     * Mapea classification_id a letra.
-     * Ajustá los IDs si en tu DB son otros.
-     */
     private function classificationLetter(int $id): string
     {
         switch ($id) {
-            case 1:
-                return 'A';
-            case 2:
-                return 'B';
-            case 3:
-                return 'C';
-            case 4:
-                return 'D';
-            case 6:
-                return 'PA';
-            case 7:
-                return 'PB';
-            default:
-                return 'X'; // resto
+            case 1: return 'A';
+            case 2: return 'B';
+            case 3: return 'C';
+            case 4: return 'D';
+            case 6: return 'PA';
+            case 7: return 'PB';
+            default: return 'X';
         }
     }
 
     /**
+     * PCs que trabajan nativamente en m³ (sales.cubic_meters)
+     */
+    private function isM3NativeProfitCenter(string $pcCode): bool
+    {
+        $id = (int) $pcCode;
+        return in_array($id, [110, 170, 171, 175], true);
+    }
+
+    /**
      * Basisvolumen GLOBAL en m³:
-     * - Usa TODAS las ventas del año calendario base (enero..capMonth)
-     *   desde la tabla sales.cubic_meters.
+     * - PCs normales: SUM(sales.sales_units * factor_to_m3[targetFy])
+     * - PCs 110/170/171/175: SUM(sales.cubic_meters) sin conversión
      * - Para cada CPC: anualiza con seasonality.
      */
-    private function computeGlobalBasisM3(int $baseCalendarYear, int $capMonth): float
+    private function computeGlobalBasisM3(int $baseCalendarYear, int $capMonth, int $targetFy): float
     {
         if ($capMonth < 1) {
             return 0.0;
@@ -563,13 +554,18 @@ class BudgetOverviewController extends Controller
 
         $rows = DB::table('sales')
             ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+            ->leftJoin('unit_conversions as uc', function ($join) use ($targetFy) {
+                $join->on('uc.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+                     ->where('uc.fiscal_year', '=', $targetFy);
+            })
             ->where('sales.fiscal_year', $baseCalendarYear)
             ->whereBetween('sales.month', [1, $capMonth])
             ->groupBy('sales.client_profit_center_id', 'client_profit_centers.profit_center_code')
             ->select(
                 'sales.client_profit_center_id as cpc_id',
                 'client_profit_centers.profit_center_code',
-                DB::raw('SUM(sales.cubic_meters) AS ytd_m3')
+                DB::raw('SUM(sales.cubic_meters) AS ytd_m3_native'),
+                DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3, 1)) AS ytd_m3_units')
             )
             ->get();
 
@@ -580,8 +576,11 @@ class BudgetOverviewController extends Controller
         $totalBase = 0.0;
 
         foreach ($rows as $r) {
-            $pcCode = (string) $r->profit_center_code;
-            $ytdM3  = (float) $r->ytd_m3;
+            $pcCode  = (string) $r->profit_center_code;
+            $isM3Pc  = $this->isM3NativeProfitCenter($pcCode);
+            $ytdM3   = $isM3Pc
+                ? (float) $r->ytd_m3_native
+                : (float) $r->ytd_m3_units;
 
             if ($ytdM3 <= 0.0) {
                 continue;
@@ -601,11 +600,10 @@ class BudgetOverviewController extends Controller
 
     /**
      * Basisvolumen por Profit Center y clasificación (A,B,C,D,PA,PB,X)
-     * usando ventas YTD (enero..capMonth) y seasonality.
-     *
-     * @return array{by_pc: array, by_class: array}
+     * - PCs normales: units * factor_to_m3[targetFy]
+     * - PCs 110/170/171/175: cubic_meters
      */
-    private function loadClassBasisByPcAndClass(int $baseCalendarYear, int $capMonth): array
+    private function loadClassBasisByPcAndClass(int $baseCalendarYear, int $capMonth, int $targetFy): array
     {
         if ($capMonth < 1) {
             return [
@@ -617,14 +615,23 @@ class BudgetOverviewController extends Controller
         $rows = DB::table('sales')
             ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
             ->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+            ->leftJoin('unit_conversions as uc', function ($join) use ($targetFy) {
+                $join->on('uc.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+                     ->where('uc.fiscal_year', '=', $targetFy);
+            })
             ->where('sales.fiscal_year', $baseCalendarYear)
             ->whereBetween('sales.month', [1, $capMonth])
-            ->groupBy('sales.client_profit_center_id', 'client_profit_centers.profit_center_code', 'clients.classification_id')
+            ->groupBy(
+                'sales.client_profit_center_id',
+                'client_profit_centers.profit_center_code',
+                'clients.classification_id'
+            )
             ->select(
                 'sales.client_profit_center_id as cpc_id',
                 'client_profit_centers.profit_center_code',
                 'clients.classification_id',
-                DB::raw('SUM(sales.cubic_meters) AS ytd_m3')
+                DB::raw('SUM(sales.cubic_meters) AS ytd_m3_native'),
+                DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3, 1)) AS ytd_m3_units')
             )
             ->get();
 
@@ -634,7 +641,10 @@ class BudgetOverviewController extends Controller
         foreach ($rows as $r) {
             $pcCode  = (string) $r->profit_center_code;
             $classId = (int) $r->classification_id;
-            $ytdM3   = (float) $r->ytd_m3;
+            $isM3Pc  = $this->isM3NativeProfitCenter($pcCode);
+            $ytdM3   = $isM3Pc
+                ? (float) $r->ytd_m3_native
+                : (float) $r->ytd_m3_units;
 
             if ($ytdM3 <= 0.0) {
                 continue;
@@ -645,7 +655,7 @@ class BudgetOverviewController extends Controller
                 continue;
             }
 
-            $base = $ytdM3 / ($ytdPct / 100.0);
+            $base   = $ytdM3 / ($ytdPct / 100.0);
             $letter = $this->classificationLetter($classId);
 
             if (!isset($byPc[$pcCode])) {
@@ -674,47 +684,56 @@ class BudgetOverviewController extends Controller
     }
 
     /**
-     * Ventas YTD (enero..capMonth) SIEMPRE en m³ (sales.cubic_meters),
-     * agrupadas por client_profit_center_id.
+     * Ventas YTD (enero..capMonth) en m³ por CPC.
+     * - PCs normales: SUM(sales_units * factor_to_m3[targetFy])
+     * - PCs 110/170/171/175: SUM(cubic_meters)
      *
      * @param  int[] $cpcIds
      * @param  int   $calendarYear
-     * @param  int   $capMonth  0 = no hay datos
+     * @param  int   $capMonth
+     * @param  int   $targetFy
      * @return array [cpc_id => m3]
      */
-    private function loadSalesYtdM3ByCpc(array $cpcIds, int $calendarYear, int $capMonth): array
+    private function loadSalesYtdM3ByCpc(array $cpcIds, int $calendarYear, int $capMonth, int $targetFy): array
     {
         if (empty($cpcIds) || $capMonth < 1) {
             return [];
         }
 
         $rows = DB::table('sales')
+            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'sales.client_profit_center_id')
+            ->leftJoin('unit_conversions as uc', function ($join) use ($targetFy) {
+                $join->on('uc.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+                     ->where('uc.fiscal_year', '=', $targetFy);
+            })
             ->whereIn('sales.client_profit_center_id', $cpcIds)
             ->where('sales.fiscal_year', $calendarYear)
             ->whereBetween('sales.month', [1, $capMonth])
-            ->groupBy('sales.client_profit_center_id')
+            ->groupBy('sales.client_profit_center_id', 'client_profit_centers.profit_center_code')
             ->select(
                 'sales.client_profit_center_id',
-                DB::raw('SUM(sales.cubic_meters) AS m3')
+                'client_profit_centers.profit_center_code',
+                DB::raw('SUM(sales.cubic_meters) AS ytd_m3_native'),
+                DB::raw('SUM(sales.sales_units * COALESCE(uc.factor_to_m3, 1)) AS ytd_m3_units')
             )
-            ->pluck('m3', 'sales.client_profit_center_id')
-            ->toArray();
+            ->get();
 
         $out = [];
-        foreach ($rows as $cpcId => $m3) {
-            $out[(int) $cpcId] = (float) $m3;
+        foreach ($rows as $r) {
+            $pcCode = (string) $r->profit_center_code;
+            $isM3Pc = $this->isM3NativeProfitCenter($pcCode);
+            $m3     = $isM3Pc
+                ? (float) $r->ytd_m3_native
+                : (float) $r->ytd_m3_units;
+            $out[(int) $r->client_profit_center_id] = $m3;
         }
+
         return $out;
     }
 
     /**
-     * Budget FY completo en m³ por CPC:
-     * - Año fiscal = $fyStart (Abr..Mar)
-     * - budgets.volume * factor_to_m3 (unit_conversions)
-     *
-     * @param int[] $cpcIds
-     * @param int   $fyStart  Año fiscal de inicio (ej: 2025 para WJ 2025/26)
-     * @return array [cpc_id => m3]
+     * Budget FY completo en m³ por CPC (sin cambios, siempre units*factor_to_m3
+     * del año de cada fila de budgets).
      */
     private function loadBudgetFyM3ByCpc(array $cpcIds, int $fyStart): array
     {
@@ -722,17 +741,16 @@ class BudgetOverviewController extends Controller
             return [];
         }
 
-        $ucAgg = DB::table('unit_conversions')
-            ->select(
-                'profit_center_code',
-                DB::raw('MAX(factor_to_m3) as factor_to_m3')
-            )
-            ->groupBy('profit_center_code');
-
         $rows = DB::table('budgets')
-            ->join('client_profit_centers', 'client_profit_centers.id', '=', 'budgets.client_profit_center_id')
-            ->leftJoinSub($ucAgg, 'uc', function ($j) {
-                $j->on('uc.profit_center_code', '=', 'client_profit_centers.profit_center_code');
+            ->join(
+                'client_profit_centers',
+                'client_profit_centers.id',
+                '=',
+                'budgets.client_profit_center_id'
+            )
+            ->leftJoin('unit_conversions as uc', function ($join) {
+                $join->on('uc.profit_center_code', '=', 'client_profit_centers.profit_center_code')
+                     ->on('uc.fiscal_year', '=', 'budgets.fiscal_year');
             })
             ->whereIn('budgets.client_profit_center_id', $cpcIds)
             ->where(function ($w) use ($fyStart) {
@@ -754,16 +772,11 @@ class BudgetOverviewController extends Controller
 
         $out = [];
         foreach ($rows as $cpcId => $m3) {
-            $out[(int) $cpcId] = (float) $m3;
+            $out[(int)$cpcId] = (float)$m3;
         }
         return $out;
     }
 
-    /**
-     * Seasonality YTD % para un PC:
-     * - Jan..Mar: prev FY
-     * - Apr..cap: último FY
-     */
     private function seasonalityYtdPct(string $profitCenterCode, int $capMonth): float
     {
         if ($capMonth < 1) return 0.0;

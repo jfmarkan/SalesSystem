@@ -680,20 +680,11 @@ class CompanyAnalyticsController extends Controller
             $budgetEurAdj = $applyExtraQuota ? $distribute($budgetEur,$extraEur)   : $budgetEur;
 
             /* ========== PC especiales: 110 / 170 / 171 / 175 ⇒ "units" = m³ ========== */
-            $specialPcCodes = ['110','170','171','175'];
             $specialCtx = in_array($ctx['type'] ?? '', ['pc','client'], true)
-                && isset($ctx['pc_code'])
-                && in_array((string)$ctx['pc_code'], $specialPcCodes, true);
+                && $this->isM3BasePcCode($ctx['pc_code'] ?? null);
 
             if ($specialCtx) {
                 // En estos PC, el "VK-EH" lógico son en realidad m³:
-                //  - sales.units            => m³
-                //  - budgets.units          => m³
-                //  - forecasts.units        => m³
-                //  - eqf.units              => m³
-                //  - extra_quotas.units     => m³
-                // (totales de units también se basan en estos arrays)
-
                 $sales      = $salesM3;
                 $budgetsAdj = $budgetM3Adj;
                 $fcU_plus   = $fcM3_plus;
@@ -815,17 +806,18 @@ class CompanyAnalyticsController extends Controller
                 $q->where('assignments.team_id', $ctx['team_id'])
                   ->where('assignments.user_id', $ctx['user_id']);
             })
-            ->when(($ctx['type'] ?? '') === 'pc', function($q) use ($ctx) {
-                $q->where('assignments.team_id', $ctx['team_id'])
-                  ->where('assignments.user_id', $ctx['user_id'])
-                  ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
-            })
-            ->when(($ctx['type'] ?? '') === 'client', function($q) use ($ctx) {
-                $q->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
-                  ->where('assignments.team_id', $ctx['team_id'])
-                  ->where('assignments.user_id', $ctx['user_id'])
-                  ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
-                  ->where('clients.client_group_number', $ctx['client_group_number']);
+            ->when(($ctx['type'] ?? ''), function($q) use ($ctx) {
+                if (($ctx['type'] ?? '') === 'pc') {
+                    $q->where('assignments.team_id', $ctx['team_id'])
+                      ->where('assignments.user_id', $ctx['user_id'])
+                      ->where('client_profit_centers.profit_center_code', $ctx['pc_code']);
+                } elseif (($ctx['type'] ?? '') === 'client') {
+                    $q->join('clients', 'clients.client_group_number', '=', 'client_profit_centers.client_group_number')
+                      ->where('assignments.team_id', $ctx['team_id'])
+                      ->where('assignments.user_id', $ctx['user_id'])
+                      ->where('client_profit_centers.profit_center_code', $ctx['pc_code'])
+                      ->where('clients.client_group_number', $ctx['client_group_number']);
+                }
             })
             ->distinct();
 
@@ -1235,7 +1227,7 @@ class CompanyAnalyticsController extends Controller
             $fcM[$i] = (float)$r->m3;
         }
 
-        // EXTRA QUOTAS & resto: igual que tenías (no uso sales.volume aquí, solo budgets/eqf)
+        // EXTRA QUOTAS & resto
         $eqAssignedQ = DB::table('extra_quota_assignments as eq')
             ->leftJoinSub($ucAgg, 'uc', fn($j)=>$j->on('uc.profit_center_code','=','eq.profit_center_code'))
             ->where('eq.fiscal_year', $fyStart)->where('eq.is_published', 1)
@@ -1321,6 +1313,17 @@ class CompanyAnalyticsController extends Controller
         $extraRemU = max(0.0, $extraU - $eqfU);
         $extraRemM = max(0.0, $extraM - $eqfM);
         $extraRemE = max(0.0, $extraE - $eqfE);
+
+        // 🔹 PCs especiales: para 110/170/171/175, "units" = m³
+        if ($this->isM3BasePcCode($pc)) {
+            $salesU    = $salesM;
+            $budUAdj   = $budMAdj;
+            $fcU       = $fcM;
+
+            $extraU    = $extraM;
+            $eqfU      = $eqfM;
+            $extraRemU = $extraRemM;
+        }
 
         $fmt = fn($n) => number_format((float)$n, 0, ',', '.');
         $fmtArr = fn($arr) => array_map($fmt, $arr);
@@ -1626,6 +1629,17 @@ class CompanyAnalyticsController extends Controller
         $eqRemU = max(0.0, $extraU - $eqfU2);
         $eqRemM = max(0.0, $extraM - $eqfM2);
         $eqRemE = max(0.0, $extraE - $eqfE2);
+
+        // 🔹 PCs especiales: para 110/170/171/175, "units" = m³
+        if ($this->isM3BasePcCode($pc)) {
+            $salesU  = $salesM;
+            $budUAdj = $budMAdj;
+            $fcU     = $fcM;
+
+            $extraU  = $extraM;
+            $eqfU2   = $eqfM2;
+            $eqRemU  = $eqRemM;
+        }
 
         $sumSlice = function(array $arr, int $toIdx) {
             $s = 0.0; for ($i=0; $i<=max(0,$toIdx); $i++) $s += $arr[$i] ?? 0.0; return $s;
