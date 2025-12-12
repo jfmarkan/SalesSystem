@@ -16,27 +16,40 @@ use App\Models\Budget;
 class ForecastController extends Controller
 {
     // ========================= ME ENDPOINTS =========================
-
-    // GET /api/me/clients  → [{ id, name }]
     public function getClients(Request $request)
     {
         $user = $request->user();
-        if (!$user) return response()->json(['message' => 'Unauthenticated'], 401);
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
 
         $cpcIds = Assignment::where('user_id', $user->id)->pluck('client_profit_center_id');
-        if ($cpcIds->isEmpty()) return response()->json([]);
+        if ($cpcIds->isEmpty()) {
+            return response()->json([]);
+        }
 
         $clientNumbers = ClientProfitCenter::whereIn('id', $cpcIds)
-            ->pluck('client_group_number')->filter()->unique();
-        if ($clientNumbers->isEmpty()) return response()->json([]);
+            ->pluck('client_group_number')
+            ->filter()
+            ->unique();
 
+        if ($clientNumbers->isEmpty()) {
+            return response()->json([]);
+        }
+
+        // 🔴 FILTRO: excluir clientes con classification_id = 5
         $clients = Client::whereIn('client_group_number', $clientNumbers)
-            ->select(['client_group_number as id', DB::raw('client_name as name')])
+            ->where('classification_id', '!=', 5)
+            ->select([
+                'client_group_number as id',
+                DB::raw('client_name as name'),
+            ])
             ->orderBy('client_name')
             ->get();
 
         return response()->json($clients);
     }
+
 
     // GET /api/me/profit-centers  → [{ id, code, name }]
     public function getProfitCenters(Request $request)

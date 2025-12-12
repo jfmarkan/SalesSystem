@@ -1,82 +1,104 @@
 <template>
 	<Toast />
 	<div class="budget-case-grid">
+		<!-- ======= CONFIRM DIALOG (estilo Forecast / PrimeVue demo) ======= -->
 		<Dialog
 			v-model:visible="confirmVisible"
-			modal
-			dismissable-mask
+			:modal="true"
+			:draggable="false"
+			:dismissableMask="true"
 			header="Ungespeicherte Änderungen"
-			:style="{ width: '520px' }"
+			:style="{ width: '380px' }"
+			class="confirm-dialog"
+			:maskClass="'confirm-dialog-mask'"
+			appendTo="body"
 		>
-			<p class="mb-3">
-				Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?
-			</p>
-			<div class="flex justify-content-end gap-2">
-				<Button
-					label="Abbrechen"
-					severity="secondary"
-					@click="
-						() => {
-							confirmVisible = false
-							pendingChange.value = null
-						}
-					"
-				/>
-				<Button
-					label="Verwerfen"
-					severity="danger"
-					icon="pi pi-trash"
-					@click="discardAndApply"
-				/>
-				<Button
-					label="Speichern"
-					severity="success"
-					icon="pi pi-save"
-					@click="saveAndApply"
-				/>
+			<div class="confirm-body">
+				<!-- Icono central -->
+				<div class="confirm-icon-row">
+					<div class="confirm-icon-circle">
+						<span class="confirm-icon-mark">!</span>
+					</div>
+				</div>
+
+				<!-- Texto -->
+				<p class="confirm-text">
+					Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?
+				</p>
+
+				<div class="confirm-divider"></div>
+
+				<!-- Botones -->
+				<div class="confirm-actions">
+					<Button
+						label="Abbrechen"
+						icon="pi pi-times"
+						size="small"
+						class="cancel-btn"
+						@click="
+							() => {
+								confirmVisible = false
+								pendingChange.value = null
+							}
+						"
+					/>
+					<Button
+						label="Verwerfen"
+						icon="pi pi-trash"
+						size="small"
+						class="discard-btn"
+						@click="discardAndApply"
+					/>
+					<Button
+						label="Speichern"
+						icon="pi pi-check"
+						size="small"
+						class="confirm-save-btn"
+						@click="saveAndApply"
+					/>
+				</div>
 			</div>
 		</Dialog>
 
-		<!-- Sidebar / Filters -->
-		<aside class="filters-col">
-			<Card class="filters-card">
-				<template #content>
-					<div class="filters-inner">
-						<div class="field-block flex-1 min-h-0">
-							<div class="selector-host">
-								<ForecastFilters
-									class="ff-host"
-									:mode="mode"
-									:primary-options="primaryOptions"
-									:primary-id="primaryId"
-									:secondary-options="secondaryOptionsWithDots"
-									:secondary-id="secondaryId"
-									@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
-									@update:primary-id="(v) => guardedChange('primary', v)"
-									@update:secondary-id="(v) => guardedChange('secondary', v)"
-									@next="handleNext"
-								/>
-								<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
-							</div>
-						</div>
-						<div class="filters-footer">
-							<div class="legend">
-								<span class="legend-item">
-									<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
-									Vorhanden
-								</span>
-								<span class="legend-item">
-									<i class="pi pi-circle legend-icon legend-icon-pending"></i>
-									Fehlt
-								</span>
-							</div>
-						</div>
+		<!-- ======= LEFT: filtros (mismo layout que Forecast, sin Weiter) ======= -->
+		<aside class="pane left">
+			<div class="filters-inner p-3">
+				<div class="field-block flex-1 min-h-0">
+					<div class="selector-host">
+						<ForecastFilters
+						class="ff-host"
+						:mode="mode"
+						:primary-options="primaryOptions"
+						:primary-id="primaryId"
+						:secondary-options="decoratedSecondaryOptions"
+						:secondary-id="secondaryId"
+						:show-status-icons="true"
+						@update:mode="(v) => guardedChange('mode', normalizeMode(v))"
+						@update:primary-id="(v) => guardedChange('primary', v)"
+						@update:secondary-id="(v) => guardedChange('secondary', v)"
+						@next="handleNext"
+						/>
+						<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
 					</div>
-				</template>
-			</Card>
+				</div>
+
+				<!-- Pie del pane: leyenda (en Forecast aquí está el botón Weiter) -->
+				<div class="filters-footer">
+					<div class="legend">
+						<span class="legend-item">
+							<i class="pi pi-check-circle legend-icon legend-icon-done"></i>
+							Vorhanden
+						</span>
+						<span class="legend-item">
+							<i class="pi pi-circle legend-icon legend-icon-pending"></i>
+							Fehlt
+						</span>
+					</div>
+				</div>
+			</div>
 		</aside>
 
-		<!-- Main content -->
+		<!-- ======= MAIN CONTENT ======= -->
 		<main class="content-col">
 			<!-- Header -->
 			<Card class="topbar-card">
@@ -146,7 +168,7 @@
 				</Card>
 			</div>
 
-			<!-- Table -->
+			<!-- Tabla -->
 			<Card class="table-card">
 				<template #content>
 					<div class="table-pad">
@@ -200,7 +222,7 @@ const mapPCToClient = ref({})
 const clientById = ref({})
 const pcById = ref({})
 
-const cpcByPair = ref({}) // key: "clientId-pcId" -> client_profit_center_id (number)
+const cpcByPair = ref({}) // key: "clientId-pcId" -> client_profit_center_id
 const pairKey = (cId, pId) => `${Number(cId)}-${Number(pId)}`
 function registerCpcPair(cId, pId, cpcIdRaw) {
 	const id = Number(cpcIdRaw)
@@ -225,7 +247,7 @@ async function loadMaster() {
 	clientById.value = Object.fromEntries(clients.value.map((c) => [c.id, c]))
 	pcById.value = Object.fromEntries(profitCenters.value.map((p) => [p.id, p]))
 
-	// ✅ load CPC ids
+	// CPC ids
 	const cpcIds = resM.data?.cpcIds || []
 	const cpcMap = {}
 	for (const item of cpcIds) {
@@ -296,9 +318,9 @@ watch([mode, primaryId, secondaryId], () => syncRouteQuery())
    Fiscal year rule
 ---------------------------------------------------- */
 function budgetYearByToday() {
-	const d = new Date(),
-		m = d.getMonth() + 1,
-		y = d.getFullYear()
+	const d = new Date()
+	const m = d.getMonth() + 1
+	const y = d.getFullYear()
 	return m >= 4 && m <= 12 ? y + 1 : y
 }
 const budgetFiscalYear = ref(budgetYearByToday())
@@ -437,31 +459,28 @@ const secondaryOptions = computed(() => {
 })
 
 const decoratedSecondaryOptions = computed(() => {
-	const list = secondaryOptions.value
-	if (!list.length || !mode.value) return list
+  const list = secondaryOptions.value
+  if (!list.length || !mode.value) return list
 
-	return list.map((opt) => {
-		const clientId = mode.value === 'client' ? primaryId.value : opt.value
-		const pcId = mode.value === 'client' ? opt.value : primaryId.value
-		const cpcId = cpcIdFor(clientId, pcId)
-		const ready = Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
-		return { ...opt, hasCase: ready }
-	})
-})
+  return list.map((opt) => {
+    const clientId = mode.value === 'client' ? primaryId.value : opt.value
+    const pcId     = mode.value === 'client' ? opt.value      : primaryId.value
+    const cpcId    = cpcIdFor(clientId, pcId)
+    const ready    = Number.isFinite(cpcId) && hasCaseCpcSet.value.has(cpcId)
 
-const secondaryOptionsWithDots = computed(() => {
-	return decoratedSecondaryOptions.value.map((opt) => {
-		const iconClass = opt.hasCase ? 'pi pi-check-circle' : 'pi pi-circle'
-		return { ...opt, label: `<i class="${iconClass}"></i>${opt.label}` }
-	})
+    return {
+      ...opt,
+      hasCase: ready,  // 👈 esto lo usa el filtro para pintar verde o gris
+    }
+  })
 })
 
 /* ---------------------------------------------------
    Series (chart/table)
 ---------------------------------------------------- */
 function genMonths(n) {
-	const out = [],
-		base = new Date()
+	const out = []
+	const base = new Date()
 	base.setDate(1)
 	for (let i = 0; i < n; i++) {
 		const d = new Date(base.getFullYear(), base.getMonth() + i, 1)
@@ -536,10 +555,10 @@ function onSimulated(payload) {
 	const bestC = toCum(t.map((x) => Number(x?.best || 0)))
 	const worstC = toCum(t.map((x) => Number(x?.worst || 0)))
 	const len = months.value?.length || 0
-	const dest = Math.min(12, len),
-		start = Math.max(0, len - dest)
-	const B = Array(len).fill(0),
-		W = Array(len).fill(0)
+	const dest = Math.min(12, len)
+	const start = Math.max(0, len - dest)
+	const B = Array(len).fill(0)
+	const W = Array(len).fill(0)
 	for (let i = 0; i < dest; i++) {
 		B[start + i] = bestC[i] ?? 0
 		W[start + i] = worstC[i] ?? 0
@@ -580,7 +599,6 @@ const confirmVisible = ref(false)
 const pendingChange = ref(null)
 const hasUnsaved = computed(() => !!budgetDirty.value)
 
-// último snapshot que manda el hijo
 const lastChildValues = ref({
 	best_case: 0,
 	worst_case: 0,
@@ -593,7 +611,6 @@ function onChildValues({ best_case, worst_case, skip_budget }) {
 		worst_case: Number(worst_case ?? 0),
 		skip_budget: !!skip_budget,
 	}
-	// OJO: dirty lo maneja solo el hijo vía @dirty-change
 }
 
 function sanitize(v, fb = 0) {
@@ -610,7 +627,6 @@ async function saveBudgetCase() {
 	const cgn = Number(cgnForChild.value)
 	const pcc = Number(pccForChild.value)
 
-	// Intentamos leer directamente del hijo; si no, usamos el último snapshot
 	const fromChild = bcRef.value.getValues?.() || lastChildValues.value
 
 	const best = sanitize(fromChild.best_case, lastChildValues.value.best_case)
@@ -652,7 +668,6 @@ async function saveBudgetCase() {
 			addReadyCpc(savedCpcId)
 		}
 
-		// avisamos al hijo que se guardó, y limpiamos "dirty"
 		bcRef.value?.markSaved?.()
 		budgetDirty.value = false
 
@@ -793,34 +808,60 @@ const selectedPCName = computed(() => {
 	overflow: hidden;
 }
 
-/* Sidebar */
-.filters-col {
-	grid-column: span 2;
-	min-width: 0;
-	display: flex;
-	height: 100%;
+/* ====== SIDEBAR: igual que Forecast (pane left) ====== */
+.pane {
+	background: var(--surface-card, #fff);
+	border-radius: 10px;
+	box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+	padding: 10px;
 	overflow: auto;
 }
 
-.filters-card {
-	flex: 1;
+.pane.left {
+	grid-column: span 2;
+	padding: 1rem;
 	display: flex;
 	flex-direction: column;
+	gap: 16px;
+	min-height: 0;
+}
+
+/* wrapper directo del componente hijo */
+.selector-host {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.field-block {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* host del componente hijo: crece y le pasa el alto al listbox interno */
+.ff-host {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
 	min-height: 0;
 }
 
 .filters-inner {
 	flex: 1;
-	min-height: 0;
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
+	min-height: 0;
 }
 
 .filters-footer {
 	margin-top: auto;
 }
 
+/* Leyenda (se queda abajo) */
 .legend {
 	font-size: 13px;
 	display: flex;
@@ -842,7 +883,7 @@ const selectedPCName = computed(() => {
 	color: var(--p-surface-500, #9ca3af);
 }
 
-/* Main content */
+/* ====== MAIN CONTENT ====== */
 .content-col {
 	grid-column: span 10;
 	display: grid;
@@ -1019,9 +1060,146 @@ const selectedPCName = computed(() => {
 	background: color-mix(in oklab, var(--surface) 65%, transparent);
 }
 
+/* ===== CONFIRM DIALOG (mismo que Forecast) ===== */
+
+/* Fondo con blur y opacidad */
+:deep(.confirm-dialog-mask) {
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	background: rgba(15, 23, 42, 0.25);
+}
+
+/* Caja del diálogo */
+:deep(.confirm-dialog) {
+	border-radius: 14px;
+	box-shadow: 0 18px 40px rgba(15, 23, 42, 0.35);
+}
+
+/* Header compacto */
+:deep(.confirm-dialog .p-dialog-header) {
+	padding: 0.8rem 1rem;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+:deep(.confirm-dialog .p-dialog-title) {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: #111827;
+}
+
+/* Icono de cerrar pequeño */
+:deep(.confirm-dialog .p-dialog-header-icon) {
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	padding: 0;
+	font-size: 0.75rem;
+	color: #6b7280;
+}
+
+:deep(.confirm-dialog .p-dialog-header-icon:hover) {
+	background: rgba(148, 163, 184, 0.2);
+	color: #111827;
+}
+
+/* Contenido interior */
+:deep(.confirm-dialog .p-dialog-content) {
+	padding: 0.75rem 1rem 0.75rem 1rem;
+}
+
+.confirm-body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+
+/* Icono circular */
+.confirm-icon-row {
+	display: flex;
+	justify-content: center;
+	margin-top: 0.25rem;
+}
+
+.confirm-icon-circle {
+	width: 52px;
+	height: 52px;
+	border-radius: 999px;
+	border: 2px solid #9ca3af;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #4b5563;
+}
+
+.confirm-icon-mark {
+	font-size: 1.4rem;
+	line-height: 1;
+}
+
+/* Texto */
+.confirm-text {
+	margin: 0.5rem 0 0.9rem 0;
+	text-align: center;
+	font-size: 0.85rem;
+	color: #374151;
+}
+
+/* Divider */
+.confirm-divider {
+	height: 1px;
+	background: #e5e7eb;
+}
+
+/* Botones */
+.confirm-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 0.35rem;
+}
+
+.confirm-actions :deep(.p-button) {
+	font-size: 0.8rem;
+	padding: 0.35rem 0.8rem;
+}
+
+/* Colores de botones (oscuros suaves) */
+.confirm-actions :deep(.cancel-btn.p-button) {
+	background: #737373;
+	border-color: #737373;
+	color: #f9fafb;
+}
+
+.confirm-actions :deep(.discard-btn.p-button) {
+	background: #a3535b;
+	border-color: #a3535b;
+	color: #f9fafb;
+}
+
+.confirm-actions :deep(.confirm-save-btn.p-button) {
+	background: #668c73;
+	border-color: #668c73;
+	color: #f9fafb;
+}
+
+.confirm-actions :deep(.cancel-btn.p-button:hover) {
+	background: #4f4f4f;
+	border-color: #4f4f4f;
+}
+
+.confirm-actions :deep(.discard-btn.p-button:hover) {
+	background: #8c474f;
+	border-color: #8c474f;
+}
+
+.confirm-actions :deep(.confirm-save-btn.p-button:hover) {
+	background: #557761;
+	border-color: #557761;
+}
+
 /* Responsive */
 @media (max-width: 1199px) {
-	.filters-col {
+	.pane.left {
 		grid-column: 1 / -1;
 	}
 

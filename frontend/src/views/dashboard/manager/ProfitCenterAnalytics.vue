@@ -131,7 +131,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, provide } from 'vue'
 import Button from 'primevue/button'
 import Dropdown from 'primevue/dropdown'
 import SelectButton from 'primevue/selectbutton'
@@ -146,6 +146,10 @@ import html2canvas from 'html2canvas'
 const pcOverviewRef = ref(null)
 const companyOverviewRef = ref(null)
 const pdfRef = ref(null)
+
+/* 🔒 flag para desactivar animaciones durante export */
+const isPdfExporting = ref(false)
+provide('isPdfExporting', isPdfExporting)
 
 /* Unidad */
 const unit = ref('m3')
@@ -274,9 +278,13 @@ async function exportPDF() {
 async function exportAllReports() {
   if (!pcOptions.value.length) await loadPcList()
 
-  const codes = pcOptions.value
-    .filter(p => p.code !== 'company_main')
-    .map(p => p.code)
+  // 👉 Empresa primero, luego todos los demás PCs
+  const codes = [
+    'company_main',
+    ...pcOptions.value
+      .filter(p => p.code !== 'company_main')
+      .map(p => p.code),
+  ]
 
   if (!codes.length) return
 
@@ -288,6 +296,10 @@ async function renderAndSavePDF(pcList, filenameBase) {
 
   const originalPc = pcCode.value
   const originalForceLight = forceLight.value
+
+  // 🧊 Desactivar animaciones en los hijos durante TODO el export
+  isPdfExporting.value = true
+  await nextTick()
 
   try {
     for (let i = 0; i < pcList.length; i++) {
@@ -337,6 +349,7 @@ async function renderAndSavePDF(pcList, filenameBase) {
   } finally {
     pcCode.value = originalPc
     forceLight.value = originalForceLight
+    isPdfExporting.value = false
     await nextTick()
   }
 }

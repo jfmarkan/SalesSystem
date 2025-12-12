@@ -56,52 +56,75 @@
 	<!-- ===== Grid 2 / 10 ===== -->
 	<div class="eqp-grid">
 		<!-- Sidebar (2 columnas) -->
+		<!-- Sidebar (2 columnas) -->
 		<aside class="eqp-aside">
 			<Card class="aside-card">
 				<template #content>
-					<div class="status-filter">
-						<Button label="Offen" size="small" :severity="statusFilter === 'open' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('open')" />
-						<Button label="Gewonnen" size="small"
-							:severity="statusFilter === 'won' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('won')" />
-						<Button label="Verloren" size="small"
-							:severity="statusFilter === 'lost' ? 'primary' : 'secondary'"
-							@click="setStatusFilter('lost')" />
-					</div>
+					<div class="filters-inner">
+						<!-- Bloque superior: filtros de estado -->
+						<div class="selector-host">
+							<div class="status-filter">
+								<Button label="Offen" size="small"
+									:severity="statusFilter === 'open' ? 'primary' : 'secondary'"
+									@click="setStatusFilter('open')" />
+								<Button label="Gewonnen" size="small"
+									:severity="statusFilter === 'won' ? 'primary' : 'secondary'"
+									@click="setStatusFilter('won')" />
+								<Button label="Verloren" size="small"
+									:severity="statusFilter === 'lost' ? 'primary' : 'secondary'"
+									@click="setStatusFilter('lost')" />
+							</div>
 
-					<div v-if="listLoading" class="local-loader">
-						<div class="caption">Wird geladen…</div>
-					</div>
+							<!-- Loader -->
+							<div v-if="listLoading" class="local-loader">
+								<div class="caption">Wird geladen…</div>
+							</div>
 
-					<template v-else>
-						<div class="listbox-flex">
-							<Listbox v-if="listOptions.length" v-model="selectedGroupId" :options="listOptions"
-								optionLabel="label" optionValue="value" @change="(e) => onSelectGroup(e.value)">
-								<template #option="slotProps">
-									<div class="row-item">
-										<div class="top">
-											<div class="pc">{{ slotProps.option.pcName }}</div>
-										</div>
-										<div class="mid">
-											{{ slotProps.option.client || '—' }}
-										</div>
-										<div class="bot">
-											<span class="amt">{{
-												fmtInt(slotProps.option.amount)
-											}}</span>
-											<span class="pct">{{ slotProps.option.pct }}%</span>
-										</div>
+							<!-- Lista -->
+							<template v-else>
+								<div class="list-scroll">
+									<template v-if="listOptions.length">
+										<Listbox v-model="selectedGroupId" :options="listOptions" optionLabel="label"
+											optionValue="value" class="w-full" @change="(e) => onSelectGroup(e.value)">
+											<template #option="slotProps">
+												<div class="row-item">
+													<div class="top">
+														<div class="pc">{{ slotProps.option.pcName }}</div>
+													</div>
+													<div class="mid">
+														{{ slotProps.option.client || '—' }}
+													</div>
+													<div class="bot">
+														<span class="amt">
+															{{ fmtInt(slotProps.option.amount) }}
+														</span>
+														<span class="pct">
+															{{ slotProps.option.pct }}%
+														</span>
+													</div>
+												</div>
+											</template>
+										</Listbox>
+									</template>
+
+									<div v-else class="no-data">
+										Keine Chancen vorhanden.
 									</div>
-								</template>
-							</Listbox>
-
-							<div v-else>Keine Chancen vorhanden.</div>
+								</div>
+							</template>
 						</div>
-					</template>
+
+						<!-- Footer siempre abajo -->
+						<div class="filters-footer">
+							<div class="list-footer">
+								Total: {{ listOptions.length }}
+							</div>
+						</div>
+					</div>
 				</template>
 			</Card>
 		</aside>
+
 
 		<!-- Main (10 columnas) -->
 		<main class="eqp-main">
@@ -491,22 +514,22 @@ async function updateAvailabilityForPc() {
 const clientTakenPcs = ref([])
 const pcFilteredWarning = ref('')
 const pcOptionsForSelection = computed(() => {
-  return assignedPcOptions.value   // SIEMPRE todos los PCs asignados al usuario
+	return assignedPcOptions.value   // SIEMPRE todos los PCs asignados al usuario
 })
 
 
 async function fetchClientTakenPcsIfPossible() {
-  const num = parseInt(opForm.value.client_group_number || 0, 10)
-  if (num >= 10000 && num <= 19999) {
-    await ensureCsrf()
-    const { data } = await api.get(`/api/extra-quota/clients/${num}/profit-centers`)
-    const arr = Array.isArray(data?.profit_centers)
-      ? data.profit_centers
-      : (Array.isArray(data) ? data : [])
-    clientTakenPcs.value = arr
-  } else {
-    clientTakenPcs.value = []
-  }
+	const num = parseInt(opForm.value.client_group_number || 0, 10)
+	if (num >= 10000 && num <= 19999) {
+		await ensureCsrf()
+		const { data } = await api.get(`/api/extra-quota/clients/${num}/profit-centers`)
+		const arr = Array.isArray(data?.profit_centers)
+			? data.profit_centers
+			: (Array.isArray(data) ? data : [])
+		clientTakenPcs.value = arr
+	} else {
+		clientTakenPcs.value = []
+	}
 }
 
 /* Form */
@@ -1136,9 +1159,9 @@ async function checkClientPcExists(cgNum, pc) {
 }
 
 const clientPcExistsNow = computed(() => {
-  const pc = String(opForm.value.profit_center_code ?? '')
-  if (!pc) return false
-  return clientTakenPcs.value.map(String).includes(pc)
+	const pc = String(opForm.value.profit_center_code ?? '')
+	if (!pc) return false
+	return clientTakenPcs.value.map(String).includes(pc)
 })
 
 function scaleForecastForWinning() {
@@ -1168,140 +1191,140 @@ function scaleForecastForWinning() {
 }
 
 function scaleBudgetForWinning() {
-  const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
-  const oldPct = Math.max(
-    0,
-    Math.round(num0(opBaseline.value?.probability_pct ?? opForm.value.probability_pct ?? 0)),
-  )
-  const newAmt = Math.max(0, Math.round(num0(opForm.value.volume)))
-  const oldExp = oldAmt * (oldPct / 100)
-  const newExp = newAmt // won → 100%
+	const oldAmt = Math.max(0, Math.round(num0(opBaseline.value?.volume ?? opForm.value.volume)))
+	const oldPct = Math.max(
+		0,
+		Math.round(num0(opBaseline.value?.probability_pct ?? opForm.value.probability_pct ?? 0)),
+	)
+	const newAmt = Math.max(0, Math.round(num0(opForm.value.volume)))
+	const oldExp = oldAmt * (oldPct / 100)
+	const newExp = newAmt // won → 100%
 
-  if (oldExp <= 0) {
-    // Sin baseline útil: no forzamos nada (opcionalmente podrías reconstruir
-    // con seasonality si querés, pero eso cambia la forma).
-    return
-  }
+	if (oldExp <= 0) {
+		// Sin baseline útil: no forzamos nada (opcionalmente podrías reconstruir
+		// con seasonality si querés, pero eso cambia la forma).
+		return
+	}
 
-  const r = newExp / oldExp
-  const raw = budget.value.map((v, i) => (isPastYM(months.value[i]) ? v : v * r))
-  const base = raw.map((v) => Math.floor(v))
-  let rest =
-    Math.round(raw.reduce((a, b) => a + b, 0)) -
-    base.reduce((a, b) => a + b, 0)
+	const r = newExp / oldExp
+	const raw = budget.value.map((v, i) => (isPastYM(months.value[i]) ? v : v * r))
+	const base = raw.map((v) => Math.floor(v))
+	let rest =
+		Math.round(raw.reduce((a, b) => a + b, 0)) -
+		base.reduce((a, b) => a + b, 0)
 
-  const order = raw
-    .map((v, i) => ({ i, frac: v - base[i] }))
-    .filter((o) => !isPastYM(months.value[o.i]))
-    .sort((a, b) => b.frac - a.frac)
+	const order = raw
+		.map((v, i) => ({ i, frac: v - base[i] }))
+		.filter((o) => !isPastYM(months.value[o.i]))
+		.sort((a, b) => b.frac - a.frac)
 
-  for (let k = 0; k < order.length && rest > 0; k++, rest--) base[order[k].i] += 1
-  budget.value = base
+	for (let k = 0; k < order.length && rest > 0; k++, rest--) base[order[k].i] += 1
+	budget.value = base
 }
 
 
 /* Handlers de eventos del modal */
 async function onModalFinalize({ client_group_number, client_name, classification_id }) {
-  if (!selectedGroupId.value || !selectedVersion.value) {
-    toast.add({
-      severity: 'error',
-      summary: 'Fehler',
-      detail: 'Gruppe/Version fehlt.',
-      life: 1800,
-    })
-    return
-  }
+	if (!selectedGroupId.value || !selectedVersion.value) {
+		toast.add({
+			severity: 'error',
+			summary: 'Fehler',
+			detail: 'Gruppe/Version fehlt.',
+			life: 1800,
+		})
+		return
+	}
 
-  if (finalizing.value) return
-  finalizing.value = true
+	if (finalizing.value) return
+	finalizing.value = true
 
-  try {
-    // ¿Debemos versionar?
-    const mustVersion =
-      opBaseline.value.volume !== opForm.value.volume ||
-      100 !== opBaseline.value.probability_pct ||
-      opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
+	try {
+		// ¿Debemos versionar?
+		const mustVersion =
+			opBaseline.value.volume !== opForm.value.volume ||
+			100 !== opBaseline.value.probability_pct ||
+			opBaseline.value.estimated_start_date !== opForm.value.estimated_start_date
 
-    // 🔥 Escalar ambos (preserva forma + respeta meses pasados)
-    scaleBudgetForWinning()
-    scaleForecastForWinning()
+		// 🔥 Escalar ambos (preserva forma + respeta meses pasados)
+		scaleBudgetForWinning()
+		scaleForecastForWinning()
 
-    if (mustVersion) {
-      await ensureCsrf()
-      const payload = {
-        fiscal_year: opForm.value.fiscal_year,
-        profit_center_code: Number(opForm.value.profit_center_code),
-        volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
-        probability_pct: 100,
-        estimated_start_date: opForm.value.estimated_start_date,
-        comments: opForm.value.comments,
-        potential_client_name: opForm.value.potential_client_name,
-        client_group_number: opForm.value.client_group_number,
-        status: opBaseline.value.status || 'open',
-      }
-      const { data } = await api.post(
-        `/api/extra-quota/opportunities/${selectedGroupId.value}/version`,
-        payload,
-      )
-      selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
-      maxVersion.value = selectedVersion.value
+		if (mustVersion) {
+			await ensureCsrf()
+			const payload = {
+				fiscal_year: opForm.value.fiscal_year,
+				profit_center_code: Number(opForm.value.profit_center_code),
+				volume: Math.max(0, Math.round(Number(opForm.value.volume) || 0)),
+				probability_pct: 100,
+				estimated_start_date: opForm.value.estimated_start_date,
+				comments: opForm.value.comments,
+				potential_client_name: opForm.value.potential_client_name,
+				client_group_number: opForm.value.client_group_number,
+				status: opBaseline.value.status || 'open',
+			}
+			const { data } = await api.post(
+				`/api/extra-quota/opportunities/${selectedGroupId.value}/version`,
+				payload,
+			)
+			selectedVersion.value = Number(data?.version || selectedVersion.value || 1)
+			maxVersion.value = selectedVersion.value
 
-      // Guardamos extra_quota_* para ESTA versión
-      await saveBudget({ silent: true })
-      await saveForecast({ silent: true })
+			// Guardamos extra_quota_* para ESTA versión
+			await saveBudget({ silent: true })
+			await saveForecast({ silent: true })
 
-      // baseline (prob=100)
-      opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
-    } else {
-      // Sin versionar, igual persistimos lo que ves en pantalla
-      if (changedBudgetCount.value > 0) await saveBudget({ silent: true })
-      if (changedForecastCount.value > 0) await saveForecast({ silent: true })
-    }
+			// baseline (prob=100)
+			opBaseline.value = JSON.parse(JSON.stringify({ ...opForm.value, probability_pct: 100 }))
+		} else {
+			// Sin versionar, igual persistimos lo que ves en pantalla
+			if (changedBudgetCount.value > 0) await saveBudget({ silent: true })
+			if (changedForecastCount.value > 0) await saveForecast({ silent: true })
+		}
 
-    // Finalizar → backend mergea desde extra_quota_*
-    const finalizePayload = {
-      status: 'won',
-      client_group_number,
-      client_name,
-    }
-    if (classification_id !== null && classification_id !== undefined) {
-      finalizePayload.classification_id = classification_id
-    }
+		// Finalizar → backend mergea desde extra_quota_*
+		const finalizePayload = {
+			status: 'won',
+			client_group_number,
+			client_name,
+		}
+		if (classification_id !== null && classification_id !== undefined) {
+			finalizePayload.classification_id = classification_id
+		}
 
-    await ensureCsrf()
-    await api.post(
-      `/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
-      finalizePayload,
-    )
+		await ensureCsrf()
+		await api.post(
+			`/api/extra-quota/opportunities/${selectedGroupId.value}/${selectedVersion.value}/finalize`,
+			finalizePayload,
+		)
 
-    // UI
-    suppressStatusWatch.value = true
-    opForm.value.status = 'won'
-    await nextTick()
-    suppressStatusWatch.value = false
+		// UI
+		suppressStatusWatch.value = true
+		opForm.value.status = 'won'
+		await nextTick()
+		suppressStatusWatch.value = false
 
-    wonDialogVisible.value = false
-    opBaseline.value = JSON.parse(JSON.stringify(opForm.value))
-    baseBudget.value = [...budget.value]
-    baseForecast.value = [...forecast.value]
+		wonDialogVisible.value = false
+		opBaseline.value = JSON.parse(JSON.stringify(opForm.value))
+		baseBudget.value = [...budget.value]
+		baseForecast.value = [...forecast.value]
 
-    toast.add({
-      severity: 'success',
-      summary: 'Überführt',
-      detail: 'Budget und Forecast zum bestehenden Kunden hinzugefügt.',
-      life: 1600,
-    })
+		toast.add({
+			severity: 'success',
+			summary: 'Überführt',
+			detail: 'Budget und Forecast zum bestehenden Kunden hinzugefügt.',
+			life: 1600,
+		})
 
-    await loadList()
-    selectedGroupId.value = null
-    selectedVersion.value = null
-    enterCreateMode()
-  } catch (e) {
-    const msg = e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
-    toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
-  } finally {
-    finalizing.value = false
-  }
+		await loadList()
+		selectedGroupId.value = null
+		selectedVersion.value = null
+		enterCreateMode()
+	} catch (e) {
+		const msg = e?.response?.data?.message || e?.message || 'Fehler beim Finalisieren (gewonnen)'
+		toast.add({ severity: 'error', summary: 'Fehler', detail: msg, life: 2200 })
+	} finally {
+		finalizing.value = false
+	}
 }
 
 /* Lost flow */
@@ -1460,9 +1483,9 @@ onMounted(async () => {
 	display: flex;
 	min-height: 0;
 	height: 100%;
-	/* crítico para que los hijos puedan scrollear */
 }
 
+/* Card del sidebar ocupa todo y permite flex interno */
 .eqp-aside :deep(.p-card) {
 	flex: 1 1 auto;
 	display: flex;
@@ -1478,43 +1501,121 @@ onMounted(async () => {
 	min-height: 0;
 }
 
-/* El header de filtros no crece */
+/* ====== Layout interno del sidebar (como pane left) ====== */
+
+.filters-inner {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	min-height: 0;
+}
+
+/* host del bloque filtros + listbox */
+.selector-host {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* Footer siempre abajo */
+.filters-footer {
+	margin-top: auto;
+}
+
+/* Tabs de estado */
 .status-filter {
 	--sf-gap: 8px;
-	/* un único valor para todo */
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
-	/* 3 columnas iguales */
 	gap: var(--sf-gap);
-	/* separación entre botones */
 	margin-bottom: var(--sf-gap);
-	/* misma separación con la lista */
 }
 
 .status-filter :deep(.p-button) {
 	width: 100%;
-	/* que cada botón llene su columna */
 }
 
-/* Contenedor que ocupa el resto y scrollea */
-.eqp-aside .listbox-flex {
+/* ===== Listbox: ocupa todo el resto y scrollea SOLO adentro ===== */
+
+/* Wrapper que ocupa el espacio restante del pane */
+.list-scroll {
 	flex: 1 1 auto;
 	min-height: 0;
-	overflow: auto;
-	height: 100%;
-	/* scroll acá */
+	display: flex;
 }
 
-/* Asegurar que la Listbox use el alto del contenedor y su UL scrollee bien */
-.eqp-aside .listbox-flex :deep(.p-listbox) {
+/* El root de PrimeVue (.p-listbox) se estira a todo el alto */
+.list-scroll :deep(.p-listbox) {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
 	height: 100%;
 }
 
-.eqp-aside .listbox-flex :deep(.p-listbox-list-container) {
+/* El contenedor interno donde va el scroll ocupa todo el alto */
+.list-scroll :deep(.p-listbox-list-wrapper),
+.list-scroll :deep(.p-listbox-list-container) {
+	flex: 1 1 auto;
+	min-height: 0;
 	height: 100%;
-	max-height: none;
-	/* evita quedar atado a 65vh */
-	overflow: auto;
+	max-height: none !important; /* 🔥 rompe límite default de PrimeVue */
+	overflow-y: auto;
+}
+
+/* La <ul> interna no fuerza altura extra */
+.list-scroll :deep(.p-listbox-list) {
+	flex: 0 0 auto;
+}
+
+/* Mensaje sin datos */
+.no-data {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	margin-top: 0.25rem;
+}
+
+/* Footer del listado */
+.list-footer {
+	padding: 6px 4px;
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	border-top: 1px solid var(--surface-border);
+	text-align: right;
+}
+
+/* Items de la lista izquierda */
+.row-item {
+	display: flex;
+	flex-direction: column;
+	border-radius: 8px;
+	cursor: pointer;
+	padding: 6px 4px;
+}
+
+.row-item:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.top {
+	display: flex;
+	justify-content: space-between;
+	font-size: 12px;
+	color: #000;
+}
+
+.mid {
+	font-weight: 600;
+	color: #000;
+}
+
+.bot {
+	display: flex;
+	justify-content: space-between;
+	font-size: 12px;
+	color: #000;
 }
 
 /* Main */
@@ -1670,11 +1771,13 @@ onMounted(async () => {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background-image: repeating-linear-gradient(to right,
-			color-mix(in oklab, var(--text-color) 35%, transparent) 0,
-			color-mix(in oklab, var(--text-color) 35%, transparent) 1px,
-			transparent 1px,
-			transparent 10%);
+	background-image: repeating-linear-gradient(
+		to right,
+		color-mix(in oklab, var(--text-color) 35%, transparent) 0,
+		color-mix(in oklab, var(--text-color) 35%, transparent) 1px,
+		transparent 1px,
+		transparent 10%
+	);
 	opacity: 0.5;
 }
 
@@ -1710,42 +1813,6 @@ onMounted(async () => {
 .ctbl-wrap.locked {
 	pointer-events: none;
 	opacity: 0.6;
-}
-
-/* Lista izquierda */
-.status-filter {
-	display: flex;
-	gap: 6px;
-}
-
-.row-item {
-	display: flex;
-	flex-direction: column;
-	border-radius: 8px;
-	cursor: pointer;
-}
-
-.row-item:hover {
-	background: rgba(255, 255, 255, 0.06);
-}
-
-.top {
-	display: flex;
-	justify-content: space-between;
-	font-size: 12px;
-	color: #000;
-}
-
-.mid {
-	font-weight: 600;
-	color: #000;
-}
-
-.bot {
-	display: flex;
-	justify-content: space-between;
-	font-size: 12px;
-	color: #000;
 }
 
 /* Cliente picker */

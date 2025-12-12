@@ -21,6 +21,7 @@ use App\Http\Controllers\ErpImportController;
 use App\Http\Controllers\DeviationDetectController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ActionItemController;
+use App\Http\Controllers\JustificationsAnalysisController;
 
 use App\Http\Controllers\Admin\UsersController as UserAdminController;
 use App\Http\Controllers\Admin\SessionAdminController as SessionAdminController;
@@ -66,9 +67,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/current-month-versions', [ForecastController::class, 'getCurrentMonthVersions']);
     });
 
-     Route::prefix('sales-force')->group(function () {
-        Route::get('/users',        [UserAdministrationController::class, 'index']);
-    });
+Route::prefix('sales-force')->group(function () {
+    // Lista de usuarios para Sales Force Analytics
+    Route::get('/users', [UserAdministrationController::class, 'index']);
+
+    // 🔹 Rückmeldungen del manager sobre desviaciones (justifications_analysis)
+    // GET  /api/sales-force/justifications-analysis?user_id=..&pc_code=..&type=forecast
+    // POST /api/sales-force/justifications-analysis
+    Route::get('/justifications-analysis', [JustificationsAnalysisController::class, 'index']);
+    Route::post('/justifications-analysis', [JustificationsAnalysisController::class, 'store']);
+
+    // 🔹 Extra Quota summary “por usuario” para la tarjeta de la vista
+    // (alias “de sales-force” sobre el mismo método del controller)
+    // GET /api/sales-force/extra-quota/analysis/summary-by-user?user_id=..&fiscal_year=..
+    Route::get(
+        '/extra-quota/analysis/summary-by-user',
+        [ExtraQuotaController::class, 'analysisSummaryByUser']
+    );
+});
+
 
     Route::prefix('analytics')->group(function () {
         Route::get('/tree',   [CompanyAnalyticsController::class, 'tree']);

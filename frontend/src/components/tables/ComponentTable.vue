@@ -12,6 +12,9 @@ const props = defineProps({
 	viewportStart: { type: Number, default: 0 }, // índice inicial visible
 	viewportSize: { type: Number, default: 12 }, // 12 visibles
 	isEditableYm: { type: Function, default: null },
+
+	// 👇 solo ForecastPanel lo usa
+	highlightMandatory: { type: Boolean, default: false },
 })
 const emit = defineEmits(['edit-forecast'])
 
@@ -32,15 +35,15 @@ function yyyymm(d) {
  * Normaliza números que pueden venir:
  *  - como número
  *  - como string con puntos de miles "5.819"
- *  - opcionalmente con coma decimal "5.819,25" (por las dudas)
+ *  - opcionalmente con coma decimal "5.819,25"
  */
 function normalizeNumber(v) {
 	if (v == null) return 0
 	if (typeof v === 'number') return v
 
 	const s = String(v)
-		.replace(/\./g, '')   // sacamos puntos de miles
-		.replace(',', '.')    // coma → punto para decimales, por si aparece
+		.replace(/\./g, '') // sacamos puntos de miles
+		.replace(',', '.') // coma → punto para decimales
 
 	const n = Number(s)
 	return Number.isFinite(n) ? n : 0
@@ -52,8 +55,8 @@ function defaultIsEditable(ym) {
 	const cur = new Date(now.getFullYear(), now.getMonth(), 1)
 	const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 	const [yS, mS] = String(ym).split('-')
-	const y = +yS,
-		m = +mS
+	const y = +yS
+	const m = +mS
 	const target = new Date(y, m - 1, 1)
 	if (target <= cur) return false
 	if (target.getTime() === next.getTime()) return now.getDate() <= 15
@@ -69,6 +72,26 @@ const curIdx = computed(() => {
 	const key = yyyymm(new Date())
 	return Array.isArray(props.months) ? props.months.findIndex((m) => m === key) : -1
 })
+
+/* === Meses obligatorios: mes siguiente + 5 (6 meses) === */
+const mandatorySet = computed(() => {
+	if (!props.highlightMandatory || !Array.isArray(props.months)) return new Set()
+
+	const out = new Set()
+	const now = new Date()
+	const firstNext = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+	for (let k = 0; k < 6; k++) {
+		const d = new Date(firstNext.getFullYear(), firstNext.getMonth() + k, 1)
+		const key = yyyymm(d)
+		if (props.months.includes(key)) out.add(key)
+	}
+	return out
+})
+
+function isMandatory(ym) {
+	return mandatorySet.value.has(ym)
+}
 
 function devPct(num, den) {
 	const n = normalizeNumber(num)
@@ -119,7 +142,6 @@ function pctLabel(num, den) {
 
 /**
  * Sales: preferimos props.sales, si no props.ventas.
- * Normalizamos TODO a número real internamente.
  */
 const salesData = computed(() => {
 	if (Array.isArray(props.sales) && props.sales.length) {
@@ -179,7 +201,8 @@ watch(
 function onForecastInput(i, e, ym) {
 	if (!canEdit(ym)) return
 	const raw = String(e?.target?.value ?? '')
-	const n = Number(raw.replace('.', '').replace(',', '.')) // aceptamos "1.234" o "1234" o "1234,5"
+	// sacamos puntos de miles y aceptamos coma como decimal (aunque luego redondeamos)
+	const n = Number(raw.replace(/\./g, '').replace(',', '.'))
 	emit('edit-forecast', { index: i, value: isNaN(n) ? 0 : n })
 }
 </script>
@@ -278,12 +301,20 @@ function onForecastInput(i, e, ym) {
 								'cur-bottom': i === curIdx,
 							}"
 						>
-							<InputText
-								class="w-full p-inputtext-sm text-center inp-forecast"
-								:value="forecast[i]"
-								:disabled="!canEdit(m)"
-								@input="(e) => onForecastInput(i, e, m)"
-							/>
+							<!-- wrapper para el borde con gradient -->
+							<div
+								:class="[
+									'inp-wrap',
+									{ 'mandatory-wrap': isMandatory(m) }
+								]"
+							>
+								<InputText
+									class="w-full p-inputtext-sm text-center inp-forecast"
+									:value="formatNumber(forecast[i] ?? 0)"
+									:disabled="!canEdit(m)"
+									@input="(e) => onForecastInput(i, e, m)"
+								/>
+							</div>
 						</td>
 					</tr>
 
@@ -351,13 +382,12 @@ function onForecastInput(i, e, ym) {
 	overflow-x: hidden; /* <- sin barra */
 	overflow-y: hidden;
 	height: 100%;
-	/* ocultar barras en navegadores que igual las dibujan */
 	-ms-overflow-style: none; /* IE/Edge */
 	scrollbar-width: none; /* Firefox */
 }
 .table-scroll-x::-webkit-scrollbar {
 	display: none;
-} /* Chrome/Safari */
+}
 
 /* Tabla fija */
 .tbl {
@@ -374,15 +404,13 @@ function onForecastInput(i, e, ym) {
 	border-bottom: 1px solid rgba(2, 6, 23, 0.12);
 }
 
-
 /* Sticky left: cubre completamente */
 .stick-left {
 	position: sticky;
 	left: 0;
 	text-align: right;
-	background: #FFF;
+	background: #fff;
 }
-
 
 .left-cover {
 	z-index: 3;
@@ -390,7 +418,8 @@ function onForecastInput(i, e, ym) {
 
 /* Header: resaltar mes actual */
 .head-current {
-	background: linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab);
+	background: #B8646C;
+	color: #FFFFFF;
 }
 
 /* Filas */
@@ -406,7 +435,12 @@ function onForecastInput(i, e, ym) {
 	background: rgba(84, 132, 154, 0.25);
 }
 
-/* Input Forecast */
+/* Wrapper del input */
+.inp-wrap {
+	width: 100%;
+}
+
+/* Input Forecast (base) */
 .inp-forecast {
 	background: rgba(255, 255, 255, 0.9) !important;
 	color: #0f172a !important;
@@ -414,6 +448,12 @@ function onForecastInput(i, e, ym) {
 	width: 100%;
 	border-radius: 6px;
 	text-align: center;
+}
+
+.mandatory-wrap .inp-forecast {
+	border: 1px solid #737373 !important;
+	background: #ffffff !important;
+	border-radius: 6px;
 }
 
 /* Desvíos */

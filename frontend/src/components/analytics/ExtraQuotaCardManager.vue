@@ -1,24 +1,18 @@
-<!-- src/components/widgets/ExtraQuotaCard.vue -->
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import Button from 'primevue/button'
 
 const props = defineProps({
-	title: { type: String, default: 'Zusatzquoten' },
-	unit: { type: String, default: 'M3' }, // etiqueta visual
-	target: { type: Number, default: 0 }, // m³ asignados
-	achieved: { type: Number, default: 0 }, // m³ consumidos (open+won si aplica)
+	// el título lo maneja el padre, acá no se muestra
+	unit: { type: String, default: 'M3' },
+	target: { type: Number, default: 0 },
+	achieved: { type: Number, default: 0 },
 	items: { type: Array, default: () => [] },
-	// mix: [{ key,label, amount (m³), color?, displayAmount?, displayUnit? }, ...] o { label: amountM3 }
 	mix: { type: [Array, Object], default: null },
 	scope: { type: String, default: 'self' },
 	currentUserId: { type: [String, Number], default: null },
-	currentUserName: { type: String, default: '' },
 	pcDetail: { type: Object, default: () => null },
+	showMoreButton: { type: Boolean, default: false },
 })
-
-const router = useRouter()
 
 /* Utils */
 const PALETTE = [
@@ -42,7 +36,7 @@ function fmt(n) {
 			new Intl.NumberFormat('de-DE', {
 				minimumFractionDigits: 2,
 				maximumFractionDigits: 2,
-			}).format(v / 1e6) + ' M'
+			}).format(v / 1e6) + ' M'
 		)
 	}
 	if (Math.abs(v) >= 1e3) {
@@ -50,7 +44,7 @@ function fmt(n) {
 			new Intl.NumberFormat('de-DE', {
 				minimumFractionDigits: 1,
 				maximumFractionDigits: 1,
-			}).format(v / 1e3) + ' k'
+			}).format(v / 1e3) + ' k'
 		)
 	}
 	return new Intl.NumberFormat('de-DE', {
@@ -75,14 +69,14 @@ function normalizeMix(m) {
 	return arr.map((s, i) => ({
 		key: s.key ?? String(i),
 		label: String(s.label ?? s.key ?? i),
-		amountM3: Number(s.amount_m3 ?? s.amount ?? 0) || 0, // usado para la barra
+		amountM3: Number(s.amount_m3 ?? s.amount ?? 0) || 0,
 		color: s.color || pick(i),
-		displayAmount: s.displayAmount ?? s.display_amount ?? null, // solo UI lista
+		displayAmount: s.displayAmount ?? s.display_amount ?? null,
 		displayUnit: s.displayUnit ?? s.display_unit ?? null,
 	}))
 }
 
-/* Totales: porcentaje por ASIGNADO (alokiert). 0=rojo, 100=verde */
+/* Totales: porcentaje por ASIGNADO */
 const totals = computed(() => {
 	const totalAssigned = Math.max(0, Number(props.target) || 0)
 	const rawUsed = Math.max(0, Number(props.achieved) || 0)
@@ -152,28 +146,11 @@ watch(
 		expanded.value = !!v
 	},
 )
-
-function goAnalysis(e) {
-	e?.preventDefault?.()
-	try {
-		router.push({ name: 'ExtraQuotasAnalysis' })
-	} catch {
-		router.push('/extra-quota/analyse')
-	}
-}
 </script>
 
 <template>
 	<div class="xq-root">
-		<!-- Header -->
-		<div class="xq-title-row">
-			<div class="xq-title">{{ title }}</div>
-			<div class="xq-actions">
-				<button v-if="pc" class="xq-toggle" @click.stop.prevent="expanded = !expanded">
-					{{ expanded ? 'Details ausblenden' : 'Details anzeigen' }}
-				</button>
-			</div>
-		</div>
+		<!-- Header viene del padre, acá sólo el cuerpo -->
 
 		<!-- KPIs -->
 		<div class="xq-row">
@@ -186,7 +163,6 @@ function goAnalysis(e) {
 					Verfügbar: {{ fmt(totals.totalAvail) }} <span>{{ unitLabel() }}</span>
 				</div>
 			</div>
-			<!-- Badge ahora usa pctAlloc con escala positiva -->
 			<div class="xq-badge" :class="toneAlloc(totals.pctAlloc)">
 				<span>{{ Math.round(totals.pctAlloc) }}%</span>
 			</div>
@@ -238,7 +214,7 @@ function goAnalysis(e) {
 			</li>
 		</ul>
 
-		<!-- Detalle PC -->
+		<!-- Detalle PC opcional -->
 		<transition name="fade">
 			<div v-if="expanded && pc" class="pc-detail">
 				<div class="pc-title">{{ pc.pcName }}</div>
@@ -280,43 +256,7 @@ function goAnalysis(e) {
 	flex-direction: column;
 	height: 100%;
 	gap: 0.6rem;
-	padding: 10px 12px;
-}
-
-/* Header */
-.xq-title-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.5rem;
-}
-.xq-title {
-	font-size: 0.9rem;
-	font-weight: 500;
-	color: #334155;
-}
-@media (prefers-color-scheme: dark) {
-	.xq-title {
-		color: #e5e7eb;
-	}
-}
-.xq-actions {
-	display: flex;
-	gap: 0.4rem;
-}
-.xq-toggle {
-	border: 1px solid rgba(2, 6, 23, 0.15);
-	background: transparent;
-	color: inherit;
-	border-radius: 0.5rem;
-	padding: 0.25rem 0.5rem;
-	font-size: 0.8rem;
-	cursor: pointer;
-}
-@media (prefers-color-scheme: dark) {
-	.xq-toggle {
-		border-color: rgba(255, 255, 255, 0.25);
-	}
+	padding: 6px 8px 10px;
 }
 
 /* KPIs */
@@ -332,38 +272,28 @@ function goAnalysis(e) {
 	gap: 0.15rem;
 }
 .xq-value {
-	font-size: 1.5rem;
+	font-size: 1.3rem;
 	font-weight: 800;
 	color: #0f172a;
 }
-@media (prefers-color-scheme: dark) {
-	.xq-value {
-		color: #f8fafc;
-	}
-}
 .xq-unit {
-	font-size: 0.95rem;
+	font-size: 0.9rem;
 	font-weight: 600;
 	opacity: 0.85;
 }
 .xq-sub {
-	font-size: 0.85rem;
+	font-size: 0.8rem;
 	color: #64748b;
 	display: flex;
 	gap: 0.5rem;
 	flex-wrap: wrap;
 }
-@media (prefers-color-scheme: dark) {
-	.xq-sub {
-		color: #cbd5e1;
-	}
-}
 
 /* Badge 0->rojo, 100->verde según asignado */
 .xq-badge {
-	min-width: 3.25rem;
-	height: 2rem;
-	padding: 0 0.5rem;
+	min-width: 3.1rem;
+	height: 1.8rem;
+	padding: 0 0.45rem;
 	border-radius: 0.75rem;
 	display: flex;
 	align-items: center;
@@ -371,6 +301,7 @@ function goAnalysis(e) {
 	color: #fff;
 	font-weight: 700;
 	background: linear-gradient(to bottom, #ef4444, #b91c1c);
+	font-size: 0.8rem;
 }
 .xq-badge.mid {
 	background: linear-gradient(to bottom, #fb923c, #ea580c);
@@ -389,11 +320,6 @@ function goAnalysis(e) {
 	width: 100%;
 	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
-@media (prefers-color-scheme: dark) {
-	.xq-stack {
-		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-	}
-}
 .xq-seg {
 	height: 100%;
 }
@@ -403,11 +329,6 @@ function goAnalysis(e) {
 	bottom: -2px;
 	width: 2px;
 	background: #111827;
-}
-@media (prefers-color-scheme: dark) {
-	.xq-marker {
-		background: #f8fafc;
-	}
 }
 
 /* Lista de segmentos */
@@ -437,7 +358,7 @@ function goAnalysis(e) {
 	display: inline-block;
 }
 .name {
-	font-size: 0.85rem;
+	font-size: 0.8rem;
 	color: #475569;
 	font-weight: 600;
 	white-space: nowrap;
@@ -445,27 +366,13 @@ function goAnalysis(e) {
 	text-overflow: ellipsis;
 }
 .uval {
-	font-size: 0.8rem;
+	font-size: 0.78rem;
 	color: #64748b;
 }
-@media (prefers-color-scheme: dark) {
-	.name {
-		color: #e5e7eb;
-	}
-	.uval {
-		color: #cbd5e1;
-		opacity: 0.9;
-	}
-}
 .seg-pct {
-	font-size: 0.8rem;
+	font-size: 0.78rem;
 	font-weight: 700;
 	color: #0f172a;
-}
-@media (prefers-color-scheme: dark) {
-	.seg-pct {
-		color: #f8fafc;
-	}
 }
 
 /* Detalle PC */
@@ -476,11 +383,11 @@ function goAnalysis(e) {
 	padding-top: 0.25rem;
 }
 .pc-title {
-	font-size: 0.85rem;
+	font-size: 0.8rem;
 	font-weight: 600;
 }
 .pc-bar {
-	height: 10px;
+	height: 8px;
 	border-radius: 999px;
 	overflow: hidden;
 	display: flex;
@@ -493,20 +400,20 @@ function goAnalysis(e) {
 .pc-legend {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem 0.9rem;
-	font-size: 0.8rem;
+	gap: 0.4rem 0.8rem;
+	font-size: 0.78rem;
 	align-items: center;
 }
 .pitem {
 	display: flex;
 	align-items: center;
-	gap: 0.4rem;
+	gap: 0.3rem;
 }
 .pitem.total {
 	font-weight: 700;
 }
 .pitem.sep {
-	flex: 0 0 8px;
+	flex: 0 0 6px;
 }
 .dot-win {
 	background: #10b981;
@@ -516,12 +423,5 @@ function goAnalysis(e) {
 }
 .dot-lost {
 	background: #ef4444;
-}
-
-/* Botón PrimeVue “Mehr anzeigen” abajo derecha */
-.more-btn {
-	position: absolute;
-	right: 10px;
-	bottom: 10px;
 }
 </style>

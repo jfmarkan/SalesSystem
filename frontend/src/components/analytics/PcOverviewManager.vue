@@ -1,4 +1,3 @@
-<!-- src/components/analytics/PcBarsByUser.vue -->
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import Tag from 'primevue/tag'
@@ -62,6 +61,7 @@ async function load() {
 			bud: toNum(data?.table?.totals?.budget),
 		}
 	} catch (e) {
+		console.error('PcOverviewManager load error', e)
 		error.value = e?.response?.data?.message || 'Fehler beim Laden.'
 	} finally {
 		loading.value = false
@@ -96,8 +96,6 @@ function layersFor(r) {
 			<div class="left">
 				<span class="title">Profitcenter</span>
 				<span class="muted unit">({{ (unit || '').toUpperCase() }})</span>
-				<span v-if="period" class="muted sep">·</span>
-				<span v-if="period" class="muted">{{ period }}</span>
 			</div>
 			<div class="right">
 				<Tag :value="`Ist ${fmt(totals.ist)}`" class="pill pill-ist" />
@@ -128,7 +126,7 @@ function layersFor(r) {
 					</div>
 				</div>
 
-				<!-- Barra: base Bud, luego Fc, luego Ist. 100% = Bud (o max(Fc, Ist) si Bud=0) -->
+				<!-- Barra apilada compacta -->
 				<div class="bar-wrap">
 					<div class="bg"></div>
 					<div class="seg bud" :style="{ width: layersFor(r).budPct }"></div>
@@ -144,31 +142,38 @@ function layersFor(r) {
 .pc-bars {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 8px;
+	min-height: 0;
+	height: 100%;
+	width: 100%;
 }
+
+/* header compacto */
 .head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 0.5rem;
 }
 .title {
 	font-weight: 700;
+	font-size: 0.9rem;
 }
 .unit,
 .muted {
 	opacity: 0.7;
-}
-.sep {
-	margin: 0 0.4rem;
+	font-size: 0.8rem;
 }
 .right {
 	display: flex;
-	gap: 6px;
+	gap: 4px;
 	align-items: center;
 	flex-wrap: wrap;
 }
 .pill {
-	font-weight: 800;
+	font-weight: 700;
+	font-size: 0.75rem;
+	padding: 0.15rem 0.4rem;
 }
 .pill-bud {
 	background: #dcfce7;
@@ -186,45 +191,45 @@ function layersFor(r) {
 .empty {
 	text-align: center;
 	opacity: 0.8;
-	padding: 8px;
+	padding: 6px;
+	font-size: 0.8rem;
 }
 .err {
 	color: #ef4444;
 }
 
+/* lista scrolleable dentro del alto disponible */
 .list {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 6px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
+	min-height: 0;
+	width: 100%;
+	overflow-y: auto;
 }
 .row {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	padding: 8px 10px;
-	border-radius: 12px;
+	gap: 4px;
+	padding: 6px 6px;
+	border-radius: 10px;
 }
 .row:hover {
-	background: rgba(0, 0, 0, 0.04);
-}
-@media (prefers-color-scheme: dark) {
-	.row:hover {
-		background: rgba(255, 255, 255, 0.06);
-	}
+	background: rgba(0, 0, 0, 0.03);
 }
 
 .top {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
 	justify-content: space-between;
 }
 .name {
-	font-weight: 600;
-	font-size: 0.85rem; /* nombre más chico */
+	font-weight: 500;
+	font-size: 0.8rem;
 	line-height: 1.2;
 	opacity: 0.9;
 	flex: 1 1 auto;
@@ -234,50 +239,36 @@ function layersFor(r) {
 }
 .vals {
 	display: flex;
-	gap: 8px;
+	gap: 4px;
 	justify-content: flex-end;
 	flex: 0 0 auto;
 }
 .val {
-	min-width: 84px;
+	min-width: 64px;
 	text-align: right;
 	font-variant-numeric: tabular-nums;
-	padding: 2px 8px;
+	padding: 1px 5px;
 	border-radius: 8px;
-	font-weight: 800;
-	font-size: 0.84rem;
+	font-weight: 700;
+	font-size: 0.75rem;
 }
 .val.ist {
-	background: rgba(59, 130, 246, 0.16);
-	color: #1e3a8a;
+	background: #D4E2ED;
+	color: #4A657C;
 }
 .val.fc {
-	background: rgba(245, 158, 11, 0.18);
-	color: #7c2d12;
+	background: #F7EAC3;
+	color: #7D733F;
 }
 .val.bud {
-	background: rgba(16, 185, 129, 0.16);
-	color: #065f46;
-}
-@media (prefers-color-scheme: dark) {
-	.val.ist {
-		background: rgba(59, 130, 246, 0.22);
-		color: #93c5fd;
-	}
-	.val.fc {
-		background: rgba(245, 158, 11, 0.22);
-		color: #fbbf24;
-	}
-	.val.bud {
-		background: rgba(16, 185, 129, 0.22);
-		color: #34d399;
-	}
+	background: #BDD8C4;
+	color: #334b3c;
 }
 
-/* Barra angosta, ancho completo, con capas en orden Bud → Fc → Ist */
+/* Barra angosta, ancho completo */
 .bar-wrap {
 	position: relative;
-	height: 10px;
+	height: 8px;
 	border-radius: 999px;
 	overflow: hidden;
 	width: 100%;
@@ -287,11 +278,7 @@ function layersFor(r) {
 	inset: 0;
 	background: rgba(0, 0, 0, 0.08);
 }
-@media (prefers-color-scheme: dark) {
-	.bg {
-		background: rgba(255, 255, 255, 0.12);
-	}
-}
+
 .seg {
 	position: absolute;
 	left: 0;
@@ -300,15 +287,12 @@ function layersFor(r) {
 	border-radius: 999px;
 }
 .bud {
-	background: #10b981;
-	opacity: 0.6;
-} /* verde */
+	background: #7AA488;
+}
 .fc {
-	background: #f59e0b;
-	opacity: 0.9;
-} /* amarillo */
+	background: #B3A45B;
+}
 .ist {
-	background: #3b82f6;
-	opacity: 1;
-} /* azul */
+	background: #6E8DA8;
+}
 </style>

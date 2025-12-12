@@ -2,19 +2,59 @@
 	<!-- Toast para mensajes -->
 	<Toast />
 
-	<!-- Confirmación de cambios sin guardar -->
-	<Dialog v-model:visible="confirmVisible" :modal="true" :draggable="false" :dismissableMask="true"
-		header="Ungespeicherte Änderungen" :style="{ width: '520px' }">
-		<p class="mb-3">
-			Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?
-		</p>
-		<div class="flex justify-content-end gap-2">
-			<Button label="Abbrechen" severity="secondary"
-				@click="(() => { confirmVisible = false; pendingChange = null })()" />
-			<Button label="Verwerfen" severity="danger" @click="discardAndApply" />
-			<Button label="Speichern" icon="pi pi-save" @click="saveAndApply" />
-		</div>
-	</Dialog>
+<!-- Confirmación de cambios sin guardar → estilo PrimeVue demo -->
+<Dialog
+  v-model:visible="confirmVisible"
+  :modal="true"
+  :draggable="false"
+  :dismissableMask="true"
+  header="Ungespeicherte Änderungen"
+  :style="{ width: '380px' }"
+  class="confirm-dialog"
+  :maskClass="'confirm-dialog-mask'"
+  appendTo="body"
+>
+  <div class="confirm-body">
+    <!-- Icono central redondo como en el ejemplo -->
+    <div class="confirm-icon-row">
+      <div class="confirm-icon-circle">
+        <span class="confirm-icon-mark">!</span>
+      </div>
+    </div>
+
+    <!-- Texto -->
+    <p class="confirm-text">
+      Es gibt nicht gespeicherte Änderungen. Möchtest du sie speichern?
+    </p>
+
+    <div class="confirm-divider"></div>
+
+    <!-- Botones estilo Cancel / Save -->
+    <div class="confirm-actions">
+      <Button
+        label="Abbrechen"
+        icon="pi pi-times"
+        size="small"
+		class="cancel-btn"
+        @click="(() => { confirmVisible = false; pendingChange = null })()"
+      />
+      <Button
+        label="Verwerfen"
+        icon="pi pi-trash"
+        size="small"
+		class="discard-btn"
+        @click="discardAndApply"
+      />
+      <Button
+        label="Speichern"
+        icon="pi pi-check"
+        size="small"
+        class="confirm-save-btn"
+        @click="saveAndApply"
+      />
+    </div>
+  </div>
+</Dialog>
 
 	<!-- Loader fullscreen -->
 	<LoaderFullScreen v-if="loadingAll" />
@@ -23,21 +63,21 @@
 	<div class="forecast-grid">
 		<!-- Filtros -->
 		<aside class="pane left">
-			<div class="list-wrap">
-				<div class="filters-inner p-3">
-					<div class="field-block flex-1 min-h-0">
-						<div class="selector-host">
-							<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions"
-								:primary-id="primaryId" :secondary-options="secondaryOptions"
-								:secondary-id="secondaryId" @update:mode="onMode" @update:primary-id="onPrimary"
-								@update:secondary-id="onSecondary" />
-							<div class="mt-2 text-muted text-sm" v-if="loading">Lädt…</div>
-						</div>
-					</div>
+			<!-- Bloque de filtros: se estira, el botón está abajo -->
+			<div class="filters-inner p-3">
+				<ForecastFilters class="ff-host" :mode="mode" :primary-options="primaryOptions" :primary-id="primaryId"
+					:secondary-options="secondaryOptions" :secondary-id="secondaryId" @update:mode="onMode"
+					@update:primary-id="onPrimary" @update:secondary-id="onSecondary" />
+
+				<div class="mt-2 text-muted text-sm" v-if="loading">
+					Lädt…
 				</div>
 			</div>
+
+			<!-- Botón fijo abajo del pane -->
 			<Button icon="pi pi-arrow-right" label="Weiter" severity="primary" class="btn-next" @click="handleNext" />
 		</aside>
+
 
 
 		<!-- Contenido -->
@@ -113,7 +153,7 @@
 							</div>
 							<ForecastTable ref="tableRef" :months="months" :ventas="sales" :budget="budget"
 								:forecast="forecast" :viewport-start="viewportStart" :viewport-size="12"
-								:is-editable-ym="isEditableYM" @edit-forecast="({ index, value }) => {
+								:is-editable-ym="isEditableYM" :highlight-mandatory="true" @edit-forecast="({ index, value }) => {
 									const n = Number(String(value).replace(',', '.'))
 									forecast[index] = isNaN(n) ? 0 : n
 								}" />
@@ -830,6 +870,176 @@ const tableRef = ref(null)
 	border: 1px dashed var(--border);
 	border-radius: 12px;
 	background: color-mix(in oklab, var(--surface) 65%, transparent);
+}
+
+/* ========== CONFIRM DIALOG ========== */
+
+/* ===== Confirm dialog estilo PrimeVue demo ===== */
+
+/* Fondo con ligera oscuridad y blur suave */
+:deep(.confirm-dialog-mask) {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.25);
+}
+
+/* Caja del diálogo */
+:deep(.confirm-dialog) {
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.35);
+}
+
+/* Header tipo screenshot: compacto, con título y X */
+:deep(.confirm-dialog .p-dialog-header) {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+:deep(.confirm-dialog .p-dialog-title) {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Icono de cerrar más pequeño y discreto */
+:deep(.confirm-dialog .p-dialog-header-icon) {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+:deep(.confirm-dialog .p-dialog-header-icon:hover) {
+  background: rgba(148, 163, 184, 0.2);
+  color: #111827;
+}
+
+/* Contenido interior */
+:deep(.confirm-dialog .p-dialog-content) {
+  padding: 0.75rem 1rem 0.75rem 1rem;
+}
+
+/* Layout interno del dialog */
+.confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Icono circular central */
+.confirm-icon-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.confirm-icon-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 2px solid #9ca3af;          /* gris azulado como el ejemplo */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+}
+
+.confirm-icon-mark {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+/* Texto principal */
+.confirm-text {
+  margin: 0.5rem 0 0.9rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+/* Divider sobre los botones */
+.confirm-divider {
+  height: 1px;
+  background: #e5e7eb;
+}
+
+/* Footer con botones a la derecha */
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 0.35rem;
+}
+
+/* Botones relativamente pequeños y pill-shaped */
+.confirm-actions :deep(.p-button) {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.8rem;
+}
+
+/* Cancel → outlined blanco, como el screenshot */
+.confirm-actions :deep(.p-button-outlined) {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.confirm-actions :deep(.p-button-outlined:hover) {
+  background: #f9fafb;
+}
+
+/* Verwerfen → texto gris (más discreto) */
+.confirm-actions :deep(.p-button-text) {
+  color: #6b7280;
+}
+
+.confirm-actions :deep(.p-button-text:hover) {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+/* Speichern → botón oscuro estilo "Save" */
+.confirm-save-btn :deep(.p-button-label),
+.confirm-save-btn :deep(.p-button-icon) {
+  /* nada aquí, sólo para tener selector */
+}
+
+.confirm-save-btn {
+  /* wrapper */
+}
+
+.confirm-actions :deep(.cancel-btn.p-button) {
+  background: #737373;   /* casi negro, como el screenshot */
+  border-color: #737373;
+  color: #f9fafb;
+}
+
+.confirm-actions :deep(.discard-btn.p-button) {
+  background: #A3535B;   /* casi negro, como el screenshot */
+  border-color: #A3535B;
+  color: #f9fafb;
+}
+
+.confirm-actions :deep(.confirm-save-btn.p-button) {
+  background: #668C73;   /* casi negro, como el screenshot */
+  border-color: #668C73;
+  color: #f9fafb;
+}
+
+.confirm-actions :deep(.cancel-btn.p-button:hover) {
+  background: #4F4F4F;
+  border-color: #4F4F4F;
+}
+
+.confirm-actions :deep(.discard-btn.p-button:hover) {
+  background: #8C474F;
+  border-color: #8C474F;
+}
+
+.confirm-actions :deep(.confirm-save-btn.p-button:hover) {
+  background: #557761;
+  border-color: #557761;
 }
 
 /* === RESPONSIVE === */

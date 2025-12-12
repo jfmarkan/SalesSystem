@@ -72,6 +72,11 @@ class User extends Authenticatable
             ->whereNull('team_members.deleted_at');
     }
 
+    public function teamMembers()
+    {
+        return $this->hasMany(\App\Models\TeamMember::class);
+    }
+
     // Team where the user is manager
     public function managedTeam()
     {
