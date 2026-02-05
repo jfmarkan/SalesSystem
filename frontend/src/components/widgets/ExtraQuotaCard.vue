@@ -1,4 +1,3 @@
-
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -29,13 +28,13 @@ function fmt(n) {
 		return new Intl.NumberFormat('de-DE', {
 			minimumFractionDigits: 2,
 			maximumFractionDigits: 2
-		}).format(v / 1e6) + ' M'
+		}).format(v / 1e6) + ' M'
 	}
 	if (Math.abs(v) >= 1e3) {
 		return new Intl.NumberFormat('de-DE', {
 			minimumFractionDigits: 1,
 			maximumFractionDigits: 1
-		}).format(v / 1e3) + ' k'
+		}).format(v / 1e3) + ' k'
 	}
 	return new Intl.NumberFormat('de-DE', {
 		maximumFractionDigits: 0
@@ -76,9 +75,20 @@ const totals = computed(() => {
 function toneAlloc(p) { if (p >= 66) return 'ok'; if (p >= 33) return 'mid'; return 'low' }
 
 const baseSegs = computed(() => normalizeMix(props.mix))
+
+/**
+ * LEYENDA: solo TOP 3 segmentos por volumen (amountM3).
+ * La barra sigue usando TODOS los segmentos (baseSegs),
+ * pero la lista de abajo muestra solo los más relevantes.
+ */
 const listSegs = computed(() => {
 	const T = totals.value.totalAssigned || 0
-	return baseSegs.value.map(s => ({ ...s, pctOfTarget: T > 0 ? (s.amountM3 * 100 / T) : 0 }))
+	const sorted = [...baseSegs.value].sort((a, b) => b.amountM3 - a.amountM3)
+	const top3 = sorted.slice(0, 3)
+	return top3.map(s => ({
+		...s,
+		pctOfTarget: T > 0 ? (s.amountM3 * 100 / T) : 0
+	}))
 })
 
 function formatPercentComma(value) {
@@ -153,26 +163,35 @@ function goAnalysis(e) {
 
 		<!-- Barra -->
 		<div v-if="baseSegs.length" class="xq-stack" aria-label="Zusammensetzung">
-			<div v-for="s in baseSegs" :key="s.key" class="xq-seg"
+			<div
+				v-for="s in baseSegs"
+				:key="s.key"
+				class="xq-seg"
 				:style="{ width: (totals.totalAssigned > 0 ? (s.amountM3 * 100 / totals.totalAssigned) : 0) + '%', background: s.color }"
-				:title="`${s.label}: ${fmt(s.amountM3)} m³`"></div>
-			<div class="xq-marker"
+				:title="`${s.label}: ${fmt(s.amountM3)} m³`"
+			></div>
+			<div
+				class="xq-marker"
 				:style="{ left: (Math.min(100, (totals.totalUsed / Math.max(1, totals.totalAssigned)) * 100)) + '%' }"
-				title="Alokation"></div>
+				title="Alokation"
+			></div>
 		</div>
 		<div v-else class="xq-empty">Keine Zusammensetzung verfügbar.</div>
 
-		<!-- Lista -->
+		<!-- Lista: SOLO TOP 3 -->
 		<ul v-if="listSegs.length" class="seg-list">
 			<li v-for="s in listSegs" :key="s.key" class="seg-li">
 				<div class="seg-left">
 					<i class="seg-dot" :style="{ background: s.color }" />
 					<span class="name">{{ s.label }}</span>
-					<span class="uval">– {{
-						s.displayAmount != null
-							? fmtUnit(s.displayAmount, s.displayUnit)
-							: fmtUnit(s.amountM3, 'm³')
-					}}</span>
+					<span class="uval">
+						–
+						{{
+							s.displayAmount != null
+								? fmtUnit(s.displayAmount, s.displayUnit)
+								: fmtUnit(s.amountM3, 'm³')
+						}}
+					</span>
 				</div>
 				<div class="seg-pct">{{ formatPercentComma(s.pctOfTarget) }}</div>
 			</li>
@@ -326,7 +345,7 @@ function goAnalysis(e) {
 	background: #111827;
 }
 
-/* ===== LISTA DE SEGMENTOS ===== */
+/* ===== LISTA DE SEGMENTOS (TOP 3) ===== */
 .seg-list {
 	list-style: none;
 	padding: 0;

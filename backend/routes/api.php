@@ -93,6 +93,8 @@ Route::prefix('sales-force')->group(function () {
         Route::get('/series', [CompanyAnalyticsController::class, 'series']);
         Route::get('/pc/overview', [CompanyAnalyticsController::class, 'pcOverview']);
         Route::get('/pc/list',     [CompanyAnalyticsController::class, 'pcList']);
+        Route::get('/pc/fiscal-meta', [CompanyAnalyticsController::class, 'fiscalMeta']);
+
     });
 
     Route::prefix('budget-cases')->group(function () {

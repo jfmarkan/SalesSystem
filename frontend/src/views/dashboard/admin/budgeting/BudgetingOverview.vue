@@ -470,63 +470,59 @@ const pcsRaw = computed(() => {
 
 /* PC scenarios (C/D assumptions aplicadas) */
 const pcScenarioList = computed(() => {
-	const list = pcsRaw.value || []
-	const result = []
+  const list = pcsRaw.value || []
+  const result = []
 
-	for (const pc of list) {
-		const mix = pc.class_mix || {}
-		const items = []
+  for (const pc of list) {
+    const mix = pc.class_mix || {}
+    const items = []
 
-		for (const key of classKeysAll) {
-			const row = mix[key] || {}
-			const base = Number(row.base_m3 ?? 0)
-			if (!base) continue
+    // base por clase (viene del backend)
+    for (const key of classKeysAll) {
+      const row = mix[key] || {}
+      const base = Number(row.base_m3 ?? 0)
+      if (!base) continue
+      items.push({ key, base })
+    }
 
-			let best = 0
-			let worst = 0
+    const baseTotal = items.reduce((s, it) => s + it.base, 0)
 
-			if (key === 'C') {
-				const pctBest = Number(cBestPct.value || 0)
-				const pctWorst = Number(cWorstPct.value || 0)
-				best = base * (1 + pctBest / 100)
-				worst = base * (1 + pctWorst / 100)
-			} else if (key === 'D') {
-				const pctBest = Number(dBestPct.value || 0)
-				const pctWorst = Number(dWorstPct.value || 0)
-				best = base * (1 + pctBest / 100)
-				worst = base * (1 + pctWorst / 100)
-			} else if (key === 'X') {
-				best = base
-				worst = base
-			} else {
-				best = base
-				worst = base
-			}
+    // ✅ START: usar best/worst del backend para A/B/PA/PB (ya están calculados)
+    let bestTotal = Number(pc.best_m3 ?? 0)
+    let worstTotal = Number(pc.worst_m3 ?? 0)
 
-			items.push({ key, base, best, worst })
-		}
+    // ✅ Agregar C/D según inputs (solo delta sobre su base)
+    const baseC = Number(mix?.C?.base_m3 ?? 0)
+    const baseD = Number(mix?.D?.base_m3 ?? 0)
 
-		const baseTotal = items.reduce((s, it) => s + it.base, 0)
-		const bestTotal = items.reduce((s, it) => s + it.best, 0)
-		const worstTotal = items.reduce((s, it) => s + it.worst, 0)
+    if (baseC) {
+      bestTotal += baseC * (Number(cBestPct.value || 0) / 100)
+      worstTotal += baseC * (Number(cWorstPct.value || 0) / 100)
+    }
+    if (baseD) {
+      bestTotal += baseD * (Number(dBestPct.value || 0) / 100)
+      worstTotal += baseD * (Number(dWorstPct.value || 0) / 100)
+    }
 
-		const mixWithShare = items.map((it) => ({
-			...it,
-			share_pct: baseTotal > 0 ? (it.base / baseTotal) * 100 : 0,
-		}))
+    // Mix con share
+    const mixWithShare = items.map((it) => ({
+      ...it,
+      share_pct: baseTotal > 0 ? (it.base / baseTotal) * 100 : 0,
+    }))
 
-		result.push({
-			...pc,
-			name: pc.name ?? pcDisplayName(pc),
-			scenario_base: baseTotal,
-			scenario_best: bestTotal,
-			scenario_worst: worstTotal,
-			mix: mixWithShare,
-		})
-	}
+    result.push({
+      ...pc,
+      name: pc.name ?? pcDisplayName(pc),
+      scenario_base: baseTotal,
+      scenario_best: bestTotal,
+      scenario_worst: worstTotal,
+      mix: mixWithShare,
+    })
+  }
 
-	return result
+  return result
 })
+
 
 /* Estado de sub-acordeones por PC */
 const openPcSummary = ref({})

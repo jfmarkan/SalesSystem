@@ -14,23 +14,89 @@ class DashboardController extends Controller
     public function index(Request $req)
     {
         $userId = (int) $req->query('user_id', Auth::id());
+
         try {
             // ---- unidad pedida (base VK-EH; soporta VKEH | M3 | EUR)
             $unit = strtoupper($req->query('unit', 'VKEH'));
-            if (!in_array($unit, ['VKEH','M3','EUR'])) $unit = 'VKEH';
-
-            // Period anchor (Y-m). El rango real es abril .. último mes completo relativo a "period"
-            $period    = $req->query('period', Carbon::now()->format('Y-m'));
-            $refMonth  = Carbon::createFromFormat('Y-m', $period)->startOfMonth();
-            $lastComplete = (clone $refMonth)->subMonth()->endOfMonth();
-
-            // Inicio fiscal en abril del año correspondiente
-            if ($lastComplete->month >= 4) {
-                $rangeStart = Carbon::create($lastComplete->year, 4, 1)->startOfMonth();
-            } else {
-                $rangeStart = Carbon::create($lastComplete->year - 1, 4, 1)->startOfMonth();
+            if (!in_array($unit, ['VKEH', 'M3', 'EUR'])) {
+                $unit = 'VKEH';
             }
-            $rangeEnd = (clone $lastComplete)->endOfMonth();
+
+            // ==== GRANULARIDAD Y PERÍODO (MES ANCLA) =======================
+            $rawPeriod = $req->query('period', Carbon::now()->format('Y-m'));
+            try {
+                $refMonth = Carbon::createFromFormat('Y-m', $rawPeriod)->startOfMonth();
+            } catch (\Exception $e) {
+                $refMonth = Carbon::now()->startOfMonth();
+                $rawPeriod = $refMonth->format('Y-m');
+            }
+
+            // month|quarter|semester|year
+            $granularity = strtolower($req->query('granularity', 'year'));
+            if (!in_array($granularity, ['month', 'quarter', 'semester', 'year'])) {
+                $granularity = 'year';
+            }
+
+            // Año fiscal: empieza en abril
+            $fyStartYear = $refMonth->month >= 4 ? $refMonth->year : $refMonth->year - 1;
+            $fyStart = Carbon::create($fyStartYear, 4, 1)->startOfMonth();
+            $fyEnd   = Carbon::create($fyStartYear + 1, 3, 1)->endOfMonth();
+
+            // Rango según granularidad (SIEMPRE sobre año fiscal)
+            switch ($granularity) {
+                case 'month':
+                    // solo el mes seleccionado
+                    $rangeStart = (clone $refMonth)->startOfMonth();
+                    $rangeEnd   = (clone $refMonth)->endOfMonth();
+                    break;
+
+                case 'quarter':
+                    // Quartale basados en FY:
+                    // Q1: Apr-Jun, Q2: Jul-Sep, Q3: Okt-Dez, Q4: Jan-Mär
+                    $m = $refMonth->month;
+                    $y = $refMonth->year;
+                    if ($m >= 4 && $m <= 6) {
+                        $rangeStart = Carbon::create($y, 4, 1);
+                        $rangeEnd   = Carbon::create($y, 6, 1)->endOfMonth();
+                    } elseif ($m >= 7 && $m <= 9) {
+                        $rangeStart = Carbon::create($y, 7, 1);
+                        $rangeEnd   = Carbon::create($y, 9, 1)->endOfMonth();
+                    } elseif ($m >= 10 && $m <= 12) {
+                        $rangeStart = Carbon::create($y, 10, 1);
+                        $rangeEnd   = Carbon::create($y, 12, 1)->endOfMonth();
+                    } else { // 1..3 => Q4 des Fiskaljahres
+                        $rangeStart = Carbon::create($y, 1, 1);
+                        $rangeEnd   = Carbon::create($y, 3, 1)->endOfMonth();
+                    }
+                    break;
+
+                case 'semester':
+                    // 1. Halbjahr: Apr-Sep, 2. Halbjahr: Okt-Mär
+                    $m = $refMonth->month;
+                    $y = $refMonth->year;
+                    if ($m >= 4 && $m <= 9) {
+                        // 1. Halbjahr des laufenden Fiskaljahres
+                        $rangeStart = Carbon::create($y, 4, 1);
+                        $rangeEnd   = Carbon::create($y, 9, 1)->endOfMonth();
+                    } else {
+                        // 2. Halbjahr: Okt (Jahr X) – Mär (Jahr X+1)
+                        if ($m >= 10) {
+                            $rangeStart = Carbon::create($y, 10, 1);
+                            $rangeEnd   = Carbon::create($y + 1, 3, 1)->endOfMonth();
+                        } else { // 1..3
+                            $rangeStart = Carbon::create($y - 1, 10, 1);
+                            $rangeEnd   = Carbon::create($y, 3, 1)->endOfMonth();
+                        }
+                    }
+                    break;
+
+                case 'year':
+                default:
+                    // Geschäftsjahr komplett (Apr..Mär)
+                    $rangeStart = $fyStart;
+                    $rangeEnd   = $fyEnd;
+                    break;
+            }
 
             // YM enteros para filtro (yyyyMM)
             $ym = fn(Carbon $d) => $d->year * 100 + $d->month;
@@ -50,40 +116,59 @@ class DashboardController extends Controller
 
             if (!$hasAssignments || !$hasCPC) {
                 return response()->json([
-                    'period'  => $period,
-                    'unit'    => $unit,
-                    'range'   => ['from'=>$rangeStart->toDateString(),'to'=>$rangeEnd->toDateString()],
-                    'kpis'    => ['items'=>[], 'period'=>$period],
+                    'period'      => $rawPeriod,
+                    'granularity' => $granularity,
+                    'unit'        => $unit,
+                    'range'       => [
+                        'from' => $rangeStart->toDateString(),
+                        'to'   => $rangeEnd->toDateString(),
+                    ],
+                    'kpis'    => ['items' => [], 'period' => $rawPeriod],
                     'chart'   => [
-                        'labels'=>[],
-                        'codes'=>[],
-                        'series'=>[
-                            ['name'=>'Ist','data'=>[]],
-                            ['name'=>'Prognose','data'=>[]],
-                            ['name'=>'Budget','data'=>[]],
+                        'labels' => [],
+                        'codes'  => [],
+                        'series' => [
+                            ['name' => 'Ist',       'data' => []],
+                            ['name' => 'Prognose',  'data' => []],
+                            ['name' => 'Budget',    'data' => []],
                         ],
-                        'unit'=>$unit
+                        'unit' => $unit,
                     ],
                     'table'   => [
-                        'rows'=>[],
-                        'totals'=>['ist'=>0,'prognose'=>0,'budget'=>0,'unit'=>$unit],
-                        'unit'=>$unit
+                        'rows'   => [],
+                        'totals' => [
+                            'ist'      => 0,
+                            'prognose' => 0,
+                            'budget'   => 0,
+                            'unit'     => $unit,
+                        ],
+                        'unit'   => $unit,
                     ],
-                    'calendar'=> ['from'=>Carbon::now()->startOfMonth()->toDateString(), 'to'=>null, 'events'=>collect()],
-                    'extra'   => ['label'=>'Zusatzquote','period'=>$period,'total'=>0,'unit'=>'M3','by_pc'=>[]],
+                    'calendar'=> $this->buildCalendar(),
+                    'extra'   => [
+                        'label'  => 'Zusatzquote',
+                        'period' => $rawPeriod,
+                        'total'  => 0,
+                        'unit'   => 'M3',
+                        'by_pc'  => [],
+                    ],
                 ]);
             }
 
             // ---- Profit centers asignados al usuario
             $pcNameCol = null;
             if ($hasPC) {
-                if (Schema::hasColumn('profit_centers','profit_center_name')) $pcNameCol = 'profit_center_name';
-                if (Schema::hasColumn('profit_centers','prfit_center_name'))  $pcNameCol = $pcNameCol ?: 'prfit_center_name';
+                if (Schema::hasColumn('profit_centers', 'profit_center_name')) {
+                    $pcNameCol = 'profit_center_name';
+                }
+                if (Schema::hasColumn('profit_centers', 'prfit_center_name')) {
+                    $pcNameCol = $pcNameCol ?: 'prfit_center_name';
+                }
             }
 
             $assigned = DB::table('assignments AS a')
-                ->join('client_profit_centers AS cpc','cpc.id','=','a.client_profit_center_id')
-                ->leftJoin('profit_centers AS pc','pc.profit_center_code','=','cpc.profit_center_code')
+                ->join('client_profit_centers AS cpc', 'cpc.id', '=', 'a.client_profit_center_id')
+                ->leftJoin('profit_centers AS pc', 'pc.profit_center_code', '=', 'cpc.profit_center_code')
                 ->where('a.user_id', $userId)
                 ->select(
                     'cpc.id AS cpc_id',
@@ -97,35 +182,50 @@ class DashboardController extends Controller
             $pcMeta = [];
             foreach ($assigned as $row) {
                 $pcMeta[$row->pc_code] = [
-                    'code' => (string)$row->pc_code,
-                    'name' => (string)$row->pc_name,
+                    'code' => (string) $row->pc_code,
+                    'name' => (string) $row->pc_name,
                 ];
             }
 
             if (empty($cpcIds)) {
                 $calendar = $this->buildCalendar();
                 return response()->json([
-                    'period'  => $period,
-                    'unit'    => $unit,
-                    'range'   => ['from'=>$rangeStart->toDateString(),'to'=>$rangeEnd->toDateString()],
-                    'kpis'    => ['items'=>[], 'period'=>$period],
+                    'period'      => $rawPeriod,
+                    'granularity' => $granularity,
+                    'unit'        => $unit,
+                    'range'       => [
+                        'from' => $rangeStart->toDateString(),
+                        'to'   => $rangeEnd->toDateString(),
+                    ],
+                    'kpis'    => ['items' => [], 'period' => $rawPeriod],
                     'chart'   => [
-                        'labels'=>[],
-                        'codes'=>[],
-                        'series'=>[
-                            ['name'=>'Ist','data'=>[]],
-                            ['name'=>'Prognose','data'=>[]],
-                            ['name'=>'Budget','data'=>[]],
+                        'labels' => [],
+                        'codes'  => [],
+                        'series' => [
+                            ['name' => 'Ist',       'data' => []],
+                            ['name' => 'Prognose',  'data' => []],
+                            ['name' => 'Budget',    'data' => []],
                         ],
-                        'unit'=>$unit
+                        'unit' => $unit,
                     ],
                     'table'   => [
-                        'rows'=>[],
-                        'totals'=>['ist'=>0,'prognose'=>0,'budget'=>0,'unit'=>$unit],
-                        'unit'=>$unit
+                        'rows'   => [],
+                        'totals' => [
+                            'ist'      => 0,
+                            'prognose' => 0,
+                            'budget'   => 0,
+                            'unit'     => $unit,
+                        ],
+                        'unit'   => $unit,
                     ],
                     'calendar'=> $calendar,
-                    'extra'   => ['label'=>'Zusatzquote','period'=>$period,'total'=>0,'unit'=>'M3','by_pc'=>[]],
+                    'extra'   => [
+                        'label'  => 'Zusatzquote',
+                        'period' => $rawPeriod,
+                        'total'  => 0,
+                        'unit'   => 'M3',
+                        'by_pc'  => [],
+                    ],
                 ]);
             }
 
@@ -133,8 +233,7 @@ class DashboardController extends Controller
             $ymRaw = fn($alias) => DB::raw("({$alias}.fiscal_year*100 + {$alias}.month)");
 
             /* ============================================================
-             *  VENTAS: usar columnas reales (sales_units, cubic_meters, euros)
-             *  Sin factores. Para PCs 110/170/171/175 la “base” (VKEH) será m³.
+             *  VENTAS
              * ============================================================ */
             $sumSalesBase = []; // VK-EH “base” por PC (units o m³ según PC)
             $sumSalesM3   = []; // siempre m³ reales de la tabla
@@ -142,79 +241,78 @@ class DashboardController extends Controller
 
             if ($hasSales) {
                 $rows = DB::table('sales AS s')
-                    ->join('client_profit_centers AS cpc','cpc.id','=','s.client_profit_center_id')
+                    ->join('client_profit_centers AS cpc', 'cpc.id', '=', 's.client_profit_center_id')
                     ->whereIn('cpc.id', $cpcIds)
                     ->where($ymRaw('s'), '>=', $startYM)
                     ->where($ymRaw('s'), '<=', $endYM)
                     ->groupBy('cpc.profit_center_code')
                     ->select(
                         'cpc.profit_center_code AS pc_code',
-                        DB::raw('COALESCE(SUM(s.sales_units),0)     AS units'),
-                        DB::raw('COALESCE(SUM(s.cubic_meters),0)    AS m3'),
-                        DB::raw('COALESCE(SUM(s.euros),0)           AS eur')
+                        DB::raw('COALESCE(SUM(s.sales_units),0)  AS units'),
+                        DB::raw('COALESCE(SUM(s.cubic_meters),0) AS m3'),
+                        DB::raw('COALESCE(SUM(s.euros),0)       AS eur')
                     )
                     ->get();
 
                 foreach ($rows as $r) {
                     $code  = $r->pc_code;
-                    $units = (float)$r->units;
-                    $m3    = (float)$r->m3;
-                    $eur   = (float)$r->eur;
+                    $units = (float) $r->units;
+                    $m3    = (float) $r->m3;
+                    $eur   = (float) $r->eur;
 
                     $sumSalesM3[$code]  = $m3;
                     $sumSalesEUR[$code] = $eur;
 
                     // PCs especiales: su “VK-EH” lo queremos en m³
-                    $isSpecialM3Base = in_array((int)$code, [110,170,171,175], true);
+                    $isSpecialM3Base = in_array((int) $code, [110, 170, 171, 175], true);
                     $sumSalesBase[$code] = $isSpecialM3Base ? $m3 : $units;
                 }
             }
 
             /* ============================================================
-             *  FORECAST & BUDGET: siguen en columna `volume` (VK-EH base)
-             *  Para m³ / € seguimos usando unit_conversions.
+             *  FORECAST & BUDGET
              * ============================================================ */
             $sumForecast = [];
             if ($hasForecasts) {
                 // última versión por (cpc, year, month)
                 $latest = DB::table('forecasts')
-                    ->select('client_profit_center_id','fiscal_year','month', DB::raw('MAX(version) AS mv'))
-                    ->groupBy('client_profit_center_id','fiscal_year','month');
+                    ->select('client_profit_center_id', 'fiscal_year', 'month', DB::raw('MAX(version) AS mv'))
+                    ->groupBy('client_profit_center_id', 'fiscal_year', 'month');
 
                 $sumForecast = DB::table('forecasts AS f')
-                    ->joinSub($latest, 'fm', function($j){
-                        $j->on('fm.client_profit_center_id','=','f.client_profit_center_id')
-                          ->on('fm.fiscal_year','=','f.fiscal_year')
-                          ->on('fm.month','=','f.month')
-                          ->on('fm.mv','=','f.version');
+                    ->joinSub($latest, 'fm', function ($j) {
+                        $j->on('fm.client_profit_center_id', '=', 'f.client_profit_center_id')
+                          ->on('fm.fiscal_year', '=', 'f.fiscal_year')
+                          ->on('fm.month', '=', 'f.month')
+                          ->on('fm.mv', '=', 'f.version');
                     })
-                    ->join('client_profit_centers AS cpc','cpc.id','=','f.client_profit_center_id')
+                    ->join('client_profit_centers AS cpc', 'cpc.id', '=', 'f.client_profit_center_id')
                     ->whereIn('cpc.id', $cpcIds)
                     ->where($ymRaw('f'), '>=', $startYM)
                     ->where($ymRaw('f'), '<=', $endYM)
                     ->groupBy('cpc.profit_center_code')
                     ->select('cpc.profit_center_code AS pc_code', DB::raw('SUM(f.volume) AS vkeh'))
-                    ->pluck('vkeh','pc_code')->map(fn($v)=> (float)$v)->toArray();
+                    ->pluck('vkeh', 'pc_code')->map(fn($v) => (float) $v)->toArray();
             }
 
             $sumBudget = [];
             if ($hasBudgets) {
                 $sumBudget = DB::table('budgets AS b')
-                    ->join('client_profit_centers AS cpc','cpc.id','=','b.client_profit_center_id')
+                    ->join('client_profit_centers AS cpc', 'cpc.id', '=', 'b.client_profit_center_id')
                     ->whereIn('cpc.id', $cpcIds)
                     ->where($ymRaw('b'), '>=', $startYM)
                     ->where($ymRaw('b'), '<=', $endYM)
                     ->groupBy('cpc.profit_center_code')
                     ->select('cpc.profit_center_code AS pc_code', DB::raw('SUM(b.volume) AS vkeh'))
-                    ->pluck('vkeh','pc_code')->map(fn($v)=> (float)$v)->toArray();
+                    ->pluck('vkeh', 'pc_code')->map(fn($v) => (float) $v)->toArray();
             }
 
-            // ---- PCs con datos (union de claves con alguna suma >0)
+            // ---- PCs con datos
             $pcCodes = collect(array_unique(array_merge(
                 array_keys($sumSalesBase),
                 array_keys($sumForecast),
                 array_keys($sumBudget)
-            )))->filter(function($code) use ($sumSalesBase,$sumForecast,$sumBudget){
+            )))->filter(function ($code) use ($sumSalesBase, $sumForecast, $sumBudget) {
                 $sv = $sumSalesBase[$code]  ?? 0;
                 $fv = $sumForecast[$code]   ?? 0;
                 $bv = $sumBudget[$code]     ?? 0;
@@ -222,34 +320,34 @@ class DashboardController extends Controller
             })->values()->all();
 
             // Metadatos de PC
-            $labels  = [];
-            $codesArr= [];
+            $labels   = [];
+            $codesArr = [];
             foreach ($pcCodes as $code) {
-                $codesArr[] = (string)$code;
-                $labels[]   = isset($pcMeta[$code]) ? (string)$pcMeta[$code]['name'] : (string)$code;
+                $codesArr[] = (string) $code;
+                $labels[]   = isset($pcMeta[$code]) ? (string) $pcMeta[$code]['name'] : (string) $code;
             }
 
-            // ---- conversiones por PC (solo para Budget/Forecast)
+            // ---- conversiones por PC
             $conv = []; // [pc => ['from_unit'=>, 'to_m3'=>, 'm3_to_eur'=>]]
             if ($hasConversions && !empty($pcCodes)) {
                 $rows = DB::table('unit_conversions')
                     ->whereIn('profit_center_code', $pcCodes)
-                    ->select('profit_center_code','from_unit','factor_to_m3','factor_to_euro')
+                    ->select('profit_center_code', 'from_unit', 'factor_to_m3', 'factor_to_euro')
                     ->get();
                 foreach ($rows as $r) {
                     $conv[$r->profit_center_code] = [
-                        'from_unit'  => strtoupper((string)($r->from_unit ?? 'VKEH')),
-                        'to_m3'      => (float)($r->factor_to_m3   ?? 1),
-                        'm3_to_eur'  => (float)($r->factor_to_euro ?? 1),
+                        'from_unit'  => strtoupper((string) ($r->from_unit ?? 'VKEH')),
+                        'to_m3'      => (float) ($r->factor_to_m3   ?? 1),
+                        'm3_to_eur'  => (float) ($r->factor_to_euro ?? 1),
                     ];
                 }
             }
 
             // helper: convertir Budget/Forecast desde su unidad base a la unidad pedida
-            $convertBF = function(string $pc, float $baseVal, string $u) use ($conv): float {
+            $convertBF = function (string $pc, float $baseVal, string $u) use ($conv): float {
                 if ($u === 'VKEH') return $baseVal;
 
-                $c = $conv[$pc] ?? ['from_unit'=>'VKEH','to_m3'=>1,'m3_to_eur'=>1];
+                $c = $conv[$pc] ?? ['from_unit' => 'VKEH', 'to_m3' => 1, 'm3_to_eur' => 1];
                 $from = strtoupper($c['from_unit'] ?? 'VKEH');
 
                 // si la unidad base es ya m³, no multiplicamos por factor_to_m3
@@ -265,10 +363,10 @@ class DashboardController extends Controller
             };
 
             // helper: obtener ventas en la unidad pedida
-            $getSales = function(string $pc, string $u) use ($sumSalesBase,$sumSalesM3,$sumSalesEUR): float {
-                if ($u === 'VKEH') return (float)($sumSalesBase[$pc] ?? 0.0);
-                if ($u === 'M3')   return (float)($sumSalesM3[$pc]   ?? 0.0);
-                if ($u === 'EUR')  return (float)($sumSalesEUR[$pc]  ?? 0.0);
+            $getSales = function (string $pc, string $u) use ($sumSalesBase, $sumSalesM3, $sumSalesEUR): float {
+                if ($u === 'VKEH') return (float) ($sumSalesBase[$pc] ?? 0.0);
+                if ($u === 'M3')   return (float) ($sumSalesM3[$pc]   ?? 0.0);
+                if ($u === 'EUR')  return (float) ($sumSalesEUR[$pc]  ?? 0.0);
                 return 0.0;
             };
 
@@ -277,36 +375,40 @@ class DashboardController extends Controller
             $seriesForecast = [];
             $seriesBudget   = [];
             foreach ($pcCodes as $code) {
-                $codeStr = (string)$code;
+                $codeStr = (string) $code;
 
                 $svU = $getSales($codeStr, $unit);
-                $fvU = $convertBF($codeStr, (float)($sumForecast[$codeStr] ?? 0), $unit);
-                $bvU = $convertBF($codeStr, (float)($sumBudget[$codeStr]   ?? 0), $unit);
+                $fvU = $convertBF($codeStr, (float) ($sumForecast[$codeStr] ?? 0), $unit);
+                $bvU = $convertBF($codeStr, (float) ($sumBudget[$codeStr]   ?? 0), $unit);
 
                 $seriesIst[]      = round($svU, 4);
                 $seriesForecast[] = round($fvU, 4);
                 $seriesBudget[]   = round($bvU, 4);
             }
+
             $chart = [
                 'labels' => $labels,
                 'codes'  => $codesArr,
                 'series' => [
-                    ['name'=>'Ist','data'=>$seriesIst],
-                    ['name'=>'Prognose','data'=>$seriesForecast],
-                    ['name'=>'Budget','data'=>$seriesBudget],
+                    ['name' => 'Ist',       'data' => $seriesIst],
+                    ['name' => 'Prognose',  'data' => $seriesForecast],
+                    ['name' => 'Budget',    'data' => $seriesBudget],
                 ],
                 'unit'   => $unit,
             ];
 
             // ---- tabla
             $rows = [];
-            $totIst=0.0; $totF=0.0; $totB=0.0;
+            $totIst = 0.0;
+            $totF   = 0.0;
+            $totB   = 0.0;
+
             foreach ($pcCodes as $code) {
-                $codeStr = (string)$code;
+                $codeStr = (string) $code;
 
                 $svU = $getSales($codeStr, $unit);
-                $fvU = $convertBF($codeStr, (float)($sumForecast[$codeStr] ?? 0), $unit);
-                $bvU = $convertBF($codeStr, (float)($sumBudget[$codeStr]   ?? 0), $unit);
+                $fvU = $convertBF($codeStr, (float) ($sumForecast[$codeStr] ?? 0), $unit);
+                $bvU = $convertBF($codeStr, (float) ($sumBudget[$codeStr]   ?? 0), $unit);
 
                 $totIst += $svU;
                 $totF   += $fvU;
@@ -314,48 +416,48 @@ class DashboardController extends Controller
 
                 $rows[] = [
                     'pc_code'   => $codeStr,
-                    'pc_name'   => (string)($pcMeta[$code]['name'] ?? $codeStr),
+                    'pc_name'   => (string) ($pcMeta[$code]['name'] ?? $codeStr),
                     'ist'       => round($svU, 4),
                     'prognose'  => round($fvU, 4),
                     'budget'    => round($bvU, 4),
                 ];
             }
+
             $table = [
                 'rows'   => $rows,
                 'totals' => [
-                    'ist'      => round($totIst,4),
-                    'prognose' => round($totF,4),
-                    'budget'   => round($totB,4),
+                    'ist'      => round($totIst, 4),
+                    'prognose' => round($totF, 4),
+                    'budget'   => round($totB, 4),
                     'unit'     => $unit,
                 ],
                 'unit'   => $unit,
             ];
 
-            // ---- KPIs (acumulados abril..último mes completo)
+            // ---- KPIs (acumulados EN EL RANGO SELECCIONADO) ==============
 
             // Base VK-EH para proporciones (ventas base, forecast base, budget base)
-            $sumVK = function(string $field) use ($pcCodes,$sumSalesBase,$sumForecast,$sumBudget): float {
-                $s=0.0;
+            $sumVK = function (string $field) use ($pcCodes, $sumSalesBase, $sumForecast, $sumBudget): float {
+                $s = 0.0;
                 foreach ($pcCodes as $code) {
-                    if ($field==='sales')    $s += (float)($sumSalesBase[$code] ?? 0);
-                    if ($field==='forecast') $s += (float)($sumForecast[$code]  ?? 0);
-                    if ($field==='budget')   $s += (float)($sumBudget[$code]    ?? 0);
+                    if ($field === 'sales')    $s += (float) ($sumSalesBase[$code] ?? 0);
+                    if ($field === 'forecast') $s += (float) ($sumForecast[$code]  ?? 0);
+                    if ($field === 'budget')   $s += (float) ($sumBudget[$code]    ?? 0);
                 }
                 return $s;
             };
+
             $salesVK    = $sumVK('sales');
             $forecastVK = $sumVK('forecast');
             $budgetVK   = $sumVK('budget');
 
             // En m³ y EUR:
-            //  - ventas usan directamente las columnas de `sales`
-            //  - budget/forecast se convierten vía unit_conversions
-            $sumM3 = function(array $vector) use ($pcCodes,$conv): float {
-                $t=0.0;
+            $sumM3 = function (array $vector) use ($pcCodes, $conv): float {
+                $t = 0.0;
                 foreach ($pcCodes as $code) {
-                    $val = (float)($vector[$code] ?? 0.0);
-                    $c   = $conv[$code] ?? ['from_unit'=>'VKEH','to_m3'=>1];
-                    $from= strtoupper($c['from_unit'] ?? 'VKEH');
+                    $val = (float) ($vector[$code] ?? 0.0);
+                    $c   = $conv[$code] ?? ['from_unit' => 'VKEH', 'to_m3' => 1];
+                    $from = strtoupper($c['from_unit'] ?? 'VKEH');
                     if ($from === 'M3') {
                         $m3 = $val;
                     } else {
@@ -365,12 +467,13 @@ class DashboardController extends Controller
                 }
                 return $t;
             };
-            $sumEUR = function(array $vector) use ($pcCodes,$conv): float {
-                $t=0.0;
+
+            $sumEUR = function (array $vector) use ($pcCodes, $conv): float {
+                $t = 0.0;
                 foreach ($pcCodes as $code) {
-                    $val = (float)($vector[$code] ?? 0.0);
-                    $c   = $conv[$code] ?? ['from_unit'=>'VKEH','to_m3'=>1,'m3_to_eur'=>1];
-                    $from= strtoupper($c['from_unit'] ?? 'VKEH');
+                    $val = (float) ($vector[$code] ?? 0.0);
+                    $c   = $conv[$code] ?? ['from_unit' => 'VKEH', 'to_m3' => 1, 'm3_to_eur' => 1];
+                    $from = strtoupper($c['from_unit'] ?? 'VKEH');
                     if ($from === 'M3') {
                         $m3 = $val;
                     } else {
@@ -383,19 +486,85 @@ class DashboardController extends Controller
             };
 
             // Ventas: usamos directamente los agregados de la tabla sales
-            $salesM3    = array_sum($sumSalesM3);
-            $salesEUR   = array_sum($sumSalesEUR);
+            $salesM3  = array_sum($sumSalesM3);
+            $salesEUR = array_sum($sumSalesEUR);
 
             // Forecast/Budget: conversión desde volume
             $forecastM3 = $sumM3($sumForecast);
             $budgetM3   = $sumM3($sumBudget);
 
             // ratios (Ist vs Prognose, Ist vs Budget): (Ist/Target - 1) * 100
-            $ratio = function(float $a, float $b): float {
+            $ratio = function (float $a, float $b): float {
                 if (abs($b) < 1e-9) return 0.0;
-                return (($a / max($b,1e-9)) - 1.0) * 100.0;
+                return (($a / max($b, 1e-9)) - 1.0) * 100.0;
             };
 
+            // ===== Deviations KPIs =======================================
+            $devStats = [
+                'total'        => 0,
+                'resolved'     => 0,
+                'open'         => 0,
+                'budget_cases' => 0,
+            ];
+
+            if (Schema::hasTable('deviations')) {
+                $devQ = DB::table('deviations')->where('user_id', $userId);
+
+                // si existen columnas fiscal_year/month, filtramos por el mismo rango
+                if (Schema::hasColumn('deviations', 'fiscal_year') && Schema::hasColumn('deviations', 'month')) {
+                    $devQ->whereBetween(DB::raw('fiscal_year*100 + month'), [$startYM, $endYM]);
+                } elseif (Schema::hasColumn('deviations', 'year') && Schema::hasColumn('deviations', 'month')) {
+                    $devQ->whereBetween(DB::raw('year*100 + month'), [$startYM, $endYM]);
+                }
+
+                $baseDevQ = clone $devQ;
+
+                // total desviaciones
+                $devStats['total'] = (clone $baseDevQ)->count();
+
+                // resueltas (según resolved_at o status)
+                if (Schema::hasColumn('deviations', 'resolved_at')) {
+                    $devStats['resolved'] = (clone $baseDevQ)
+                        ->whereNotNull('resolved_at')
+                        ->count();
+                } elseif (Schema::hasColumn('deviations', 'status')) {
+                    $devStats['resolved'] = (clone $baseDevQ)
+                        ->whereIn('status', ['resolved', 'closed', 'done'])
+                        ->count();
+                }
+
+                $devStats['open'] = max(0, $devStats['total'] - $devStats['resolved']);
+
+                // ==== Budget Cases: vía client_profit_center_id + assignments ====
+                if (Schema::hasTable('budget_cases')) {
+                    $bcQ = DB::table('budget_cases AS bc');
+
+                    // vínculo BC → assignments → user
+                    if (
+                        Schema::hasColumn('budget_cases', 'client_profit_center_id') &&
+                        Schema::hasTable('assignments') &&
+                        Schema::hasColumn('assignments', 'client_profit_center_id') &&
+                        Schema::hasColumn('assignments', 'user_id')
+                    ) {
+                        $bcQ->join('assignments AS a', 'a.client_profit_center_id', '=', 'bc.client_profit_center_id')
+                            ->where('a.user_id', $userId);
+                    }
+
+                    // Filtro por año fiscal si la tabla tiene fiscal_year + month
+                    if (Schema::hasColumn('budget_cases', 'fiscal_year') && Schema::hasColumn('budget_cases', 'month')) {
+                        $bcQ->whereBetween(DB::raw('bc.fiscal_year*100 + bc.month'), [$startYM, $endYM]);
+                    }
+
+                    // contamos budget_cases distintos (por si un mismo BC aparece en varios assignments)
+                    $devStats['budget_cases'] = $bcQ->distinct('bc.id')->count('bc.id');
+                }
+            }
+
+            $devResolvedPct = $devStats['total'] > 0
+                ? round($devStats['resolved'] * 100.0 / max(1, $devStats['total']), 2)
+                : 0.0;
+
+            // ---- KPIs array (incluye los devStats)
             $kpis = [
                 'items' => [
                     [
@@ -403,10 +572,11 @@ class DashboardController extends Controller
                         'label' => 'Ist vs Prognose',
                         'value' => round($ratio($salesVK, $forecastVK), 2),
                         'unit'  => '%',
+                        'target'=> 0, // Ziel: 0% Abweichung
                         'details' => [
-                            'ist_m3'      => round($salesM3,2),
-                            'prognose_m3' => round($forecastM3,2),
-                            'diff_m3'     => round($salesM3 - $forecastM3,2),
+                            'ist_m3'      => round($salesM3, 2),
+                            'prognose_m3' => round($forecastM3, 2),
+                            'diff_m3'     => round($salesM3 - $forecastM3, 2),
                         ],
                     ],
                     [
@@ -414,10 +584,11 @@ class DashboardController extends Controller
                         'label' => 'Ist vs Budget',
                         'value' => round($ratio($salesVK, $budgetVK), 2),
                         'unit'  => '%',
+                        'target'=> 0, // Ziel: 0% Abweichung
                         'details' => [
-                            'ist_m3'    => round($salesM3,2),
-                            'budget_m3' => round($budgetM3,2),
-                            'diff_m3'   => round($salesM3 - $budgetM3,2),
+                            'ist_m3'    => round($salesM3, 2),
+                            'budget_m3' => round($budgetM3, 2),
+                            'diff_m3'   => round($salesM3 - $budgetM3, 2),
                         ],
                     ],
                     [
@@ -425,6 +596,7 @@ class DashboardController extends Controller
                         'label' => 'Differenz Ist–Budget',
                         'value' => round($salesM3 - $budgetM3, 2),
                         'unit'  => 'M3',
+                        'target'=> 0,
                     ],
                     [
                         'id'    => 'umsatz_eur',
@@ -432,9 +604,35 @@ class DashboardController extends Controller
                         'value' => round($salesEUR, 2),
                         'unit'  => 'EUR',
                     ],
+                    // Deviations KPIs extra
+                    [
+                        'id'    => 'deviations_total',
+                        'label' => 'Abweichungen gesamt',
+                        'value' => $devStats['total'],
+                        'unit'  => 'Stk',
+                        'details' => $devStats,
+                    ],
+                    [
+                        'id'    => 'deviations_resolved_pct',
+                        'label' => 'Abweichungen gelöst',
+                        'value' => $devResolvedPct,
+                        'unit'  => '%',
+                        'target'=> 100, // Ziel: 100% gelöst
+                        'details' => $devStats,
+                    ],
+                    [
+                        'id'    => 'deviations_budget_cases',
+                        'label' => 'Budget Cases',
+                        'value' => $devStats['budget_cases'],
+                        'unit'  => 'Stk',
+                    ],
                 ],
-                'period' => $period,
-                'range'  => ['from'=>$rangeStart->toDateString(),'to'=>$rangeEnd->toDateString()],
+                'period'      => $rawPeriod,
+                'granularity' => $granularity,
+                'range'       => [
+                    'from' => $rangeStart->toDateString(),
+                    'to'   => $rangeEnd->toDateString(),
+                ],
             ];
 
             // ---- calendario (mes actual → futuro)
@@ -443,16 +641,20 @@ class DashboardController extends Controller
             // ---- extra (stub)
             $extra = [
                 'label'  => 'Zusatzquote',
-                'period' => $period,
+                'period' => $rawPeriod,
                 'total'  => 0,
                 'unit'   => 'M3',
                 'by_pc'  => [],
             ];
 
             return response()->json([
-                'period'  => $period,
-                'unit'    => $unit,
-                'range'   => ['from'=>$rangeStart->toDateString(),'to'=>$rangeEnd->toDateString()],
+                'period'      => $rawPeriod,
+                'granularity' => $granularity,
+                'unit'        => $unit,
+                'range'       => [
+                    'from' => $rangeStart->toDateString(),
+                    'to'   => $rangeEnd->toDateString(),
+                ],
                 'kpis'    => $kpis,
                 'chart'   => $chart,
                 'table'   => $table,
@@ -460,11 +662,25 @@ class DashboardController extends Controller
                 'extra'   => $extra,
             ]);
         } catch (\Throwable $e) {
+            // Log MUCHO más descriptivo
             Log::error('Dashboard error', [
-                'error'=>$e->getMessage(),
-                'trace'=>$e->getTraceAsString()
+                'user_id'     => $userId,
+                'unit'        => $unit ?? null,
+                'period_param'=> $req->query('period'),
+                'granularity_param' => $req->query('granularity'),
+                'resolved_period'   => $rawPeriod ?? null,
+                'message'     => $e->getMessage(),
+                'exception'   => get_class($e),
+                'file'        => $e->getFile(),
+                'line'        => $e->getLine(),
+                'trace'       => $e->getTraceAsString(),
             ]);
-            return response()->json(['message'=>'Server error'], 500);
+
+            return response()->json([
+                'message'   => 'Dashboard konnte nicht geladen werden.',
+                'error'     => $e->getMessage(),
+                'exception' => get_class($e),
+            ], 500);
         }
     }
 
@@ -472,29 +688,33 @@ class DashboardController extends Controller
     {
         $codes = $req->query('codes', '');
         if (is_string($codes)) {
-            $codes = array_filter(array_map('trim', explode(',', $codes)), fn($c)=>$c!=='');
+            $codes = array_filter(array_map('trim', explode(',', $codes)), fn($c) => $c !== '');
         }
         if (!is_array($codes) || empty($codes)) {
             return response()->json([]);
         }
 
-        if (!\Illuminate\Support\Facades\Schema::hasTable('unit_conversions')) {
+        if (!Schema::hasTable('unit_conversions')) {
             // fallback: todo VK-EH si no hay tabla
             $out = [];
-            foreach ($codes as $c) $out[(string)$c] = 'VKEH';
+            foreach ($codes as $c) {
+                $out[(string) $c] = 'VKEH';
+            }
             return response()->json($out);
         }
 
-        $rows = \Illuminate\Support\Facades\DB::table('unit_conversions')
+        $rows = DB::table('unit_conversions')
             ->whereIn('profit_center_code', $codes)
-            ->select('profit_center_code','from_unit')
+            ->select('profit_center_code', 'from_unit')
             ->get();
 
         $map = [];
-        foreach ($codes as $c) $map[(string)$c] = 'VKEH'; // default
+        foreach ($codes as $c) {
+            $map[(string) $c] = 'VKEH'; // default
+        }
         foreach ($rows as $r) {
-            $code = (string)$r->profit_center_code;
-            $fu   = (string)($r->from_unit ?? 'VKEH');
+            $code = (string) $r->profit_center_code;
+            $fu   = (string) ($r->from_unit ?? 'VKEH');
             $map[$code] = $fu ?: 'VKEH';
         }
         return response()->json($map);
@@ -502,6 +722,7 @@ class DashboardController extends Controller
 
     /**
      * Build calendar payload from current month forward, for the logged-in user.
+     * (Se usa en el dashboard como "resumen" – para el calendario visual usás CalendarController)
      */
     private function buildCalendar(): array
     {
@@ -512,7 +733,7 @@ class DashboardController extends Controller
             $today = Carbon::today()->toDateString();
 
             $rows = DB::table('action_items AS ai')
-                ->join('action_plans AS ap','ap.id','=','ai.action_plan_id')
+                ->join('action_plans AS ap', 'ap.id', '=', 'ai.action_plan_id')
                 ->select(
                     'ai.id',
                     'ai.title',
@@ -550,4 +771,3 @@ class DashboardController extends Controller
         ];
     }
 }
-

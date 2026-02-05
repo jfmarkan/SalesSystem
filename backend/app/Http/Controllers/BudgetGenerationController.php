@@ -9,6 +9,8 @@ use Carbon\Carbon;
 class BudgetGenerationController extends Controller
 {
     private const FISCAL_START_MONTH = 4; // Abril
+    private const CAP_MONTH = 10;         // Jan..Oct
+    private const M3_NATIVE_PCS = [110, 170, 171, 175];
 
     /** Estado intermedio para logging */
     private float $lastYtdPct = 0.0;
@@ -20,8 +22,7 @@ class BudgetGenerationController extends Controller
             'worst_case_c'  => ['required','numeric','between:-100,100'],
             'best_case_d'   => ['required','numeric','between:-100,100'],
             'worst_case_d'  => ['required','numeric','between:-100,100'],
-            // 'pa_pb_mode'    => ['required','in:D,AB_BUDGET_CASES,AB_MANUAL'],
-            // 'pa_pb_cases'   => ['nullable','array'],
+            'fiscal_year'   => ['nullable','integer','min:2024'],
         ]);
 
         $bestC  = (float)$validated['best_case_c'];
@@ -29,8 +30,12 @@ class BudgetGenerationController extends Controller
         $bestD  = (float)$validated['best_case_d'];
         $worstD = (float)$validated['worst_case_d'];
 
-        $now    = Carbon::now();
-        $nextFY = $this->nextFiscalYear($now);
+        $now = Carbon::now();
+        $nextFY = isset($validated['fiscal_year'])
+            ? (int)$validated['fiscal_year']
+            : $this->nextFiscalYear($now);
+
+        $baseCalendarYear = $nextFY - 1;
 
         $months = [
             ['name'=>'Apr','m'=>4],['name'=>'May','m'=>5],['name'=>'Jun','m'=>6],
@@ -39,7 +44,6 @@ class BudgetGenerationController extends Controller
             ['name'=>'Jan','m'=>1], ['name'=>'Feb','m'=>2], ['name'=>'Mar','m'=>3],
         ];
 
-        // CPC activos (aparecen en sales)
         $cpcIds = DB::table('sales')
             ->select('client_profit_center_id')
             ->distinct()
@@ -49,40 +53,33 @@ class BudgetGenerationController extends Controller
         $forecastsCnt = 0;
 
         foreach ($cpcIds as $cpcId) {
-            $cpc = DB::table('client_profit_centers')
-                ->where('id', $cpcId)
-                ->first();
+            $cpc = DB::table('client_profit_centers')->where('id', $cpcId)->first();
             if (!$cpc) continue;
 
-            $client = DB::table('clients')
-                ->where('client_group_number', $cpc->client_group_number)
-                ->first();
+            $client = DB::table('clients')->where('client_group_number', $cpc->client_group_number)->first();
             if (!$client) continue;
 
             $classId = (int)$client->classification_id; // 1=A,2=B,3=C,4=D,5=X,6=PA,7=PB
-            if ($classId === 5) continue; // X: se ignora en generación de budget
+            if ($classId === 5) continue; // X
 
-            // Seasonality actual y anterior
-            $seasonCurr = DB::table('seasonalities')
-                ->where('profit_center_code', $cpc->profit_center_code)
-                ->orderByDesc('fiscal_year')
-                ->first();
-            if (!$seasonCurr) continue;
+            $pcCode = (string)$cpc->profit_center_code;
 
-            $seasonPrev = DB::table('seasonalities')
-                ->where('profit_center_code', $cpc->profit_center_code)
-                ->where('fiscal_year', '<', $seasonCurr->fiscal_year)
-                ->orderByDesc('fiscal_year')
-                ->first();
+            // seasonality del año generado con fallback
+            $seasonMap = $this->loadSeasonalityMapWithFallback($pcCode, $nextFY);
+            if (!$seasonMap) continue;
 
-            $mapCurr = $this->mapSeasonRow($seasonCurr);
-            $mapPrev = $this->mapSeasonRow($seasonPrev ?? $seasonCurr);
+            // base anual en m³ desde Jan..Oct del año base calendario
+            $baseM3 = $this->calculateBaseAnnualM3(
+                (int)$cpcId,
+                $pcCode,
+                $nextFY,
+                $baseCalendarYear,
+                self::CAP_MONTH,
+                $seasonMap
+            );
+            if ($baseM3 <= 0.0) continue;
 
-            // Base forecast anualizada (VBA-like)
-            $base = $this->calculateBaseForecast($cpcId, $mapCurr, $mapPrev);
-            if ($base <= 0) continue;
-
-            // % best/worst según clasificación
+            // best/worst + si forecast = budget
             [$bestPct, $worstPct, $forecastEqualsBudget] = $this->resolvePcts(
                 $classId,
                 (int)$cpcId,
@@ -90,11 +87,19 @@ class BudgetGenerationController extends Controller
                 $bestC, $worstC, $bestD, $worstD
             );
 
-            // ⚠️ IMPORTANTE:
-            // - si el CPC está marcado como skip_budget en budget_cases (AB/PA/PB),
-            //   resolvePcts devuelve bestPct = worstPct = -100 → totalBest = totalWorst = 0
-            $totalBest  = $base * (1 + $bestPct  / 100.0);
-            $totalWorst = $base * (1 + $worstPct / 100.0);
+            $totalBestM3  = $baseM3 * (1 + $bestPct  / 100.0);
+            $totalWorstM3 = $baseM3 * (1 + $worstPct / 100.0);
+
+            $isM3Native = $this->isM3NativePc($pcCode);
+            $factorToM3 = $isM3Native ? 1.0 : $this->factorToM3($pcCode, $nextFY);
+
+            // ✅ Si es C/D y hay forecast automático, resolver owner user_id desde assignments
+            $forecastUserId = null;
+            if ($forecastEqualsBudget) {
+                $forecastUserId = $this->resolveAssignedUserId((int)$cpcId);
+                // Si no hay assignment, queda null; el forecast existirá pero no lo verá nadie.
+                // Podés decidir si en ese caso preferís skippear forecast.
+            }
 
             $budgetRows   = [];
             $forecastRows = [];
@@ -103,10 +108,18 @@ class BudgetGenerationController extends Controller
             foreach ($months as $slot) {
                 $m  = $slot['m'];
                 $fy = ($m >= self::FISCAL_START_MONTH) ? $nextFY : ($nextFY + 1);
-                $pct = (float)($mapCurr[$slot['name']] ?? 0.0);
 
-                $budgetVol = (int) round(($pct / 100.0) * $totalBest, 0);
-                $worstVol  = (int) round(($pct / 100.0) * $totalWorst, 0);
+                $pct = (float)($seasonMap[$slot['name']] ?? 0.0);
+
+                $monthM3Best  = ($pct / 100.0) * $totalBestM3;
+                $monthM3Worst = ($pct / 100.0) * $totalWorstM3;
+
+                // guardar en budgets.volume:
+                // - PCs m³ nativos => m³
+                // - PCs normales => UNITS (para que overview convierta con factor_to_m3)
+                $budgetVol = $isM3Native
+                    ? (int) round($monthM3Best, 0)
+                    : (int) round(($factorToM3 > 0 ? ($monthM3Best / $factorToM3) : 0.0), 0);
 
                 $budgetRows[] = [
                     'client_profit_center_id' => $cpcId,
@@ -117,6 +130,7 @@ class BudgetGenerationController extends Controller
                     'updated_at'              => now(),
                 ];
 
+                // ✅ C/D => forecast = budget y con user_id del assignment
                 if ($forecastEqualsBudget) {
                     $forecastRows[] = [
                         'client_profit_center_id' => $cpcId,
@@ -124,13 +138,12 @@ class BudgetGenerationController extends Controller
                         'month'                   => $m,
                         'volume'                  => $budgetVol,
                         'version'                 => 1,
-                        'user_id'                 => null,
+                        'user_id'                 => $forecastUserId, // ✅ clave
                         'created_at'              => now(),
                         'updated_at'              => now(),
                     ];
                 }
 
-                // Debug log (línea verde/roja)
                 $debugRows[] = [
                     'client_profit_center_id' => $cpcId,
                     'fiscal_year'             => $nextFY,
@@ -141,8 +154,8 @@ class BudgetGenerationController extends Controller
                     'best_case'               => $bestPct,
                     'worst_case'              => $worstPct,
                     'seasonality_base'        => $this->lastYtdPct,
-                    'forecast_base'           => $base,
-                    'total_budget'            => $totalBest,
+                    'forecast_base'           => $baseM3,
+                    'total_budget'            => $totalBestM3,
                     'monthly_pct'             => $pct,
                     'monthly_volume'          => $budgetVol,
                     'created_at'              => now(),
@@ -150,7 +163,6 @@ class BudgetGenerationController extends Controller
                 ];
             }
 
-            // Upsert budgets (aunque sea todo 0)
             DB::table('budgets')->upsert(
                 $budgetRows,
                 ['client_profit_center_id','fiscal_year','month'],
@@ -158,28 +170,30 @@ class BudgetGenerationController extends Controller
             );
             $budgetsCnt += count($budgetRows);
 
-            // Upsert forecasts cuando corresponde
             if (!empty($forecastRows)) {
                 DB::table('forecasts')->upsert(
                     $forecastRows,
                     ['client_profit_center_id','fiscal_year','month','version'],
-                    ['volume','updated_at']
+                    // ✅ importante: actualizar user_id también
+                    ['volume','user_id','updated_at']
                 );
                 $forecastsCnt += count($forecastRows);
             }
 
-            // Insert debug log
             DB::table('budget_debug_log')->insert($debugRows);
         }
 
         return response()->json([
-            'message'        => "✅ Budget FY {$nextFY} generado.",
-            'budgets_rows'   => $budgetsCnt,
-            'forecasts_rows' => $forecastsCnt,
+            'message'           => "✅ Budget FY {$nextFY} generado.",
+            'target_fiscal_year'=> $nextFY,
+            'base_calendar_year'=> $baseCalendarYear,
+            'cap_month'         => self::CAP_MONTH,
+            'budgets_rows'      => $budgetsCnt,
+            'forecasts_rows'    => $forecastsCnt,
+            'note'              => 'Forecast C/D: user_id se asigna desde assignments (si existe). Jan-Mar quedan con fiscal_year = targetFY+1.',
         ]);
     }
 
-    /** FY siguiente (abril–marzo) */
     private function nextFiscalYear(Carbon $date): int
     {
         $fy = $date->year;
@@ -187,49 +201,110 @@ class BudgetGenerationController extends Controller
         return $fy + 1;
     }
 
-    /**
-     * Ventas YTD anualizadas con seasonality:
-     * Jan–Mar del FY-1 y Apr..mes_cap del FY actual (VBA).
-     */
-    private function calculateBaseForecast(int $cpcId, array $mapCurr, array $mapPrev): float
+    private function resolveAssignedUserId(int $cpcId): ?int
     {
-        $now  = Carbon::now();
-        $cap  = max(1, $now->month - 1);
-        $year = (int)$now->year;
-
-        $salesYTD = (float) DB::table('sales')
+        // Tomamos el assignment más reciente con user_id no null
+        $userId = DB::table('assignments')
             ->where('client_profit_center_id', $cpcId)
-            ->where('fiscal_year', $year)
-            ->whereBetween('month', [1, $cap])
-            ->sum('volume');
+            ->whereNotNull('user_id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->value('user_id');
 
-        if ($salesYTD <= 0) {
+        return $userId ? (int)$userId : null;
+    }
+
+    private function isM3NativePc(string $pcCode): bool
+    {
+        return in_array((int)$pcCode, self::M3_NATIVE_PCS, true);
+    }
+
+    private function factorToM3(string $pcCode, int $targetFy): float
+    {
+        $row = DB::table('unit_conversions')
+            ->where('profit_center_code', $pcCode)
+            ->where('fiscal_year', $targetFy)
+            ->first();
+
+        $f = $row ? (float)($row->factor_to_m3 ?? 1) : 1.0;
+        return $f > 0 ? $f : 1.0;
+    }
+
+    private function calculateBaseAnnualM3(
+        int $cpcId,
+        string $pcCode,
+        int $targetFy,
+        int $baseCalendarYear,
+        int $capMonth,
+        array $seasonMap
+    ): float {
+        $isM3Native = $this->isM3NativePc($pcCode);
+        $factorToM3 = $isM3Native ? 1.0 : $this->factorToM3($pcCode, $targetFy);
+
+        if ($isM3Native) {
+            $ytdM3 = (float) DB::table('sales')
+                ->where('client_profit_center_id', $cpcId)
+                ->where('fiscal_year', $baseCalendarYear)
+                ->whereBetween('month', [1, $capMonth])
+                ->sum('cubic_meters');
+        } else {
+            $units = (float) DB::table('sales')
+                ->where('client_profit_center_id', $cpcId)
+                ->where('fiscal_year', $baseCalendarYear)
+                ->whereBetween('month', [1, $capMonth])
+                ->sum('sales_units');
+
+            $ytdM3 = $units * $factorToM3;
+        }
+
+        if ($ytdM3 <= 0.0) {
             $this->lastYtdPct = 0.0;
             return 0.0;
         }
 
-        $names = [
-            1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',
-            7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec'
-        ];
-        $ytdPct = 0.0;
-        for ($m=1; $m <= $cap; $m++) {
-            $label = $names[$m];
-            $ytdPct += (float)(
-                $m <= 3
-                    ? ($mapPrev[$label] ?? 0.0)
-                    : ($mapCurr[$label] ?? 0.0)
-            );
-        }
+        $ytdPct = $this->seasonalityPctForMonths($seasonMap, 1, $capMonth);
         $this->lastYtdPct = (float) number_format($ytdPct, 2, '.', '');
-        if ($ytdPct <= 0) return 0.0;
 
-        return $salesYTD / ($ytdPct / 100.0);
+        if ($ytdPct <= 0.0) return 0.0;
+
+        return $ytdM3 / ($ytdPct / 100.0);
     }
 
-    /**
-     * Mapea fila de seasonality -> array ['Jan'=>float,...].
-     */
+    private function loadSeasonalityMapWithFallback(string $pcCode, int $desiredYear): ?array
+    {
+        $row = DB::table('seasonalities')
+            ->where('profit_center_code', $pcCode)
+            ->where('fiscal_year', $desiredYear)
+            ->first();
+
+        if (!$row) {
+            $row = DB::table('seasonalities')
+                ->where('profit_center_code', $pcCode)
+                ->where('fiscal_year', '<', $desiredYear)
+                ->orderByDesc('fiscal_year')
+                ->first();
+        }
+
+        if (!$row) {
+            $row = DB::table('seasonalities')
+                ->where('profit_center_code', $pcCode)
+                ->orderByDesc('fiscal_year')
+                ->first();
+        }
+
+        return $row ? $this->mapSeasonRow($row) : null;
+    }
+
+    private function seasonalityPctForMonths(array $seasonMap, int $fromMonth, int $toMonth): float
+    {
+        $names = [1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec'];
+        $pct = 0.0;
+        for ($m = $fromMonth; $m <= $toMonth; $m++) {
+            $pct += (float)($seasonMap[$names[$m]] ?? 0.0);
+        }
+        return $pct;
+    }
+
     private function mapSeasonRow(object $row): array
     {
         $out = [];
@@ -246,15 +321,10 @@ class BudgetGenerationController extends Controller
     }
 
     /**
-     * Resuelve porcentajes y si forecast=budget según clasificación.
-     *
      * A/B/PA/PB:
-     *   - Lee best_case / worst_case / skip_budget de budget_cases (por CPC+FY).
-     *   - Si skip_budget = true → bestPct = worstPct = -100 → presupuesto = 0.
+     * - si no hay budget_case o skip_budget => presupuesto 0 (consistente con overview)
      * C/D:
-     *   - Usa best/worst globales del request.
-     * X:
-     *   - No debería entrar acá (ya se filtra), pero devolvemos 0.
+     * - usa request y forecast = budget
      */
     private function resolvePcts(
         int $classId,
@@ -263,39 +333,25 @@ class BudgetGenerationController extends Controller
         float $bestC, float $worstC,
         float $bestD, float $worstD
     ): array {
-        // A, B, PA, PB → leer valores guardados
         if (in_array($classId, [1, 2, 6, 7], true)) {
             $case = DB::table('budget_cases')
                 ->where('client_profit_center_id', $cpcId)
                 ->where('fiscal_year', $nextFY)
                 ->first();
 
-            if ($case) {
-                $skip = (bool)($case->skip_budget ?? false);
-                if ($skip) {
-                    // 👉 “nicht mehr planen”: todo el presupuesto del próximo FY = 0
-                    return [-100.0, -100.0, false]; // no forecast, budget=0
-                }
+            if (!$case) return [-100.0, -100.0, false];
 
-                $best  = (float)($case->best_case ?? 0.0);
-                $worst = (float)($case->worst_case ?? 0.0);
-                return [$best, $worst, false]; // no forecast automático
-            }
+            $skip = (bool)($case->skip_budget ?? false);
+            if ($skip) return [-100.0, -100.0, false];
 
-            // Sin Budget Case: comportamiento actual → 0% cambia nada (usa base)
-            return [0.0, 0.0, false];
+            $best  = (float)($case->best_case ?? 0.0);
+            $worst = (float)($case->worst_case ?? 0.0);
+            return [$best, $worst, false];
         }
 
-        // C → usar input del request, forecast = true
-        if ($classId === 3) {
-            return [$bestC, $worstC, true];
-        }
-        // D → idem
-        if ($classId === 4) {
-            return [$bestD, $worstD, true];
-        }
+        if ($classId === 3) return [$bestC, $worstC, true];
+        if ($classId === 4) return [$bestD, $worstD, true];
 
-        // Tipo X (o cualquier otro): default
         return [0.0, 0.0, false];
     }
 }

@@ -37,7 +37,7 @@
                 icon="pi pi-angle-left"
                 text
                 @click="prevFY"
-                :disabled="fyStart <= 2024"
+                :disabled="fyStart <= minFYStart"
               />
               <span class="ctrl-text">
                 WJ {{ fyStart }}/{{ String(fyStart + 1).slice(-2) }}
@@ -46,7 +46,7 @@
                 icon="pi pi-angle-right"
                 text
                 @click="nextFY"
-                :disabled="fyStart >= currentFYStart"
+                :disabled="maxFYStart == null || fyStart >= maxFYStart"
               />
             </div>
 
@@ -147,6 +147,10 @@ const pcOverviewRef = ref(null)
 const companyOverviewRef = ref(null)
 const pdfRef = ref(null)
 
+const minFYStart = ref(2024)     // si querés mantener un mínimo fijo
+const maxFYStart = ref(null)     // lo trae backend
+
+
 /* 🔒 flag para desactivar animaciones durante export */
 const isPdfExporting = ref(false)
 provide('isPdfExporting', isPdfExporting)
@@ -166,7 +170,7 @@ const unitLabel = computed(
 const now = new Date()
 const initialFYStart =
   now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
-const currentFYStart = initialFYStart
+
 const fyStart = ref(initialFYStart)
 
 /* Profit Centers */
@@ -181,6 +185,12 @@ const pcLabel = computed(() => {
     '–'
   )
 })
+
+async function loadFiscalMeta() {
+  const { data } = await api.get('/api/analytics/pc/fiscal-meta')
+  maxFYStart.value = data?.max_fy_start != null ? Number(data.max_fy_start) : null
+}
+
 
 /* As-Of (Stand, meses Abril–März) */
 const asOfIdx = ref(0)
@@ -221,8 +231,10 @@ function prevFY() {
   if (fyStart.value > 2024) fyStart.value--
 }
 function nextFY() {
-  if (fyStart.value < currentFYStart) fyStart.value++
+  if (maxFYStart.value == null) return
+  if (fyStart.value < maxFYStart.value) fyStart.value++
 }
+
 function prevAsOf() {
   if (asOfIdx.value > 0) asOfIdx.value--
 }
@@ -371,6 +383,7 @@ function setLastCompleteMonth() {
 }
 
 onMounted(async () => {
+  await loadFiscalMeta()
   await loadPcList()
   setLastCompleteMonth()
 })

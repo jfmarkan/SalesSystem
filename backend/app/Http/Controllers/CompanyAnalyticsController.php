@@ -1061,6 +1061,37 @@ class CompanyAnalyticsController extends Controller
         ]);
     }
 
+    public function fiscalMeta(Request $request)
+    {
+        // FY Start normalizado desde budgets (Abr–Mar)
+        $q = DB::table('budgets')
+            ->selectRaw("
+                CASE
+                    WHEN month BETWEEN 4 AND 12 THEN fiscal_year
+                    WHEN month BETWEEN 1 AND 3  THEN fiscal_year - 1
+                    ELSE NULL
+                END AS fy_start
+            ")
+            ->whereNotNull('fiscal_year')
+            ->whereNotNull('month')
+            ->groupBy('fy_start');
+
+        $fyStarts = $q->pluck('fy_start')->filter(fn($v) => $v !== null)->values();
+
+        if ($fyStarts->isEmpty()) {
+            return response()->json([
+                'min_fy_start' => null,
+                'max_fy_start' => null,
+            ]);
+        }
+
+        return response()->json([
+            'min_fy_start' => (int) $fyStarts->min(),
+            'max_fy_start' => (int) $fyStarts->max(),
+        ]);
+    }
+
+
     public function debugTeamUsers(Request $request)
     {
         $teamId = (int)$request->query('team_id');
